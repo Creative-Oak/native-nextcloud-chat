@@ -15,6 +15,7 @@ extension ChatModel {
 
     /// Called whenever the text or the caret moves.
     func refreshMentionQuery() {
+        guard !isApplyingMention else { return }
         guard canMention, editing == nil else {
             dismissMentions()
             return
@@ -94,12 +95,15 @@ extension ChatModel {
         guard let query = mentionQuery else { return }
         let result = MentionComposer.apply(suggestion, to: draftText, replacing: query)
 
-        // Dismiss first: setting the text re-runs detection, and we don't want the popover
-        // to reopen on the mention we just finished.
+        // The whole rewrite is one atomic step as far as detection is concerned: writing the
+        // text and then moving the caret would otherwise re-detect the mention we just
+        // completed and reopen the list on it.
+        isApplyingMention = true
         dismissMentions()
         draftText = result.text
         caret = result.caret
         caretRequest = result.caret
+        isApplyingMention = false
     }
 
     func dismissMentions() {

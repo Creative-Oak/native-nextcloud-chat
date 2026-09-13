@@ -17,6 +17,7 @@ struct ChatView: View {
 
     @State private var highlightedMessageID: Int?
     @State private var didInitialScroll = false
+    @State private var highlightClearTask: Task<Void, Never>?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -50,7 +51,6 @@ struct ChatView: View {
                         .frame(height: 8)
                         .id(Self.bottomAnchor)
                 }
-                .scrollTargetLayout()
             }
             .defaultScrollAnchor(.bottom)
             .scrollContentBackground(.hidden)
@@ -65,32 +65,59 @@ struct ChatView: View {
                 if model.isScrolledToLatest != atBottom { model.isScrolledToLatest = atBottom }
 
                 // Start fetching before the user reaches the top, so history is usually
-                // already there by the time they get to it.
-                guard metrics.distanceFromTop < 240, model.canLoadOlder, !model.isLoadingOlder else { return }
+                // already there by the time they arrive.
+                guard didInitialScroll, metrics.distanceFromTop < 240,
+                      model.canLoadOlder, !model.isLoadingOlder
+                else { return }
                 Task { await loadOlderKeepingPosition(proxy) }
             }
             .onChange(of: model.rows.last?.id) { _, _ in
                 guard model.isScrolledToLatest else { return }
                 scrollToBottom(proxy, animated: didInitialScroll)
             }
+            // The first rows arrive from the cache *after* the view appears, so the initial
+            // positioning has to wait for them rather than happening in onAppear.
+            .onChange(of: model.rows.isEmpty) { _, isEmpty in
+                if !isEmpty { positionInitially(proxy) }
+            }
             .onAppear {
-                // Land at the bottom (or at the unread marker) without an animation, so
-                // opening a conversation looks instantaneous rather than "scrolly".
-                if let unread = model.rows.first(where: \.isUnreadSeparator)?.id {
-                    proxy.scrollTo(unread, anchor: .center)
-                } else {
-                    proxy.scrollTo(Self.bottomAnchor, anchor: .bottom)
-                }
-                didInitialScroll = true
+                if !model.rows.isEmpty { positionInitially(proxy) }
             }
             .onChange(of: highlightedMessageID) { _, newValue in
                 guard let newValue, let row = model.rows.first(where: { $0.message?.messageID == newValue }) else { return }
                 withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.25)) {
                     proxy.scrollTo(row.id, anchor: .center)
                 }
+                // The highlight is a "here it is" flash, not a selection — clear it so the
+                // message doesn't stay tinted for the rest of the session.
+                highlightClearTask?.cancel()
+                highlightClearTask = Task {
+                    try? await Task.sleep(for: .seconds(2))
+                    guard !Task.isCancelled else { return }
+                    withAnimation(reduceMotion ? nil : .easeOut(duration: 0.4)) {
+                        highlightedMessageID = nil
+                    }
+                }
+            }
+            .overlay(alignment: .bottomTrailing) { scrollToBottomButton(proxy) }
+        }
+    }
+
+    /// Opening a conversation lands on the unread marker if there is one, otherwise at the
+    /// bottom — and without animating, so it reads as "already there" rather than as a scroll.
+    private func positionInitially(_ proxy: ScrollViewProxy) {
+        guard !didInitialScroll else { return }
+        didInitialScroll = true
+
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            if let unread = model.rows.first(where: \.isUnreadSeparator)?.id {
+                proxy.scrollTo(unread, anchor: .center)
+            } else {
+                proxy.scrollTo(Self.bottomAnchor, anchor: .bottom)
             }
         }
-        .overlay(alignment: .bottomTrailing) { scrollToBottomButton }
     }
 
     @ViewBuilder
@@ -138,9 +165,13 @@ struct ChatView: View {
     }
 
     @ViewBuilder
-    private var scrollToBottomButton: some View {
+    private func scrollToBottomButton(_ proxy: ScrollViewProxy) -> some View {
         if !model.isScrolledToLatest {
             Button {
+                // Actually scroll — flipping the flag alone would just lie about where we are.
+                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.25)) {
+                    proxy.scrollTo(Self.bottomAnchor, anchor: .bottom)
+                }
                 model.isScrolledToLatest = true
             } label: {
                 Image(systemName: "arrow.down")

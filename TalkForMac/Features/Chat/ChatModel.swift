@@ -292,7 +292,11 @@ final class ChatModel {
     private(set) var mentionQuery: MentionComposer.Query?
     private(set) var mentionSuggestions: [MentionSuggestion] = []
     var highlightedMentionIndex = 0
-    @ObservationIgnored private var mentionTask: Task<Void, Never>?
+    @ObservationIgnored var mentionTask: Task<Void, Never>?
+    /// Guards the text+caret rewrite when a suggestion is accepted. Without it, setting the
+    /// text re-runs detection against the just-finished mention and the popover reopens on
+    /// the name the user only just chose.
+    @ObservationIgnored var isApplyingMention = false
 
     private var draftSaveTask: Task<Void, Never>?
 
