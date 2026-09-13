@@ -31,6 +31,7 @@ struct RootView: View {
                 splitView
             }
         }
+        .remembersWindowFrame(named: "TalkForMacMain")
         .task { await app.start() }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             app.isApplicationActive = true

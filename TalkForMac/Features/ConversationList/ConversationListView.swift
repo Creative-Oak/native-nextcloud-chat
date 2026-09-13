@@ -34,6 +34,12 @@ struct ConversationListView: View {
             ForEach(model.conversations) { conversation in
                 ConversationRow(conversation: conversation)
                     .tag(conversation.token)
+                    // Double-clicking a conversation opens it and puts the caret in the
+                    // message field — the thing you were almost certainly about to do.
+                    .onTapGesture(count: 2) {
+                        selection = conversation.token
+                        composerFocused = true
+                    }
                     .contextMenu { contextMenu(for: conversation) }
             }
         }

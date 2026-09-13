@@ -171,6 +171,31 @@ Two seams exist so calls can be added without surgery:
    are already modelled, so the sidebar and header can surface an ongoing call before
    any call code exists.
 
+## Mentions
+
+Detection (`@…` under the caret) and the wire syntax (`mentionId` after the `@`, quoted when
+it contains a space or a slash — straight from the Talk docs) live in `MentionComposer` in
+the core, with tests. The composer only does the popover and the keyboard handling: while
+the suggestion list is open it takes Return, Tab, Escape and the arrow keys, so Return picks
+a name instead of sending a half-typed message.
+
+`@all` is filtered out when the server's `mentionPermissions` restricts it to moderators.
+
+## Verification, without a Mac
+
+This repository was largely written on Linux, which has no macOS SDK. Three things stand in
+for the compiler on the UI layer:
+
+1. `swift build` / `swift test` compile and run **all** of `Sources/TalkCore` — which is why
+   as much logic as possible lives there, including transcript grouping, previews, relative
+   timestamps and mention syntax, none of which are inherently UI.
+2. `swiftc -parse` over `TalkForMac/**` catches syntax errors.
+3. `Tools/validate_pbxproj.py` parses the hand-written Xcode project as an OpenStep plist
+   and checks for dangling references and malformed targets, so the worst failure —
+   "the project won't open" — is caught without Xcode.
+
+The macOS CI job is what actually type-checks the SwiftUI layer.
+
 ## Logging
 
 `os.Logger` with subsystem `dk.creativeoak.TalkForMac` and categories

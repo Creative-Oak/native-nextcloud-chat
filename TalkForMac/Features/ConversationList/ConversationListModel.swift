@@ -19,6 +19,9 @@ final class ConversationListModel {
     private let notifications: NotificationController
     /// Tokens we have already notified about, so a re-fetch doesn't re-announce old news.
     private var announcedActivity: [String: Int] = [:]
+    /// Set by `AppModel`: true when the user is demonstrably looking at this conversation.
+    /// Stops a notification firing for the messages appearing on screen in front of them.
+    var isCurrentlyVisible: (String) -> Bool = { _ in false }
     private var hasLoadedFromCache = false
 
     init(session: Session, notifications: NotificationController) {
@@ -177,6 +180,10 @@ final class ConversationListModel {
     private func notifyAboutNewActivity(_ change: ConversationIndex.Change) {
         for token in change.newActivity {
             guard let conversation = index[token] else { continue }
+            guard !isCurrentlyVisible(token) else {
+                announcedActivity[token] = conversation.unreadMessages
+                continue
+            }
             let previous = announcedActivity[token] ?? 0
             announcedActivity[token] = conversation.unreadMessages
             guard conversation.unreadMessages > previous else { continue }

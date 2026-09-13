@@ -55,15 +55,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSWindow.allowsAutomaticWindowTabbing = false
     }
 
-    func applicationWillTerminate(_ notification: Notification) {
-        // Drafts are debounced while typing; make sure the last few keystrokes survive quit.
-        app?.chat?.saveDraftNow()
-    }
-
-    /// Quitting with an unsent draft shouldn't lose it. The save is a fast local write, so
-    /// a brief, bounded wait is worth it.
+    /// Quitting with a half-typed message must not lose it.
+    ///
+    /// Draft saves are debounced while typing, so on quit there can be up to a few hundred
+    /// milliseconds of unwritten text. `.terminateLater` waits for the write — a local
+    /// store write, so the wait is imperceptible — rather than racing the process exit.
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        app?.chat?.saveDraftNow()
-        return .terminateNow
+        guard let chat = app?.chat else { return .terminateNow }
+        Task {
+            await chat.flushDraft()
+            sender.reply(toApplicationShouldTerminate: true)
+        }
+        return .terminateLater
     }
 }

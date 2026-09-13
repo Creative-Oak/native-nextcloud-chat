@@ -313,6 +313,19 @@ final class ChatModel {
         }
     }
 
+    /// Writes the draft and *waits* for it. Used on quit, where a fire-and-forget write
+    /// would race the process going away.
+    func flushDraft() async {
+        draftSaveTask?.cancel()
+        let draft = Draft(
+            token: token,
+            text: draftText,
+            replyToMessageID: replyingTo?.messageID,
+            editingMessageID: editing?.messageID
+        )
+        await session.store.save(draft: draft, accountID: session.account.id)
+    }
+
     func saveDraftNow() {
         let draft = Draft(
             token: token,

@@ -28,7 +28,7 @@ final class AvatarLoader {
     /// A few hundred small images is a couple of megabytes — well worth never refetching.
     private let memoryLimit = 300
 
-    init(client: OCSClient, server: ServerAddress, supportsConversationAvatars: Bool) {
+    init(client: OCSClient, supportsConversationAvatars: Bool) {
         self.client = client
         self.supportsConversationAvatars = supportsConversationAvatars
         self.diskCache = AvatarDiskCache()

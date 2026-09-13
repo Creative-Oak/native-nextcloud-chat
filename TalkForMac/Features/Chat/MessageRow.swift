@@ -85,6 +85,29 @@ struct MessageRow: View {
                 Color.accentColor.opacity(0.07)
             }
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(accessibilityLabel)
+    }
+
+    /// VoiceOver reads one coherent sentence per message rather than a pile of fragments.
+    private var accessibilityLabel: String {
+        var parts = [message.actor.resolvedDisplayName]
+        if message.isDeleted {
+            parts.append("message deleted")
+        } else {
+            parts.append(content.preview)
+        }
+        if let parent = message.parent {
+            parts.append("replying to \(parent.actor.resolvedDisplayName)")
+        }
+        if message.lastEdit != nil { parts.append("edited") }
+        if !message.reactions.isEmpty {
+            let total = message.reactions.values.reduce(0, +)
+            parts.append("\(total) reaction\(total == 1 ? "" : "s")")
+        }
+        if case .failed(let reason) = message.deliveryState { parts.append("not sent: \(reason)") }
+        parts.append(message.timestamp.formatted(date: .abbreviated, time: .shortened))
+        return parts.joined(separator: ", ")
     }
 
     @ViewBuilder

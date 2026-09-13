@@ -84,12 +84,15 @@ final class AppModel {
         self.session = session
         avatarLoader = AvatarLoader(
             client: session.client,
-            server: account.server,
             supportsConversationAvatars: account.capabilities.supportsConversationAvatars
         )
         phase = .ready
 
         let list = ConversationListModel(session: session, notifications: notifications)
+        list.isCurrentlyVisible = { [weak self] token in
+            guard let self else { return false }
+            return self.selectedToken == token && self.isApplicationActive && self.isWindowKey
+        }
         conversationList = list
 
         await list.loadFromCache()
