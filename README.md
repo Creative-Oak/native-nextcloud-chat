@@ -22,6 +22,11 @@ real menu commands, keyboard-first navigation, unread state you can trust.
 open TalkForMac.xcodeproj      # then ⌘R
 ```
 
+The project uses Xcode 16+ synchronized folder groups, so new files under `TalkForMac/`
+and `Sources/TalkCore/` are picked up automatically — there is no file list to maintain.
+`python3 Tools/validate_pbxproj.py` checks the project file's integrity without Xcode, and
+runs in CI.
+
 The non-UI half of the app is also a Swift package, so it builds and tests from the
 command line — including on Linux, which is what keeps the layering honest:
 
