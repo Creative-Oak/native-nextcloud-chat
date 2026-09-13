@@ -133,6 +133,8 @@ final class ChatModel {
         syncTask?.cancel()
         syncTask = nil
         saveDraftNow()
+        // The separator belongs to this visit; it shouldn't still be sitting there next time.
+        clearUnreadSeparator()
         await session.chatSync.stop()
     }
 
@@ -165,9 +167,14 @@ final class ChatModel {
 
         await session.store.save(messages: batch.messages, accountID: session.account.id)
 
-        if firstUnreadMessageID == nil, !change.appendedAtEnd {
-            firstUnreadMessageID = computeFirstUnread()
+        // Messages arriving while the user is reading history get a "new messages" line of
+        // their own, so they can see where they were when they scroll back down.
+        if firstUnreadMessageID == nil, !isScrolledToLatest, change.appendedAtEnd,
+           let firstIncoming = batch.messages.first(where: { $0.isVisible && !session.account.isMe($0.actor) }) {
+            firstUnreadMessageID = firstIncoming.messageID
+            rebuildRows()
         }
+
         markReadIfPossible()
     }
 

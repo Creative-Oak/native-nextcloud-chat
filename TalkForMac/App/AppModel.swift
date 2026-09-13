@@ -46,6 +46,7 @@ final class AppModel {
 
     private var networkTask: Task<Void, Never>?
     private var conversationSyncTask: Task<Void, Never>?
+    private var isRefreshingCapabilities = false
 
     init(dependencies: AppDependencies = AppDependencies()) {
         self.dependencies = dependencies
@@ -79,14 +80,18 @@ final class AppModel {
 
     /// Brings an account online: cache first, network second. The sidebar is painted from
     /// the cache before any request is made, which is what makes launch feel instant.
+    ///
+    /// Safe to call again for the same account — it tears the previous session down first,
+    /// which is what makes a capability refresh possible without restarting the app.
     func activate(account: Account) async throws {
+        await teardownSession()
+
         let session = try dependencies.makeSession(account: account)
         self.session = session
         avatarLoader = AvatarLoader(
             client: session.client,
             supportsConversationAvatars: account.capabilities.supportsConversationAvatars
         )
-        phase = .ready
 
         let list = ConversationListModel(session: session, notifications: notifications)
         list.isCurrentlyVisible = { [weak self] token in
@@ -95,7 +100,17 @@ final class AppModel {
         }
         conversationList = list
 
+        // Paint from the cache *before* going to `.ready`, so the window never flashes an
+        // empty "No Conversations" state on the way in.
         await list.loadFromCache()
+        phase = .ready
+
+        // The server tells us its Talk configuration changed by changing this hash; that is
+        // the documented signal to refetch capabilities, and the only one we act on.
+        await session.capabilities.preload(account.capabilities, hash: account.talkHash)
+        await session.client.onTalkHashChange { [weak self] hash in
+            Task { @MainActor in await self?.talkConfigurationChanged(hash: hash) }
+        }
 
         // Restore the previous selection if it still exists.
         let remembered = dependencies.preferences.lastSelectedToken
@@ -109,15 +124,43 @@ final class AppModel {
         await notifications.requestAuthorizationIfNeeded()
     }
 
-    func signOut() async {
+    private func teardownSession() async {
         guard let session else { return }
         await chat?.deactivate()
-        await session.shutdown()
+        chat = nil
         conversationSyncTask?.cancel()
-        await dependencies.authentication.signOut(account: session.account)
-        await dependencies.store.deleteAccount(id: session.account.id)
-
+        conversationSyncTask = nil
+        await session.shutdown()
         self.session = nil
+    }
+
+    /// The server's Talk configuration changed — refetch capabilities and rebuild around
+    /// them, so a feature that was just enabled (or disabled) takes effect without a relaunch.
+    private func talkConfigurationChanged(hash: String) async {
+        guard let session, !isRefreshingCapabilities else { return }
+        isRefreshingCapabilities = true
+        defer { isRefreshingCapabilities = false }
+
+        await session.capabilities.invalidate(newHash: hash)
+        guard let refreshed = try? await session.capabilities.capabilities(force: true) else { return }
+
+        var account = session.account
+        guard refreshed != account.capabilities || account.talkHash != hash else { return }
+        account.capabilities = refreshed
+        account.talkHash = hash
+        await dependencies.store.save(account: account)
+
+        Log.sync.info("Talk capabilities changed; rebuilding the session")
+        try? await activate(account: account)
+    }
+
+    func signOut() async {
+        guard let session else { return }
+        let account = session.account
+        await teardownSession()
+        await dependencies.authentication.signOut(account: account)
+        await dependencies.store.deleteAccount(id: account.id)
+
         avatarLoader = nil
         conversationList = nil
         chat = nil
