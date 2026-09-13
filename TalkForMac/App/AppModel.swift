@@ -190,6 +190,9 @@ final class AppModel {
         guard let session, let token = selectedToken,
               let conversation = conversationList?.index[token]
         else {
+            // Nothing is going to open, so a reveal waiting on it would otherwise fire at
+            // whichever conversation the user picked next.
+            pendingReveal = nil
             let previous = chat
             chat = nil
             inspector = nil

@@ -286,6 +286,17 @@ final class ChatModel {
         }
 
         for _ in 0..<Self.revealPageLimit {
+            // A scroll-driven page may already be in flight; `loadOlder` would no-op and
+            // this loop would read that as "no progress" and give up short of the message.
+            while isLoadingOlder {
+                try? await Task.sleep(for: .milliseconds(50))
+                if Task.isCancelled { return false }
+            }
+            if timeline.message(id: messageID) != nil {
+                highlightRequest = messageID
+                return true
+            }
+
             let oldestBefore = timeline.firstServerMessageID
             // Already past it: the message is missing from a stretch we have loaded, which
             // means it was deleted or expired rather than being further back.
