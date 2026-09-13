@@ -9,6 +9,7 @@ struct RootView: View {
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var composerFocused = false
     @State private var searchFocusRequest = false
+    @State private var isShowingQuickSwitcher = false
 
     var body: some View {
         @Bindable var app = app
@@ -43,9 +44,34 @@ struct RootView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification)) { _ in
             app.isWindowKey = false
         }
+        .overlay { quickSwitcher }
         .focusedSceneValue(\.appModel, app)
         .focusedSceneValue(\.composerFocusRequest, { composerFocused = true })
         .focusedSceneValue(\.searchFocusRequest, { searchFocusRequest = true })
+        .focusedSceneValue(\.quickSwitcherRequest, { isShowingQuickSwitcher = true })
+    }
+
+    @ViewBuilder
+    private var quickSwitcher: some View {
+        if isShowingQuickSwitcher, let list = app.conversationList {
+            ZStack(alignment: .top) {
+                // A click anywhere outside dismisses, the way Spotlight does.
+                Color.black.opacity(0.001)
+                    .contentShape(.rect)
+                    .onTapGesture { isShowingQuickSwitcher = false }
+
+                QuickSwitcher(
+                    conversations: list.index.visibleConversations,
+                    onPick: { conversation in
+                        isShowingQuickSwitcher = false
+                        app.selectedToken = conversation.token
+                    },
+                    onCancel: { isShowingQuickSwitcher = false }
+                )
+                .padding(.top, 80)
+            }
+            .transition(.opacity)
+        }
     }
 
     @ViewBuilder

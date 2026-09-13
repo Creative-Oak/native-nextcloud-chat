@@ -34,6 +34,7 @@ struct ComposerView: View {
             }
         }
         .background(.bar)
+        .overlay(alignment: .bottomLeading) { mentionSuggestions }
     }
 
     private var editor: some View {
@@ -42,12 +43,17 @@ struct ComposerView: View {
                 text: $model.draftText,
                 isFocused: $isFocused,
                 measuredHeight: $height,
+                caret: $model.caret,
+                caretRequest: $model.caretRequest,
                 placeholder: placeholder,
                 isEnabled: true,
                 sendsOnReturn: preferences?.sendsOnReturn ?? true,
+                isSuggesting: model.isShowingMentionSuggestions,
                 onSubmit: { model.send() },
                 onCancel: { cancelContext() },
-                onEditPrevious: { model.beginEditingLatestOwnMessage() }
+                onEditPrevious: { model.beginEditingLatestOwnMessage() },
+                onMoveSuggestion: { model.moveMentionHighlight(by: $0) },
+                onAcceptSuggestion: { model.acceptHighlightedMention() }
             )
             .frame(height: height)
             .overlay(alignment: .topLeading) {
@@ -106,7 +112,26 @@ struct ComposerView: View {
             : "Send (⌘Return)"
     }
 
+    /// Floats above the composer rather than pushing it down, so the text you're typing
+    /// doesn't move while you're typing it.
+    @ViewBuilder
+    private var mentionSuggestions: some View {
+        if model.isShowingMentionSuggestions {
+            MentionSuggestionList(
+                suggestions: model.mentionSuggestions,
+                highlighted: model.highlightedMentionIndex,
+                onPick: { model.accept($0) }
+            )
+            .padding(.leading, 12)
+            .offset(y: -(height + 24))
+        }
+    }
+
     private func cancelContext() {
+        if model.isShowingMentionSuggestions {
+            model.dismissMentions()
+            return
+        }
         if model.editing != nil {
             model.cancelEdit()
         } else if model.replyingTo != nil {

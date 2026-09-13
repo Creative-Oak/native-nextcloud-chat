@@ -64,9 +64,10 @@ struct ChatView: View {
                 let atBottom = metrics.distanceFromBottom < 40
                 if model.isScrolledToLatest != atBottom { model.isScrolledToLatest = atBottom }
 
-                if metrics.distanceFromTop < 200 {
-                    Task { await model.loadOlder() }
-                }
+                // Start fetching before the user reaches the top, so history is usually
+                // already there by the time they get to it.
+                guard metrics.distanceFromTop < 240, model.canLoadOlder, !model.isLoadingOlder else { return }
+                Task { await loadOlderKeepingPosition(proxy) }
             }
             .onChange(of: model.rows.last?.id) { _, _ in
                 guard model.isScrolledToLatest else { return }
@@ -152,6 +153,26 @@ struct ChatView: View {
             .padding(16)
             .help("Scroll to the newest message")
             .transition(.opacity)
+        }
+    }
+
+    /// Loads older messages without moving what the user is reading.
+    ///
+    /// Prepending rows to a scroll view shifts everything below them down, which normally
+    /// yanks the reader upward by exactly the height of what was just inserted. Pinning the
+    /// row that was at the top before the fetch, and restoring it after, is what makes
+    /// scrolling up feel like the content was always there.
+    private func loadOlderKeepingPosition(_ proxy: ScrollViewProxy) async {
+        let anchor = model.rows.first?.id
+        await model.loadOlder()
+        guard let anchor else { return }
+
+        // One turn for SwiftUI to lay out the inserted rows before we re-anchor.
+        await Task.yield()
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            proxy.scrollTo(anchor, anchor: .top)
         }
     }
 

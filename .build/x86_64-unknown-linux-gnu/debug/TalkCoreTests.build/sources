@@ -1,6 +1,7 @@
 /home/user/native-nextcloud-chat/Tests/TalkCoreTests/CapabilityTests.swift
 /home/user/native-nextcloud-chat/Tests/TalkCoreTests/ConversationDecodingTests.swift
 /home/user/native-nextcloud-chat/Tests/TalkCoreTests/LoginFlowTests.swift
+/home/user/native-nextcloud-chat/Tests/TalkCoreTests/MentionComposerTests.swift
 /home/user/native-nextcloud-chat/Tests/TalkCoreTests/MessageContentParserTests.swift
 /home/user/native-nextcloud-chat/Tests/TalkCoreTests/MessageDecodingTests.swift
 /home/user/native-nextcloud-chat/Tests/TalkCoreTests/MessageTimelineTests.swift

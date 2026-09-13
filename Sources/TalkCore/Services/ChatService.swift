@@ -18,7 +18,7 @@ struct ChatBatch: Sendable {
 
 /// The Talk chat API, v1. See docs/NEXTCLOUD_API.md § 5.
 actor ChatService {
-    private let client: OCSClient
+    let client: OCSClient
 
     /// Talk's documented ceilings.
     static let maxLimit = 200
@@ -179,5 +179,83 @@ actor ChatService {
     /// Requires `chat-unread`.
     func markUnread(token: String) async throws(TalkError) {
         _ = try await client.send(OCSRequest.delete(Endpoint.chatReadMarker(token)), as: ConversationDTO.self)
+    }
+}
+
+// MARK: - Mentions
+
+extension ChatService {
+    /// Autocomplete suggestions for the composer.
+    ///
+    /// `GET /chat/{token}/mentions`. The documented `search` term must be at least one
+    /// character; an empty term is answered locally with nothing rather than by asking the
+    /// server for everyone.
+    func mentionSuggestions(
+        token: String,
+        search: String,
+        limit: Int = 20,
+        includeStatus: Bool = true
+    ) async throws(TalkError) -> [MentionSuggestion] {
+        guard !search.isEmpty else { return [] }
+        let query = [
+            URLQueryItem(name: "search", value: search),
+            URLQueryItem(name: "limit", value: String(limit)),
+            URLQueryItem(name: "includeStatus", value: includeStatus ? "true" : "false")
+        ]
+        let response = try await client.send(
+            OCSRequest.get(Endpoint.mentions(token), query: query),
+            as: [MentionSuggestionDTO].self
+        )
+        return (response.value ?? []).map { $0.model() }
+    }
+}
+
+struct MentionSuggestionDTO: Decodable, Sendable {
+    let id: String
+    let label: String?
+    let source: String?
+    let mentionId: String?
+    let details: String?
+    let status: String?
+    let statusIcon: String?
+    let statusMessage: String?
+    let statusClearAt: Int?
+
+    private enum CodingKeys: String, CodingKey {
+        case id, label, source, mentionId, details, status, statusIcon, statusMessage, statusClearAt
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = Lenient.string(container, .id) ?? ""
+        label = try? container.decodeIfPresent(String.self, forKey: .label)
+        source = try? container.decodeIfPresent(String.self, forKey: .source)
+        mentionId = try? container.decodeIfPresent(String.self, forKey: .mentionId)
+        details = try? container.decodeIfPresent(String.self, forKey: .details)
+        status = try? container.decodeIfPresent(String.self, forKey: .status)
+        statusIcon = try? container.decodeIfPresent(String.self, forKey: .statusIcon)
+        statusMessage = try? container.decodeIfPresent(String.self, forKey: .statusMessage)
+        statusClearAt = Lenient.int(container, .statusClearAt)
+    }
+
+    func model() -> MentionSuggestion {
+        var userStatus: UserStatus?
+        if let status, !status.isEmpty {
+            userStatus = UserStatus(
+                status: status,
+                icon: statusIcon,
+                message: statusMessage,
+                clearAt: statusClearAt.map { Date(timeIntervalSince1970: TimeInterval($0)) }
+            )
+        }
+        return MentionSuggestion(
+            id: id,
+            label: label ?? id,
+            // Older servers predate `mentionId`; the id is what they expect after the `@`.
+            mentionID: mentionId ?? id,
+            source: MentionSuggestion.Source(rawValue: source ?? "users"),
+            status: userStatus,
+            details: details
+        )
     }
 }

@@ -58,7 +58,9 @@ server doesn't support is hidden rather than broken.
 | ↑ ↓ | Move through the sidebar |
 | ⌥⌘↑ / ⌥⌘↓ | Previous / next conversation |
 | ⇧⌘] | Next unread conversation |
+| ⌘K | Go to conversation (quick switcher) |
 | ⇧⌘K | Focus the message field |
+| @ | Mention someone — ↑↓ to choose, Return or Tab to insert |
 | Return | Send (⇧Return for a new line — swappable in Settings) |
 | ⌘Return | Send, always |
 | ⌘↑ | Edit your last message |

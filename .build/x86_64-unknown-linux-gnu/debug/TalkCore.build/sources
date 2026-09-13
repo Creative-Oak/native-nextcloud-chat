@@ -3,6 +3,7 @@
 /home/user/native-nextcloud-chat/Sources/TalkCore/Models/Capabilities.swift
 /home/user/native-nextcloud-chat/Sources/TalkCore/Models/Conversation.swift
 /home/user/native-nextcloud-chat/Sources/TalkCore/Models/Draft.swift
+/home/user/native-nextcloud-chat/Sources/TalkCore/Models/MentionSuggestion.swift
 /home/user/native-nextcloud-chat/Sources/TalkCore/Models/Message.swift
 /home/user/native-nextcloud-chat/Sources/TalkCore/Models/RichObject.swift
 /home/user/native-nextcloud-chat/Sources/TalkCore/Networking/Credentials.swift

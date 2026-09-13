@@ -16,14 +16,22 @@ struct ComposerTextView: NSViewRepresentable {
     @Binding var text: String
     @Binding var isFocused: Bool
     @Binding var measuredHeight: CGFloat
+    /// Where the caret is, so mention autocomplete knows which `@…` you're inside.
+    @Binding var caret: Int
+    /// Set by the model after it rewrites the text (accepting a mention), consumed here.
+    @Binding var caretRequest: Int?
 
     var placeholder: String
     var isEnabled: Bool
     var sendsOnReturn: Bool
+    /// While the mention list is open it owns Return, Tab, Escape and the arrow keys.
+    var isSuggesting: Bool
 
     var onSubmit: () -> Void
     var onCancel: () -> Void
     var onEditPrevious: () -> Void
+    var onMoveSuggestion: (Int) -> Void
+    var onAcceptSuggestion: () -> Void
 
     /// One line, and the ceiling before it starts scrolling instead of growing.
     static let minimumHeight: CGFloat = 22
@@ -68,6 +76,13 @@ struct ComposerTextView: NSViewRepresentable {
         textView.isEditable = isEnabled
         textView.isSelectable = true
 
+        if let requested = caretRequest {
+            let clamped = min(max(requested, 0), textView.string.count)
+            textView.setSelectedRange(NSRange(location: clamped, length: 0))
+            // Clear the request outside the update pass.
+            DispatchQueue.main.async { caretRequest = nil }
+        }
+
         if isFocused, textView.window?.firstResponder !== textView {
             DispatchQueue.main.async {
                 textView.window?.makeFirstResponder(textView)
@@ -89,7 +104,14 @@ struct ComposerTextView: NSViewRepresentable {
         func textDidChange(_ notification: Notification) {
             guard let textView = notification.object as? NSTextView else { return }
             parent.text = textView.string
+            parent.caret = textView.selectedRange().location
             updateHeight()
+        }
+
+        func textViewDidChangeSelection(_ notification: Notification) {
+            guard let textView = notification.object as? NSTextView else { return }
+            let location = textView.selectedRange().location
+            if parent.caret != location { parent.caret = location }
         }
 
         func textDidBeginEditing(_ notification: Notification) {
@@ -101,6 +123,27 @@ struct ComposerTextView: NSViewRepresentable {
         }
 
         func textView(_ textView: NSTextView, doCommandBy selector: Selector) -> Bool {
+            // While the mention list is open it owns these keys — Return picks a name
+            // rather than sending a half-typed message.
+            if parent.isSuggesting {
+                switch selector {
+                case #selector(NSResponder.moveUp(_:)):
+                    parent.onMoveSuggestion(-1)
+                    return true
+                case #selector(NSResponder.moveDown(_:)):
+                    parent.onMoveSuggestion(1)
+                    return true
+                case #selector(NSResponder.insertNewline(_:)), #selector(NSResponder.insertTab(_:)):
+                    parent.onAcceptSuggestion()
+                    return true
+                case #selector(NSResponder.cancelOperation(_:)):
+                    parent.onCancel()
+                    return true
+                default:
+                    break
+                }
+            }
+
             switch selector {
             case #selector(NSResponder.insertNewline(_:)):
                 if parent.sendsOnReturn {

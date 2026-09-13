@@ -9,6 +9,7 @@ struct TalkCommands: Commands {
     @FocusedValue(\.appModel) private var app
     @FocusedValue(\.composerFocusRequest) private var focusComposer
     @FocusedValue(\.searchFocusRequest) private var focusSearch
+    @FocusedValue(\.quickSwitcherRequest) private var showQuickSwitcher
 
     var body: some Commands {
         // Replaces the default "New Window" — a second window on a messaging app is rarely
@@ -42,6 +43,10 @@ struct TalkCommands: Commands {
                 .keyboardShortcut("]", modifiers: [.command, .shift])
 
             Divider()
+
+            Button("Go to Conversation…") { showQuickSwitcher?() }
+                .keyboardShortcut("k", modifiers: .command)
+                .disabled(app?.session == nil)
 
             Button("Focus Message Field") { focusComposer?() }
                 .keyboardShortcut("k", modifiers: [.command, .shift])
@@ -95,6 +100,7 @@ struct TalkCommands: Commands {
 private struct AppModelFocusedKey: FocusedValueKey { typealias Value = AppModel }
 private struct ComposerFocusKey: FocusedValueKey { typealias Value = () -> Void }
 private struct SearchFocusKey: FocusedValueKey { typealias Value = () -> Void }
+private struct QuickSwitcherKey: FocusedValueKey { typealias Value = () -> Void }
 
 extension FocusedValues {
     var appModel: AppModel? {
@@ -110,5 +116,10 @@ extension FocusedValues {
     var searchFocusRequest: (() -> Void)? {
         get { self[SearchFocusKey.self] }
         set { self[SearchFocusKey.self] = newValue }
+    }
+
+    var quickSwitcherRequest: (() -> Void)? {
+        get { self[QuickSwitcherKey.self] }
+        set { self[QuickSwitcherKey.self] = newValue }
     }
 }

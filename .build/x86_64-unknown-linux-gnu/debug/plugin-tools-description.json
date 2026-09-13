@@ -61,6 +61,10 @@
         },
         {
           "kind" : "file",
+          "name" : "/home/user/native-nextcloud-chat/Sources/TalkCore/Models/MentionSuggestion.swift"
+        },
+        {
+          "kind" : "file",
           "name" : "/home/user/native-nextcloud-chat/Sources/TalkCore/Models/Message.swift"
         },
         {
@@ -221,6 +225,7 @@
         "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/Capabilities.swift.o",
         "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/Conversation.swift.o",
         "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/Draft.swift.o",
+        "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/MentionSuggestion.swift.o",
         "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/Message.swift.o",
         "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/RichObject.swift.o",
         "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/Credentials.swift.o",
@@ -306,6 +311,10 @@
         {
           "kind" : "file",
           "name" : "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/Draft.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/MentionSuggestion.swift.o"
         },
         {
           "kind" : "file",
@@ -463,6 +472,7 @@
         "/home/user/native-nextcloud-chat/Sources/TalkCore/Models/Capabilities.swift",
         "/home/user/native-nextcloud-chat/Sources/TalkCore/Models/Conversation.swift",
         "/home/user/native-nextcloud-chat/Sources/TalkCore/Models/Draft.swift",
+        "/home/user/native-nextcloud-chat/Sources/TalkCore/Models/MentionSuggestion.swift",
         "/home/user/native-nextcloud-chat/Sources/TalkCore/Models/Message.swift",
         "/home/user/native-nextcloud-chat/Sources/TalkCore/Models/RichObject.swift",
         "/home/user/native-nextcloud-chat/Sources/TalkCore/Networking/Credentials.swift",
@@ -519,6 +529,10 @@
         {
           "kind" : "file",
           "name" : "/home/user/native-nextcloud-chat/Tests/TalkCoreTests/LoginFlowTests.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/home/user/native-nextcloud-chat/Tests/TalkCoreTests/MentionComposerTests.swift"
         },
         {
           "kind" : "file",
@@ -588,6 +602,7 @@
         "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/CapabilityTests.swift.o",
         "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/ConversationDecodingTests.swift.o",
         "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/LoginFlowTests.swift.o",
+        "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/MentionComposerTests.swift.o",
         "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/MessageContentParserTests.swift.o",
         "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/MessageDecodingTests.swift.o",
         "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/MessageTimelineTests.swift.o",
@@ -645,6 +660,10 @@
         },
         {
           "kind" : "file",
+          "name" : "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/MentionComposerTests.swift.o"
+        },
+        {
+          "kind" : "file",
           "name" : "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/MessageContentParserTests.swift.o"
         },
         {
@@ -697,6 +716,7 @@
         "/home/user/native-nextcloud-chat/Tests/TalkCoreTests/CapabilityTests.swift",
         "/home/user/native-nextcloud-chat/Tests/TalkCoreTests/ConversationDecodingTests.swift",
         "/home/user/native-nextcloud-chat/Tests/TalkCoreTests/LoginFlowTests.swift",
+        "/home/user/native-nextcloud-chat/Tests/TalkCoreTests/MentionComposerTests.swift",
         "/home/user/native-nextcloud-chat/Tests/TalkCoreTests/MessageContentParserTests.swift",
         "/home/user/native-nextcloud-chat/Tests/TalkCoreTests/MessageDecodingTests.swift",
         "/home/user/native-nextcloud-chat/Tests/TalkCoreTests/MessageTimelineTests.swift",
@@ -890,6 +910,7 @@
       "/home/user/native-nextcloud-chat/Sources/TalkCore/Models/Capabilities.swift",
       "/home/user/native-nextcloud-chat/Sources/TalkCore/Models/Conversation.swift",
       "/home/user/native-nextcloud-chat/Sources/TalkCore/Models/Draft.swift",
+      "/home/user/native-nextcloud-chat/Sources/TalkCore/Models/MentionSuggestion.swift",
       "/home/user/native-nextcloud-chat/Sources/TalkCore/Models/Message.swift",
       "/home/user/native-nextcloud-chat/Sources/TalkCore/Models/RichObject.swift",
       "/home/user/native-nextcloud-chat/Sources/TalkCore/Networking/Credentials.swift",
@@ -967,6 +988,7 @@
       "/home/user/native-nextcloud-chat/Tests/TalkCoreTests/CapabilityTests.swift",
       "/home/user/native-nextcloud-chat/Tests/TalkCoreTests/ConversationDecodingTests.swift",
       "/home/user/native-nextcloud-chat/Tests/TalkCoreTests/LoginFlowTests.swift",
+      "/home/user/native-nextcloud-chat/Tests/TalkCoreTests/MentionComposerTests.swift",
       "/home/user/native-nextcloud-chat/Tests/TalkCoreTests/MessageContentParserTests.swift",
       "/home/user/native-nextcloud-chat/Tests/TalkCoreTests/MessageDecodingTests.swift",
       "/home/user/native-nextcloud-chat/Tests/TalkCoreTests/MessageTimelineTests.swift",
@@ -1124,6 +1146,10 @@
         },
         {
           "kind" : "file",
+          "name" : "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/MentionComposerTests.swift.o"
+        },
+        {
+          "kind" : "file",
           "name" : "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/MessageContentParserTests.swift.o"
         },
         {
@@ -1225,6 +1251,10 @@
         {
           "kind" : "file",
           "name" : "/home/user/native-nextcloud-chat/Sources/TalkCore/Models/Draft.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/home/user/native-nextcloud-chat/Sources/TalkCore/Models/MentionSuggestion.swift"
         },
         {
           "kind" : "file",
@@ -1391,6 +1421,10 @@
         {
           "kind" : "file",
           "name" : "/home/user/native-nextcloud-chat/Tests/TalkCoreTests/LoginFlowTests.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/home/user/native-nextcloud-chat/Tests/TalkCoreTests/MentionComposerTests.swift"
         },
         {
           "kind" : "file",
@@ -1572,6 +1606,10 @@
         },
         {
           "kind" : "file",
+          "name" : "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/MentionSuggestion.swift.o"
+        },
+        {
+          "kind" : "file",
           "name" : "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/Message.swift.o"
         },
         {
@@ -1657,6 +1695,10 @@
         {
           "kind" : "file",
           "name" : "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/LoginFlowTests.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/MentionComposerTests.swift.o"
         },
         {
           "kind" : "file",

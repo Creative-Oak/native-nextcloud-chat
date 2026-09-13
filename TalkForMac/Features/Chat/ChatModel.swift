@@ -274,8 +274,25 @@ final class ChatModel {
     // MARK: - Drafts
 
     var draftText: String = "" {
-        didSet { scheduleDraftSave() }
+        didSet {
+            scheduleDraftSave()
+            refreshMentionQuery()
+        }
     }
+
+    /// Caret offset in the composer, reported by the text view. Mention autocomplete needs
+    /// it to know which `@…` the user is inside.
+    var caret: Int = 0 {
+        didSet { refreshMentionQuery() }
+    }
+
+    /// Set to move the composer's caret after the model rewrites the text.
+    var caretRequest: Int?
+
+    private(set) var mentionQuery: MentionComposer.Query?
+    private(set) var mentionSuggestions: [MentionSuggestion] = []
+    var highlightedMentionIndex = 0
+    @ObservationIgnored private var mentionTask: Task<Void, Never>?
 
     private var draftSaveTask: Task<Void, Never>?
 
