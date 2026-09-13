@@ -63,6 +63,50 @@ final class URLSessionTransport: HTTPTransport, @unchecked Sendable {
         }
     }
 
+    /// Uploads with byte-level progress.
+    ///
+    /// Uses a task delegate for `didSendBodyData`, which is the only way `URLSession`
+    /// reports upload progress. Where that API isn't available (Linux's Foundation), this
+    /// falls back to the protocol's coarse default rather than pretending.
+    func upload(
+        _ request: HTTPRequest,
+        progress: @escaping @Sendable (Double) -> Void
+    ) async throws(TalkError) -> HTTPResponse {
+        #if canImport(FoundationNetworking)
+        progress(0)
+        let response = try await send(request)
+        progress(1)
+        return response
+        #else
+        guard let body = request.body else { return try await send(request) }
+
+        var urlRequest = URLRequest(url: request.url)
+        urlRequest.httpMethod = request.method.rawValue
+        urlRequest.timeoutInterval = request.timeout
+        for (name, value) in request.headers.all {
+            urlRequest.setValue(value, forHTTPHeaderField: name)
+        }
+
+        let delegate = UploadProgressDelegate(onProgress: progress)
+        do {
+            let (data, response) = try await session.upload(for: urlRequest, from: body, delegate: delegate)
+            guard let http = response as? HTTPURLResponse else {
+                throw TalkError.unexpectedResponse("Non-HTTP response")
+            }
+            var headers = HTTPHeaders()
+            for (key, value) in http.allHeaderFields {
+                if let key = key as? String, let value = value as? String { headers[key] = value }
+            }
+            progress(1)
+            return HTTPResponse(status: http.statusCode, headers: headers, body: data)
+        } catch let error as TalkError {
+            throw error
+        } catch {
+            throw Self.map(error, host: request.url.host() ?? "")
+        }
+        #endif
+    }
+
     private static func map(_ error: any Error, host: String) -> TalkError {
         let nsError = error as NSError
         guard nsError.domain == NSURLErrorDomain else {
@@ -87,3 +131,26 @@ final class URLSessionTransport: HTTPTransport, @unchecked Sendable {
         }
     }
 }
+
+
+#if !canImport(FoundationNetworking)
+/// Reports upload progress. `URLSession` only offers this through a delegate callback.
+private final class UploadProgressDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+    private let onProgress: @Sendable (Double) -> Void
+
+    init(onProgress: @escaping @Sendable (Double) -> Void) {
+        self.onProgress = onProgress
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        didSendBodyData bytesSent: Int64,
+        totalBytesSent: Int64,
+        totalBytesExpectedToSend: Int64
+    ) {
+        guard totalBytesExpectedToSend > 0 else { return }
+        onProgress(min(1, Double(totalBytesSent) / Double(totalBytesExpectedToSend)))
+    }
+}
+#endif

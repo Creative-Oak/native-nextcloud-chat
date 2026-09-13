@@ -12,7 +12,7 @@ struct ConversationListResult: Sendable {
 
 /// The Talk conversation (room) API, v4.
 actor ConversationService {
-    private let client: OCSClient
+    let client: OCSClient
 
     init(client: OCSClient) {
         self.client = client
@@ -96,5 +96,75 @@ actor ConversationService {
             OCSRequest.put(Endpoint.sessionState(token), form: ["state": active ? "1" : "0"]),
             as: EmptyResponse.self
         )
+    }
+}
+
+// MARK: - Creating and managing conversations
+
+/// What to create. `roomType` values are the documented constants; the optional fields map
+/// one-to-one onto the documented `POST /room` body.
+struct NewConversation: Sendable, Equatable {
+    var type: ConversationType
+    var name: String
+    /// User, group or team id to invite immediately.
+    var invite: String?
+    /// The `source` for `invite` — users, groups, teams, circles…
+    var source: String?
+    var description: String?
+    var password: String?
+
+    /// A direct conversation with one person. Talk returns the existing one if there is one.
+    static func oneToOne(with userID: String) -> NewConversation {
+        NewConversation(type: .oneToOne, name: "", invite: userID, source: "users")
+    }
+
+    static func group(named name: String, inviting entry: DirectoryEntry? = nil) -> NewConversation {
+        NewConversation(
+            type: .group,
+            name: name,
+            invite: entry?.identifier,
+            source: entry?.source.talkSource
+        )
+    }
+
+    static func publicRoom(named name: String, password: String? = nil) -> NewConversation {
+        NewConversation(type: .publicRoom, name: name, password: password)
+    }
+}
+
+extension ConversationService {
+    /// `POST /room`. Returns the created conversation — or the existing one, when asking for
+    /// a one-to-one that already exists, which the server answers with 200 rather than 201.
+    func create(_ new: NewConversation) async throws(TalkError) -> Conversation {
+        var form: [String: String] = ["roomType": String(new.type.rawValue)]
+        if !new.name.isEmpty { form["roomName"] = new.name }
+        if let invite = new.invite, !invite.isEmpty { form["invite"] = invite }
+        if let source = new.source, !source.isEmpty { form["source"] = source }
+        if let description = new.description, !description.isEmpty { form["description"] = description }
+        if let password = new.password, !password.isEmpty { form["password"] = password }
+
+        return try await client.require(OCSRequest.post(Endpoint.rooms, form: form), as: ConversationDTO.self)
+            .value
+            .model()
+    }
+
+    func rename(token: String, to name: String) async throws(TalkError) {
+        _ = try await client.send(
+            OCSRequest.put(Endpoint.room(token), form: ["roomName": name]),
+            as: ConversationDTO.self
+        )
+    }
+
+    func setDescription(_ description: String, token: String) async throws(TalkError) {
+        _ = try await client.send(
+            OCSRequest.put(Endpoint.room(token) + "/description", form: ["description": description]),
+            as: ConversationDTO.self
+        )
+    }
+
+    /// Deletes the conversation for everyone. Moderators only, and never for a one-to-one —
+    /// the server enforces both, and the UI hides the command via `canDeleteConversation`.
+    func delete(token: String) async throws(TalkError) {
+        _ = try await client.send(OCSRequest.delete(Endpoint.room(token)), as: EmptyResponse.self)
     }
 }

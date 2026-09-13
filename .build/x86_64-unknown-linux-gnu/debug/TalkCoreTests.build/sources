@@ -5,6 +5,7 @@
 /home/user/native-nextcloud-chat/Tests/TalkCoreTests/MessageContentParserTests.swift
 /home/user/native-nextcloud-chat/Tests/TalkCoreTests/MessageDecodingTests.swift
 /home/user/native-nextcloud-chat/Tests/TalkCoreTests/MessageTimelineTests.swift
+/home/user/native-nextcloud-chat/Tests/TalkCoreTests/NewServiceTests.swift
 /home/user/native-nextcloud-chat/Tests/TalkCoreTests/OCSClientTests.swift
 /home/user/native-nextcloud-chat/Tests/TalkCoreTests/ServerAddressTests.swift
 /home/user/native-nextcloud-chat/Tests/TalkCoreTests/ServiceRequestTests.swift

@@ -12,6 +12,7 @@ struct RootView: View {
     @State private var composerFocused = false
     @State private var searchFocusRequest = false
     @State private var isShowingQuickSwitcher = false
+    @State private var isShowingInspector = false
 
     var body: some View {
         @Bindable var app = app
@@ -114,6 +115,29 @@ struct RootView: View {
                     .help("Showing cached conversations. Talk for Mac will reconnect on its own.")
             }
         }
+
+        // A spacer separates the conversation's own controls from the window's, so the
+        // toolbar reads as two groups of glass rather than one undifferentiated row.
+        ToolbarSpacer(.flexible)
+
+        ToolbarItem {
+            Button {
+                isShowingQuickSwitcher = true
+            } label: {
+                Label("Go to Conversation", systemImage: "magnifyingglass")
+            }
+            .help("Go to Conversation (⌘K)")
+        }
+
+        ToolbarItem {
+            Button {
+                withAnimation(.smooth) { isShowingInspector.toggle() }
+            } label: {
+                Label("Conversation Details", systemImage: "sidebar.trailing")
+            }
+            .help("Show conversation details")
+            .disabled(app.chat == nil)
+        }
     }
 }
 
@@ -151,7 +175,7 @@ private struct ReauthenticationView: View {
             Button("Sign In Again") {
                 Task { await app.signOut() }
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.glassProminent)
             .controlSize(.large)
         }
         .padding(40)

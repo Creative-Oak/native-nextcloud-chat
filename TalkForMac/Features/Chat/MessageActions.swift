@@ -17,8 +17,15 @@ struct MessageHoverActions: View {
     var onReact: (String, Message) -> Void
 
     @State private var isShowingEmojiPicker = false
+    @Namespace private var glassNamespace
 
     var body: some View {
+        GlassEffectContainer(spacing: GlassSpacing.distinct) {
+            actions
+        }
+    }
+
+    private var actions: some View {
         HStack(spacing: 2) {
             if capabilities.supportsReactions {
                 ForEach(ChatModel.quickReactions.prefix(3), id: \.self) { emoji in
@@ -65,11 +72,10 @@ struct MessageHoverActions: View {
             .help("More")
         }
         .font(.system(size: 12))
-        .padding(.horizontal, 5)
-        .padding(.vertical, 3)
-        .background(.regularMaterial, in: .rect(cornerRadius: 6))
-        .overlay { RoundedRectangle(cornerRadius: 6).strokeBorder(Color(nsColor: .separatorColor), lineWidth: 0.5) }
-        .shadow(color: .black.opacity(0.08), radius: 3, y: 1)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 4)
+        .glass(.floating, cornerRadius: 9)
+        .glassEffectID("message-actions", in: glassNamespace)
     }
 }
 
@@ -130,40 +136,41 @@ struct ReactionStrip: View {
     let isEnabled: Bool
     var onToggle: (String) -> Void
 
+    @Namespace private var namespace
+
     var body: some View {
         // Most-used first, then alphabetically, so the order is stable as counts change.
         let ordered = reactions.sorted {
             $0.value == $1.value ? $0.key < $1.key : $0.value > $1.value
         }
 
-        HStack(spacing: 4) {
-            ForEach(ordered, id: \.key) { emoji, count in
-                Button { onToggle(emoji) } label: {
-                    HStack(spacing: 3) {
-                        Text(emoji).font(.system(size: 11))
-                        if count > 1 {
-                            Text("\(count)")
-                                .font(.system(size: 10, weight: .medium))
-                                .monospacedDigit()
+        // A container with generous spacing: neighbouring pills merge into one glass shape,
+        // and a new reaction flows out of the pill beside it instead of popping into place.
+        GlassEffectContainer(spacing: GlassSpacing.merging) {
+            HStack(spacing: 4) {
+                ForEach(ordered, id: \.key) { emoji, count in
+                    Button { onToggle(emoji) } label: {
+                        HStack(spacing: 3) {
+                            Text(emoji).font(.system(size: 11))
+                            if count > 1 {
+                                Text("\(count)")
+                                    .font(.system(size: 10, weight: .medium))
+                                    .monospacedDigit()
+                            }
                         }
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .foregroundStyle(mine.contains(emoji) ? Color.white : Color.primary)
                     }
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(
-                        mine.contains(emoji) ? AnyShapeStyle(Color.accentColor.opacity(0.18)) : AnyShapeStyle(.quaternary.opacity(0.5)),
-                        in: .capsule
-                    )
-                    .overlay {
-                        if mine.contains(emoji) {
-                            Capsule().strokeBorder(Color.accentColor.opacity(0.5), lineWidth: 0.5)
-                        }
-                    }
+                    .buttonStyle(.plain)
+                    .glass(mine.contains(emoji) ? .selectedChip : .chip)
+                    .glassEffectID(emoji, in: namespace)
+                    .disabled(!isEnabled)
+                    .help(mine.contains(emoji) ? "Remove your reaction" : "React with \(emoji)")
                 }
-                .buttonStyle(.plain)
-                .disabled(!isEnabled)
-                .help(mine.contains(emoji) ? "Remove your reaction" : "React with \(emoji)")
             }
         }
+        .animation(.smooth(duration: 0.25), value: ordered.map(\.key))
     }
 }
 
@@ -213,6 +220,7 @@ struct EmojiPicker: View {
             .frame(width: 240, height: 220)
         }
         .padding(10)
+        .glass(.panel)
     }
 
     private var filteredCategories: [(String, [String])] {

@@ -68,4 +68,26 @@ struct HTTPResponse: Sendable {
 /// layer, the services and the sync engines all have real unit tests.
 protocol HTTPTransport: Sendable {
     func send(_ request: HTTPRequest) async throws(TalkError) -> HTTPResponse
+
+    /// Sends a request whose body is a file, reporting 0…1 as the bytes go out.
+    ///
+    /// Separate from ``send(_:)`` because an upload is the one case where a progress bar is
+    /// worth the plumbing — and because the default implementation below means a transport
+    /// only implements it if it can do better than "0, then 1".
+    func upload(
+        _ request: HTTPRequest,
+        progress: @escaping @Sendable (Double) -> Void
+    ) async throws(TalkError) -> HTTPResponse
+}
+
+extension HTTPTransport {
+    func upload(
+        _ request: HTTPRequest,
+        progress: @escaping @Sendable (Double) -> Void
+    ) async throws(TalkError) -> HTTPResponse {
+        progress(0)
+        let response = try await send(request)
+        progress(1)
+        return response
+    }
 }

@@ -44,6 +44,12 @@
     "swiftmodule": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/MessageTimelineTests~partial.swiftmodule",
     "swift-dependencies": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/MessageTimelineTests.swiftdeps"
   },
+  "/home/user/native-nextcloud-chat/Tests/TalkCoreTests/NewServiceTests.swift": {
+    "dependencies": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/NewServiceTests.d",
+    "object": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/NewServiceTests.swift.o",
+    "swiftmodule": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/NewServiceTests~partial.swiftmodule",
+    "swift-dependencies": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/NewServiceTests.swiftdeps"
+  },
   "/home/user/native-nextcloud-chat/Tests/TalkCoreTests/OCSClientTests.swift": {
     "dependencies": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/OCSClientTests.d",
     "object": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/OCSClientTests.swift.o",

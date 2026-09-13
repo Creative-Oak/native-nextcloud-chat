@@ -50,6 +50,9 @@ struct LoginView: View {
                 }
             }
             .frame(maxWidth: 380)
+            .padding(.horizontal, 36)
+            .padding(.vertical, 32)
+            .glass(.panel, cornerRadius: 22)
 
             Spacer(minLength: 0)
 
@@ -81,7 +84,7 @@ struct LoginView: View {
                     Text("Add Nextcloud Account")
                 }
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.glassProminent)
             .controlSize(.large)
             .disabled(model.serverText.trimmingCharacters(in: .whitespaces).isEmpty || model.phase == .checkingServer)
         }

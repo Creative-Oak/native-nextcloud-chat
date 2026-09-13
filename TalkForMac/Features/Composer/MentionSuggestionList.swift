@@ -15,9 +15,8 @@ struct MentionSuggestionList: View {
             }
         }
         .frame(width: 280, alignment: .leading)
-        .background(.regularMaterial, in: .rect(cornerRadius: 8))
-        .overlay { RoundedRectangle(cornerRadius: 8).strokeBorder(Color(nsColor: .separatorColor), lineWidth: 0.5) }
-        .shadow(color: .black.opacity(0.12), radius: 8, y: 3)
+        .glass(.panel, cornerRadius: 10)
+        .shadow(color: .black.opacity(0.14), radius: 12, y: 4)
         .accessibilityLabel("Mention suggestions")
     }
 

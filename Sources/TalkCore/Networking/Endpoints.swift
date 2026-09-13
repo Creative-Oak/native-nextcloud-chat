@@ -36,6 +36,30 @@ enum Endpoint {
     static func mentions(_ token: String) -> String { "\(spreedV1)/chat/\(token)/mentions" }
     static func reaction(_ token: String, _ messageID: Int) -> String { "\(spreedV1)/reaction/\(token)/\(messageID)" }
 
+    // Core
+    static let autocomplete = "\(ocs)/core/autocomplete/get"
+
+    // Files sharing (not Talk — the Files app's share API, used for attachments)
+    static let shares = "\(ocs)/apps/files_sharing/api/v1/shares"
+
+    /// WebDAV path for a file in the user's own storage.
+    static func webDAV(userID: String, path: String) -> String {
+        let trimmed = path.hasPrefix("/") ? String(path.dropFirst()) : path
+        let encodedUser = userID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? userID
+        let encodedPath = trimmed
+            .split(separator: "/", omittingEmptySubsequences: false)
+            .map { $0.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? String($0) }
+            .joined(separator: "/")
+        return "/remote.php/dav/files/\(encodedUser)/\(encodedPath)"
+    }
+
+    // Attendees
+    static func attendees(_ token: String) -> String { "\(spreedV4)/room/\(token)/attendees" }
+
+    // Shared items
+    static func sharedItems(_ token: String) -> String { "\(spreedV1)/chat/\(token)/share" }
+    static func sharedItemsOverview(_ token: String) -> String { "\(spreedV1)/chat/\(token)/share/overview" }
+
     // Avatars (not OCS)
     static func userAvatar(_ userID: String, size: Int, dark: Bool = false) -> String {
         let encoded = userID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? userID

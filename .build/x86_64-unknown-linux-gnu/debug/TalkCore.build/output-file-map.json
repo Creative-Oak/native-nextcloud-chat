@@ -44,6 +44,12 @@
     "swiftmodule": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/Message~partial.swiftmodule",
     "swift-dependencies": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/Message.swiftdeps"
   },
+  "/home/user/native-nextcloud-chat/Sources/TalkCore/Models/Participant.swift": {
+    "dependencies": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/Participant.d",
+    "object": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/Participant.swift.o",
+    "swiftmodule": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/Participant~partial.swiftmodule",
+    "swift-dependencies": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/Participant.swiftdeps"
+  },
   "/home/user/native-nextcloud-chat/Sources/TalkCore/Models/RichObject.swift": {
     "dependencies": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/RichObject.d",
     "object": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/RichObject.swift.o",
@@ -73,6 +79,12 @@
     "object": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/MessageDTO.swift.o",
     "swiftmodule": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/MessageDTO~partial.swiftmodule",
     "swift-dependencies": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/MessageDTO.swiftdeps"
+  },
+  "/home/user/native-nextcloud-chat/Sources/TalkCore/Networking/DTO/ParticipantDTO.swift": {
+    "dependencies": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/ParticipantDTO.d",
+    "object": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/ParticipantDTO.swift.o",
+    "swiftmodule": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/ParticipantDTO~partial.swiftmodule",
+    "swift-dependencies": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/ParticipantDTO.swiftdeps"
   },
   "/home/user/native-nextcloud-chat/Sources/TalkCore/Networking/DTO/RichObjectDTO.swift": {
     "dependencies": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/RichObjectDTO.d",
@@ -164,6 +176,12 @@
     "swiftmodule": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/KeychainStore~partial.swiftmodule",
     "swift-dependencies": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/KeychainStore.swiftdeps"
   },
+  "/home/user/native-nextcloud-chat/Sources/TalkCore/Services/AttachmentService.swift": {
+    "dependencies": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/AttachmentService.d",
+    "object": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/AttachmentService.swift.o",
+    "swiftmodule": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/AttachmentService~partial.swiftmodule",
+    "swift-dependencies": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/AttachmentService.swiftdeps"
+  },
   "/home/user/native-nextcloud-chat/Sources/TalkCore/Services/AuthenticationService.swift": {
     "dependencies": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/AuthenticationService.d",
     "object": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/AuthenticationService.swift.o",
@@ -188,11 +206,23 @@
     "swiftmodule": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/ConversationService~partial.swiftmodule",
     "swift-dependencies": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/ConversationService.swiftdeps"
   },
+  "/home/user/native-nextcloud-chat/Sources/TalkCore/Services/ParticipantService.swift": {
+    "dependencies": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/ParticipantService.d",
+    "object": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/ParticipantService.swift.o",
+    "swiftmodule": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/ParticipantService~partial.swiftmodule",
+    "swift-dependencies": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/ParticipantService.swiftdeps"
+  },
   "/home/user/native-nextcloud-chat/Sources/TalkCore/Services/ReactionService.swift": {
     "dependencies": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/ReactionService.d",
     "object": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/ReactionService.swift.o",
     "swiftmodule": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/ReactionService~partial.swiftmodule",
     "swift-dependencies": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/ReactionService.swiftdeps"
+  },
+  "/home/user/native-nextcloud-chat/Sources/TalkCore/Services/SharedItemsService.swift": {
+    "dependencies": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/SharedItemsService.d",
+    "object": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/SharedItemsService.swift.o",
+    "swiftmodule": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/SharedItemsService~partial.swiftmodule",
+    "swift-dependencies": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/SharedItemsService.swiftdeps"
   },
   "/home/user/native-nextcloud-chat/Sources/TalkCore/Support/LenientDecoding.swift": {
     "dependencies": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/LenientDecoding.d",

@@ -57,9 +57,8 @@ struct QuickSwitcher: View {
             }
         }
         .frame(width: 420)
-        .background(.regularMaterial, in: .rect(cornerRadius: 10))
-        .overlay { RoundedRectangle(cornerRadius: 10).strokeBorder(Color(nsColor: .separatorColor), lineWidth: 0.5) }
-        .shadow(radius: 20, y: 8)
+        .glass(.panel, cornerRadius: 14)
+        .shadow(color: .black.opacity(0.18), radius: 24, y: 10)
         .onAppear { isFieldFocused = true }
         .onKeyPress(.downArrow) { move(1) }
         .onKeyPress(.upArrow) { move(-1) }

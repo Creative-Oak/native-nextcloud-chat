@@ -1,6 +1,7 @@
 /home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/Account.swift.o
 /home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/ActiveChatSyncEngine.swift.o
 /home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/Actor.swift.o
+/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/AttachmentService.swift.o
 /home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/AuthenticationService.swift.o
 /home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/Backoff.swift.o
 /home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/CacheModels.swift.o
@@ -30,12 +31,16 @@
 /home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/NetworkMonitor.swift.o
 /home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/OCSClient.swift.o
 /home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/OCSEnvelope.swift.o
+/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/Participant.swift.o
+/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/ParticipantDTO.swift.o
+/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/ParticipantService.swift.o
 /home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/ReactionService.swift.o
 /home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/ReadStatePolicy.swift.o
 /home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/ReferenceID.swift.o
 /home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/RichObject.swift.o
 /home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/RichObjectDTO.swift.o
 /home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/ServerAddress.swift.o
+/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/SharedItemsService.swift.o
 /home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/TalkCore.swiftmodule.o
 /home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/TalkError.swift.o
 /home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/TalkStore.swift.o
@@ -48,6 +53,7 @@
 /home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/MessageContentParserTests.swift.o
 /home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/MessageDecodingTests.swift.o
 /home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/MessageTimelineTests.swift.o
+/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/NewServiceTests.swift.o
 /home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/OCSClientTests.swift.o
 /home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/ServerAddressTests.swift.o
 /home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/ServiceRequestTests.swift.o

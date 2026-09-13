@@ -24,9 +24,14 @@ struct ChatView: View {
             ChatHeaderView(model: model)
             Divider()
             transcript
-            if let error = model.lastError, error != .cancelled {
-                InlineStatusBar(error: error, state: model.syncState)
-            }
+                .overlay(alignment: .top) {
+                    if let error = model.lastError, error != .cancelled {
+                        InlineStatusBar(error: error, state: model.syncState)
+                            .padding(.top, 10)
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                    }
+                }
+                .animation(.smooth(duration: 0.25), value: model.lastError)
             Divider()
             ComposerView(model: model, isFocused: $composerFocused)
         }
@@ -176,11 +181,10 @@ struct ChatView: View {
             } label: {
                 Image(systemName: "arrow.down")
                     .font(.system(size: 12, weight: .semibold))
-                    .padding(8)
-                    .background(.regularMaterial, in: .circle)
-                    .overlay { Circle().strokeBorder(Color(nsColor: .separatorColor), lineWidth: 0.5) }
+                    .frame(width: 30, height: 30)
             }
             .buttonStyle(.plain)
+            .glassCircle()
             .padding(16)
             .help("Scroll to the newest message")
             .transition(.opacity)
@@ -272,11 +276,11 @@ private struct InlineStatusBar: View {
             Text(error.userMessage)
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            Spacer()
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 5)
-        .background(.quaternary.opacity(0.4))
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .glass(.floating, cornerRadius: 14)
+        .shadow(color: .black.opacity(0.08), radius: 6, y: 2)
     }
 
     private var symbol: String {

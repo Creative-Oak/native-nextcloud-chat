@@ -73,12 +73,13 @@ struct ComposerView: View {
                         .foregroundStyle(remaining < 0 ? .red : .secondary)
                 }
                 Button(action: { model.send() }) {
-                    Image(systemName: "arrow.up.circle.fill")
-                        .font(.system(size: 20))
-                        .symbolRenderingMode(.hierarchical)
-                        .foregroundStyle(model.canSend ? Color.accentColor : Color.secondary)
+                    Image(systemName: "arrow.up")
+                        .font(.system(size: 13, weight: .semibold))
+                        .frame(width: 16, height: 16)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.glassProminent)
+                .buttonBorderShape(.circle)
+                .tint(.accentColor)
                 .disabled(!model.canSend)
                 .keyboardShortcut(.return, modifiers: .command)
                 .help(sendHelp)
