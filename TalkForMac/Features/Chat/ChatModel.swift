@@ -125,12 +125,15 @@ final class ChatModel {
         }
     }
 
-    func deactivate() {
+    /// Async on purpose. The long-poll engine is shared between conversations, so the
+    /// previous conversation's stop has to *complete* before the next one starts — otherwise
+    /// a stop scheduled from the old model can land after the new model's activate and kill
+    /// the subscription that just opened.
+    func deactivate() async {
         syncTask?.cancel()
         syncTask = nil
         saveDraftNow()
-        let sync = session.chatSync
-        Task { await sync.stop() }
+        await session.chatSync.stop()
     }
 
     func applicationDidBecomeActive() async {

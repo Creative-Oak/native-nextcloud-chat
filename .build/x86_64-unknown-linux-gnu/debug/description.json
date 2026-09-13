@@ -542,6 +542,10 @@
         },
         {
           "kind" : "file",
+          "name" : "/home/user/native-nextcloud-chat/Tests/TalkCoreTests/ServiceRequestTests.swift"
+        },
+        {
+          "kind" : "file",
           "name" : "/home/user/native-nextcloud-chat/Tests/TalkCoreTests/Support/StubTransport.swift"
         },
         {
@@ -589,6 +593,7 @@
         "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/MessageTimelineTests.swift.o",
         "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/OCSClientTests.swift.o",
         "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/ServerAddressTests.swift.o",
+        "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/ServiceRequestTests.swift.o",
         "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/StubTransport.swift.o",
         "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/SyncEngineTests.swift.o",
         "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/SyncLogicTests.swift.o",
@@ -660,6 +665,10 @@
         },
         {
           "kind" : "file",
+          "name" : "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/ServiceRequestTests.swift.o"
+        },
+        {
+          "kind" : "file",
           "name" : "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/StubTransport.swift.o"
         },
         {
@@ -693,6 +702,7 @@
         "/home/user/native-nextcloud-chat/Tests/TalkCoreTests/MessageTimelineTests.swift",
         "/home/user/native-nextcloud-chat/Tests/TalkCoreTests/OCSClientTests.swift",
         "/home/user/native-nextcloud-chat/Tests/TalkCoreTests/ServerAddressTests.swift",
+        "/home/user/native-nextcloud-chat/Tests/TalkCoreTests/ServiceRequestTests.swift",
         "/home/user/native-nextcloud-chat/Tests/TalkCoreTests/Support/StubTransport.swift",
         "/home/user/native-nextcloud-chat/Tests/TalkCoreTests/SyncEngineTests.swift",
         "/home/user/native-nextcloud-chat/Tests/TalkCoreTests/SyncLogicTests.swift",
@@ -962,6 +972,7 @@
       "/home/user/native-nextcloud-chat/Tests/TalkCoreTests/MessageTimelineTests.swift",
       "/home/user/native-nextcloud-chat/Tests/TalkCoreTests/OCSClientTests.swift",
       "/home/user/native-nextcloud-chat/Tests/TalkCoreTests/ServerAddressTests.swift",
+      "/home/user/native-nextcloud-chat/Tests/TalkCoreTests/ServiceRequestTests.swift",
       "/home/user/native-nextcloud-chat/Tests/TalkCoreTests/Support/StubTransport.swift",
       "/home/user/native-nextcloud-chat/Tests/TalkCoreTests/SyncEngineTests.swift",
       "/home/user/native-nextcloud-chat/Tests/TalkCoreTests/SyncLogicTests.swift",
@@ -1130,6 +1141,10 @@
         {
           "kind" : "file",
           "name" : "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/ServerAddressTests.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/ServiceRequestTests.swift.o"
         },
         {
           "kind" : "file",
@@ -1399,6 +1414,10 @@
         },
         {
           "kind" : "file",
+          "name" : "/home/user/native-nextcloud-chat/Tests/TalkCoreTests/ServiceRequestTests.swift"
+        },
+        {
+          "kind" : "file",
           "name" : "/home/user/native-nextcloud-chat/Tests/TalkCoreTests/Support/StubTransport.swift"
         },
         {
@@ -1658,6 +1677,10 @@
         {
           "kind" : "file",
           "name" : "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/ServerAddressTests.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/ServiceRequestTests.swift.o"
         },
         {
           "kind" : "file",

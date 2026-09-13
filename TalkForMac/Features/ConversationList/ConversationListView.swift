@@ -10,9 +10,24 @@ struct ConversationListView: View {
     @Binding var selection: String?
     @Binding var composerFocused: Bool
 
-    @FocusState private var isSearchFocused: Bool
     var searchFocusRequest: Bool
     var onSearchFocusHandled: () -> Void
+
+    @FocusState private var isSearchFocused: Bool
+
+    init(
+        model: ConversationListModel,
+        selection: Binding<String?>,
+        composerFocused: Binding<Bool>,
+        searchFocusRequest: Bool,
+        onSearchFocusHandled: @escaping () -> Void
+    ) {
+        self.model = model
+        _selection = selection
+        _composerFocused = composerFocused
+        self.searchFocusRequest = searchFocusRequest
+        self.onSearchFocusHandled = onSearchFocusHandled
+    }
 
     var body: some View {
         List(selection: $selection) {

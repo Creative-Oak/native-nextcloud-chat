@@ -108,6 +108,7 @@ final class AppModel {
 
     func signOut() async {
         guard let session else { return }
+        await chat?.deactivate()
         await session.shutdown()
         conversationSyncTask?.cancel()
         await dependencies.authentication.signOut(account: session.account)
@@ -134,8 +135,9 @@ final class AppModel {
         guard let session, let token = selectedToken,
               let conversation = conversationList?.index[token]
         else {
-            chat?.deactivate()
+            let previous = chat
             chat = nil
+            Task { await previous?.deactivate() }
             return
         }
 
@@ -152,8 +154,9 @@ final class AppModel {
         chat = model
 
         Task {
-            // Tear the old one down first, so two long polls never overlap.
-            previous?.deactivate()
+            // Tear the old one down *completely* first: the long-poll engine is shared, so
+            // overlapping activate/stop would leave the new conversation without a sync loop.
+            await previous?.deactivate()
             await model.activate()
         }
     }

@@ -59,4 +59,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Drafts are debounced while typing; make sure the last few keystrokes survive quit.
         app?.chat?.saveDraftNow()
     }
+
+    /// Quitting with an unsent draft shouldn't lose it. The save is a fast local write, so
+    /// a brief, bounded wait is worth it.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        app?.chat?.saveDraftNow()
+        return .terminateNow
+    }
 }
