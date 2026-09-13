@@ -75,12 +75,19 @@ server doesn't support is hidden rather than broken.
 | ⌘R | Refresh conversations |
 | ⌘, | Settings |
 
+## First build
+
+The SwiftUI layer was written without a macOS SDK available, so expect a first-build error
+pass. [`docs/FIRST_BUILD.md`](docs/FIRST_BUILD.md) explains what to expect and what is worth
+checking once it runs.
+
 ## Documentation
 
 - [`docs/PRODUCT.md`](docs/PRODUCT.md) — what this is, and what it is not
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — layers, concurrency, data flow
 - [`docs/NEXTCLOUD_API.md`](docs/NEXTCLOUD_API.md) — every endpoint and capability relied on, verified against the official docs
 - [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) — the plan, and what is done
+- [`docs/FIRST_BUILD.md`](docs/FIRST_BUILD.md) — getting through the first compile
 
 ## Development against your own server
 

@@ -39,7 +39,9 @@ actor AuthenticationService {
     private let transport: any HTTPTransport
     private let credentialStore: any CredentialStore
     private let userAgent: String
-    private let allowInsecureHTTP: Bool
+    /// Read at the moment it matters rather than captured at init, so toggling the
+    /// developer setting takes effect without relaunching.
+    private let isInsecureHTTPAllowed: @Sendable () -> Bool
     /// Injected so the polling loop can be tested without spending real seconds.
     private let sleeper: @Sendable (Double) async throws -> Void
 
@@ -47,13 +49,13 @@ actor AuthenticationService {
         transport: any HTTPTransport,
         credentialStore: any CredentialStore,
         userAgent: String,
-        allowInsecureHTTP: Bool = false,
+        isInsecureHTTPAllowed: @escaping @Sendable () -> Bool = { false },
         sleeper: @escaping @Sendable (Double) async throws -> Void = { try await Task.sleep(for: .seconds($0)) }
     ) {
         self.transport = transport
         self.credentialStore = credentialStore
         self.userAgent = userAgent
-        self.allowInsecureHTTP = allowInsecureHTTP
+        self.isInsecureHTTPAllowed = isInsecureHTTPAllowed
         self.sleeper = sleeper
     }
 
@@ -268,7 +270,7 @@ actor AuthenticationService {
             throw .unexpectedResponse("login/v2 \(purpose) URL has no scheme")
         }
         if scheme == "https" { return }
-        if scheme == "http", allowInsecureHTTP, ServerAddress.isLocalHost(url.host() ?? "") { return }
+        if scheme == "http", isInsecureHTTPAllowed(), ServerAddress.isLocalHost(url.host() ?? "") { return }
         throw .insecureServer(host: url.host() ?? purpose)
     }
 }

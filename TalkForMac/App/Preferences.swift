@@ -23,7 +23,10 @@ final class Preferences {
         ])
     }
 
-    private enum Key {
+    /// Read directly from `UserDefaults` by code that can't reach the main actor.
+    static let allowInsecureLocalServersKey = Key.allowInsecureLocalServers
+
+    fileprivate enum Key {
         static let showNotifications = "notifications.enabled"
         static let notificationSound = "notifications.sound"
         static let notificationPreviews = "notifications.previews"

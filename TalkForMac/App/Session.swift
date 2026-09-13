@@ -69,7 +69,11 @@ final class AppDependencies {
             transport: transport,
             credentialStore: credentialStore,
             userAgent: Self.userAgent,
-            allowInsecureHTTP: preferences.allowsInsecureLocalServers
+            // Read on demand: `UserDefaults` is thread-safe, and the setting can be toggled
+            // while the app is running.
+            isInsecureHTTPAllowed: {
+                UserDefaults.standard.bool(forKey: Preferences.allowInsecureLocalServersKey)
+            }
         )
         network = SystemNetworkMonitor()
 

@@ -37,12 +37,14 @@ private let userBody = ocsEnvelope(#"{"id":"alice","display-name":"Alice Anderse
 struct LoginFlowTests {
     private func service(
         _ transport: StubTransport,
-        store: InMemoryCredentialStore = InMemoryCredentialStore()
+        store: InMemoryCredentialStore = InMemoryCredentialStore(),
+        allowsInsecure: Bool = false
     ) -> AuthenticationService {
         AuthenticationService(
             transport: transport,
             credentialStore: store,
             userAgent: "Talk for Mac/1.0 (Mac)",
+            isInsecureHTTPAllowed: { allowsInsecure },
             sleeper: { _ in }        // no real waiting in tests
         )
     }
@@ -69,6 +71,29 @@ struct LoginFlowTests {
         """)
         await #expect(throws: TalkError.self) {
             try await service(transport).beginLogin(server: try ServerAddress.parse("https://cloud.example.com"))
+        }
+    }
+
+    @Test("The developer opt-in allows a local HTTP login flow, and only a local one")
+    func insecureLocalFlow() async throws {
+        let localBody = """
+        {"poll":{"token":"t","endpoint":"http://localhost:8080/login/v2/poll"},
+         "login":"http://localhost:8080/login/v2/flow/abc"}
+        """
+        let transport = StubTransport(json: localBody)
+        let session = try await service(transport, allowsInsecure: true)
+            .beginLogin(server: try ServerAddress.parse("http://localhost:8080", allowInsecureHTTP: true))
+        #expect(session.loginURL.scheme == "http")
+
+        // The same opt-in must not open the door for a public host.
+        let publicBody = """
+        {"poll":{"token":"t","endpoint":"http://cloud.example.com/login/v2/poll"},
+         "login":"http://cloud.example.com/login/v2/flow/abc"}
+        """
+        let publicTransport = StubTransport(json: publicBody)
+        await #expect(throws: TalkError.insecureServer(host: "cloud.example.com")) {
+            try await service(publicTransport, allowsInsecure: true)
+                .beginLogin(server: try ServerAddress.parse("https://cloud.example.com"))
         }
     }
 

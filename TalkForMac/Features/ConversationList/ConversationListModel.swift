@@ -43,6 +43,7 @@ final class ConversationListModel {
     /// Paints the sidebar from disk. This runs before any network call, which is the whole
     /// reason the app doesn't show a spinner at launch.
     func loadFromCache() async {
+        guard !hasLoadedFromCache else { return }
         isLoadingFirstTime = index.isEmpty
         let cached = await session.store.conversations(accountID: session.account.id)
         if !cached.isEmpty {
@@ -59,17 +60,19 @@ final class ConversationListModel {
 
     func apply(_ result: ConversationListResult) async {
         let change = index.apply(result)
+
+        // The cursor advances even on a quiet refresh — that is the point of `modifiedSince`.
+        var cursor = await session.store.syncState(accountID: session.account.id)
+        cursor.conversationsModifiedSince = result.modifiedBefore ?? cursor.conversationsModifiedSince
+        if !result.isIncremental { cursor.lastFullRefresh = Date() }
+        await session.store.save(syncState: cursor, accountID: session.account.id)
+
         guard !change.isEmpty else { return }
 
         await session.store.save(conversations: result.conversations, accountID: session.account.id)
         if !change.removed.isEmpty {
             await session.store.deleteConversations(tokens: change.removed, accountID: session.account.id)
         }
-
-        var cursor = await session.store.syncState(accountID: session.account.id)
-        cursor.conversationsModifiedSince = result.modifiedBefore ?? cursor.conversationsModifiedSince
-        if !result.isIncremental { cursor.lastFullRefresh = Date() }
-        await session.store.save(syncState: cursor, accountID: session.account.id)
 
         notifyAboutNewActivity(change)
     }
