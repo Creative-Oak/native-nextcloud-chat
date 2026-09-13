@@ -544,6 +544,55 @@ Three steps, none of them a Talk endpoint except the last:
 *objectType → array of messages*, but a single type's listing is a map of
 *message id → message* — an object, not an array.
 
+## 13. Message search — Nextcloud core unified search, not a Talk endpoint
+
+Talk has no search endpoint. It registers providers with Nextcloud's **unified search**,
+and a client asks core for one provider's results.
+
+| Method | Path | Parameters |
+| --- | --- | --- |
+| GET | `/ocs/v2.php/search/providers` | — |
+| GET | `/ocs/v2.php/search/providers/{providerId}/search` | `term`, `limit`, `cursor`, `sortOrder`, `from`, plus the provider's own filters |
+
+Talk's providers (`lib/Search/*.php`):
+
+- **`talk-message`** — messages across every conversation the user is in.
+- **`talk-message-current`** — the conversation the *web UI* is showing. It reads the route
+  to decide what "current" means, so it returns nothing to an API client and is not used.
+- **`talk-conversations`** — conversations by name. The app filters its own sidebar
+  instead; no request needed.
+
+**Filters are ordinary query parameters.** Core builds the provider's filter list out of
+the whole request, so `MessageSearch::CONVERSATION_FILTER` is sent as
+`conversation=<token>` and restricts the search to one conversation. The provider also
+declares the built-in `since`, `until` and `person` filters.
+
+**Availability is asked, not assumed.** There is no Talk capability for search — the app
+calls `/search/providers` once per session and looks for `talk-message`. That also covers
+an administrator having disabled it.
+
+### Response
+
+`data` is a `UnifiedSearchResult`: `name`, `isPaginated`, `entries`, `cursor`. The cursor
+is `int | string | null` in the description — Talk makes it an offset, but it is echoed
+back verbatim rather than reinterpreted.
+
+Each entry is presentation-shaped, because unified search exists to fill a drop-down:
+
+| Field | What Talk puts in it |
+| --- | --- |
+| `thumbnailUrl` | the author's avatar, absolute; empty for guests |
+| `title` | `"{user} in {conversation}"`, already substituted and localized |
+| `subline` | the message, cut down to the part around the match |
+| `resourceUrl` | the web UI's link, ending `#message_<id>` |
+
+**Trap, and the second reason to read the source rather than only the OpenAPI:** the
+description types `attributes` as an *array of strings*, but the server builds it with
+`SearchResultEntry::addAttribute($key, $value)` into a PHP associative array, which
+serializes as an **object**. Those attributes are the only machine-readable part of a hit
+— `conversation`, `messageId`, `threadId`, `actorType`, `actorId`, `timestamp` — so an
+entry without them cannot be navigated to and is dropped.
+
 ## 9. Things this project deliberately does not use
 
 - The **signaling** API (internal + external). Not documented as a stable client API,

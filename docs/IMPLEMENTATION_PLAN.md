@@ -119,8 +119,8 @@ target is compiled by CI on a macOS runner. Anything not yet green on CI is mark
 - [x] Sidebar sections, including an archive that stays searchable
 - [x] Who-reacted popover
 - [x] Keyboard shortcuts window (⌘/)
-- [ ] Server-side message search (Talk's unified search provider) for history older than
-      the local cache
+- [x] Server-side message search (⇧⌘F) through Talk's unified search provider, scoped to
+      one conversation or all of them, reaching history older than the local cache
 - [ ] Pins, reminders, voice messages, polls (rendered, not yet interactive)
 - [ ] Typing indicators and user-status editing (both need signaling or the status API)
 - [ ] Calls — deliberately out of scope; see ARCHITECTURE.md § Room for calls
@@ -129,15 +129,31 @@ target is compiled by CI on a macOS runner. Anything not yet green on CI is mark
 
 ## Known gaps
 
-- **The SwiftUI/AppKit layer has not been type-checked.** It was written on Linux, where no
-  macOS SDK exists. Everything in `Sources/TalkCore` is built and tested on every change
-  (178 tests); `TalkForMac/` is checked by `Tools/preflight.sh` — syntax, framework imports,
-  duplicate declarations, and the Xcode project's integrity — and type-checked only by the
-  macOS CI job. Expect a first-build error pass; see docs/FIRST_BUILD.md.
+- **The app has never been built by Xcode.** It was written on Linux, where no macOS SDK
+  exists. Everything in `Sources/TalkCore` is built and tested on every change;
+  `TalkForMac/` is **type-checked** by `Tools/preflight.sh` against stand-in SwiftUI,
+  AppKit, SwiftData, Combine and UserNotifications modules (`Tools/uicheck`) under Swift 6,
+  which is what catches a wrong argument label, a missing member or an isolation mistake
+  before Xcode does. What that cannot check is the parts with no stand-in: how Liquid Glass
+  actually renders, SwiftData's macros, the Keychain, and anything that is a runtime
+  behaviour rather than a type. See docs/FIRST_BUILD.md.
 - **Not yet run against a real server.** Every request shape is verified against the
   documentation and against fixtures, but no live Nextcloud has answered one of them.
 
 ## Discovered work (append as found)
+
+- Unified search types `attributes` as an array of strings, but the server builds it as a
+  PHP associative array — so it arrives as an object, and it is the only machine-readable
+  part of a search hit. *(phase 7)*
+- A `@ViewBuilder` method that renders nested content cannot return `some View` and recurse:
+  the opaque type ends up defined in terms of itself. Quoted blocks needed a nominal view.
+  *(found by the stub type-check)*
+- An `EnvironmentKey`'s `defaultValue` is a `static let`, so a bare closure type fails Swift
+  6's Sendable rule; the environment's action closures have to be `@MainActor`.
+  *(found by the stub type-check)*
+- An actor-isolated method cannot satisfy a nonisolated protocol requirement, so a protocol
+  whose only real implementation is an actor has to declare the method `async`.
+  *(found by the stub type-check)*
 
 - `lastMessage` may be `[]` rather than an object — needs a tolerant decoder. *(found in docs, phase 0)*
 - `reactions`/`messageParameters` may be `[]` rather than `{}` — same tolerance needed. *(phase 0)*

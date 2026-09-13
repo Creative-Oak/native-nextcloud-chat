@@ -243,6 +243,66 @@ final class ChatModel {
         }
     }
 
+    /// How far back ``reveal(messageID:)`` will page before giving up.
+    ///
+    /// A hit from the server can be years old. Paging to it is a request per page, so there
+    /// has to be a limit; past it the honest answer is to offer the web UI, which can jump
+    /// straight there.
+    static let revealPageLimit = 12
+
+    /// True while the transcript is paging backwards to reach a searched-for message.
+    private(set) var isRevealing = false
+
+    /// Set when a search result turned out to be further back than the transcript will
+    /// page. The transcript offers to open it in Nextcloud instead.
+    private(set) var unreachableMessageID: Int?
+
+    func dismissUnreachableMessage() { unreachableMessageID = nil }
+
+    /// Where the Nextcloud web UI shows one message. The fragment is the anchor Talk's own
+    /// search results use.
+    func webURL(forMessage messageID: Int) -> URL {
+        session.account.server.url(path: "/index.php/call/\(token)#message_\(messageID)")
+    }
+
+    /// Scrolls to a message, loading history until it appears.
+    ///
+    /// Returns false when the message is further back than ``revealPageLimit`` pages, or
+    /// the conversation ran out of history without it — the caller then has the choice of
+    /// opening it in Nextcloud instead.
+    @discardableResult
+    func reveal(messageID: Int) async -> Bool {
+        guard messageID > 0 else { return false }
+        unreachableMessageID = nil
+        if timeline.message(id: messageID) != nil {
+            highlightRequest = messageID
+            return true
+        }
+
+        isRevealing = true
+        defer {
+            isRevealing = false
+            if timeline.message(id: messageID) == nil { unreachableMessageID = messageID }
+        }
+
+        for _ in 0..<Self.revealPageLimit {
+            let oldestBefore = timeline.firstServerMessageID
+            // Already past it: the message is missing from a stretch we have loaded, which
+            // means it was deleted or expired rather than being further back.
+            if oldestBefore > 0, messageID > oldestBefore { return false }
+            guard canLoadOlder else { return false }
+
+            await loadOlder()
+            if timeline.message(id: messageID) != nil {
+                highlightRequest = messageID
+                return true
+            }
+            // No progress — a failed request, or the beginning of the conversation.
+            if timeline.firstServerMessageID == oldestBefore { return false }
+        }
+        return false
+    }
+
     // MARK: - Read state
 
     private func pushReadContext() {

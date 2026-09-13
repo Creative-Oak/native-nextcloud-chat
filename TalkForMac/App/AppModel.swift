@@ -48,6 +48,9 @@ final class AppModel {
     /// Thumbnails for shared files, likewise per account.
     private(set) var previewLoader: PreviewLoader?
 
+    /// A message a search result wants shown, applied once the conversation is live.
+    private var pendingReveal: Int?
+
     private var networkTask: Task<Void, Never>?
     private var conversationSyncTask: Task<Void, Never>?
     private var isRefreshingCapabilities = false
@@ -213,7 +216,29 @@ final class AppModel {
             // overlapping activate/stop would leave the new conversation without a sync loop.
             await previous?.deactivate()
             await model.activate()
+            await self.applyPendingReveal(to: model)
         }
+    }
+
+    /// Shows a searched-for message once its conversation has finished opening.
+    ///
+    /// It has to wait for activation: revealing works by paging backwards from the oldest
+    /// message loaded, and before the conversation opens there is no oldest message.
+    private func applyPendingReveal(to model: ChatModel) async {
+        guard let messageID = pendingReveal, model.token == selectedToken else { return }
+        pendingReveal = nil
+        await model.reveal(messageID: messageID)
+    }
+
+    /// Opens a search result: switches to its conversation, then scrolls to the message.
+    func open(_ hit: MessageSearchHit) {
+        guard let chat, chat.token == hit.token else {
+            pendingReveal = hit.messageID
+            selectedToken = hit.token
+            return
+        }
+        // Already there — no need to wait for an activation that isn't going to happen.
+        Task { await chat.reveal(messageID: hit.messageID) }
     }
 
     /// Everything the read-state policy needs to know about the window right now.

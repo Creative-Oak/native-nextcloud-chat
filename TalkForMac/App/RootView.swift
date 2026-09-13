@@ -14,6 +14,7 @@ struct RootView: View {
     @State private var isShowingQuickSwitcher = false
     @State private var isShowingInspector = false
     @State private var isShowingNewConversation = false
+    @State private var messageSearch: MessageSearchModel?
 
     var body: some View {
         @Bindable var app = app
@@ -123,8 +124,30 @@ struct RootView: View {
                 }
             }
         }
+        // Built fresh each time so the scope picker reflects whichever conversation is
+        // open now, rather than the one that was open the first time it was used.
+        .sheet(item: $messageSearch) { model in
+            MessageSearchSheet(
+                model: model,
+                onOpen: { hit in
+                    messageSearch = nil
+                    app.open(hit)
+                },
+                onClose: { messageSearch = nil }
+            )
+        }
         .focusedSceneValue(\.newConversationRequest, { isShowingNewConversation = true })
+        .focusedSceneValue(\.messageSearchRequest, { startMessageSearch() })
         .focusedSceneValue(\.inspectorToggle, { withAnimation(.smooth) { isShowingInspector.toggle() } })
+    }
+
+    private func startMessageSearch() {
+        guard let session = app.session else { return }
+        messageSearch = MessageSearchModel(
+            session: session,
+            currentToken: app.chat?.token,
+            currentConversationName: app.chat?.conversation.displayName
+        )
     }
 
     @ToolbarContentBuilder

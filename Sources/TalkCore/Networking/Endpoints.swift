@@ -39,6 +39,11 @@ enum Endpoint {
     // Core
     static let autocomplete = "\(ocs)/core/autocomplete/get"
 
+    // Core unified search. Talk registers `talk-message` here rather than exposing a
+    // search endpoint of its own, which is why message search is a core path.
+    static let searchProviders = "\(ocs)/search/providers"
+    static func searchProvider(_ id: String) -> String { "\(ocs)/search/providers/\(id)/search" }
+
     /// Nextcloud's thumbnail service. Built with query items at the call site so the
     /// parameters are escaped properly.
     static let preview = "/index.php/core/preview"

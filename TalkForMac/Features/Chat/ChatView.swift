@@ -30,9 +30,25 @@ struct ChatView: View {
                         InlineStatusBar(error: error, state: model.syncState)
                             .padding(.top, 10)
                             .transition(.move(edge: .top).combined(with: .opacity))
+                    } else if let messageID = model.unreachableMessageID {
+                        UnreachableMessageBar(
+                            onOpenInBrowser: {
+                                NSWorkspace.shared.open(model.webURL(forMessage: messageID))
+                                model.dismissUnreachableMessage()
+                            },
+                            onDismiss: { model.dismissUnreachableMessage() }
+                        )
+                        .padding(.top, 10)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                    } else if model.isRevealing {
+                        RevealingBar()
+                            .padding(.top, 10)
+                            .transition(.opacity)
                     }
                 }
                 .animation(.smooth(duration: 0.25), value: model.lastError)
+                .animation(.smooth(duration: 0.25), value: model.unreachableMessageID)
+                .animation(.smooth(duration: 0.25), value: model.isRevealing)
             Divider()
             ComposerView(model: model, isFocused: $composerFocused)
         }
@@ -378,5 +394,48 @@ private struct ChatHeaderView: View {
         if !conversation.description.isEmpty { return conversation.description }
         if conversation.hasCall { return "Call in progress" }
         return nil
+    }
+}
+
+/// Shown while the transcript pages backwards towards a searched-for message.
+private struct RevealingBar: View {
+    var body: some View {
+        HStack(spacing: 8) {
+            ProgressView().controlSize(.small)
+            Text("Loading earlier messages…")
+                .font(.callout)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .glass(.panel, cornerRadius: 10)
+    }
+}
+
+/// The search result was further back than the transcript will page to. Rather than
+/// pretending, the web UI — which can jump straight to a message — is offered instead.
+private struct UnreachableMessageBar: View {
+    var onOpenInBrowser: () -> Void
+    var onDismiss: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "clock.arrow.circlepath")
+                .foregroundStyle(.secondary)
+            Text("That message is further back than this conversation has loaded.")
+                .font(.callout)
+            Button("Open in Nextcloud", action: onOpenInBrowser)
+                .buttonStyle(.link)
+            Button {
+                onDismiss()
+            } label: {
+                Image(systemName: "xmark")
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .accessibilityLabel("Dismiss")
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .glass(.panel, cornerRadius: 10)
     }
 }

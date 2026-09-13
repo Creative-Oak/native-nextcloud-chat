@@ -12,6 +12,7 @@ struct TalkCommands: Commands {
     @FocusedValue(\.searchFocusRequest) private var focusSearch
     @FocusedValue(\.quickSwitcherRequest) private var showQuickSwitcher
     @FocusedValue(\.newConversationRequest) private var newConversation
+    @FocusedValue(\.messageSearchRequest) private var searchMessages
     @FocusedValue(\.inspectorToggle) private var toggleInspector
     @Environment(\.openWindow) private var openWindow
 
@@ -40,6 +41,12 @@ struct TalkCommands: Commands {
             }
             .keyboardShortcut("f", modifiers: [.command, .option])
             .disabled(app?.chat == nil)
+
+            // Distinct from Find in Conversation: that one searches what is loaded and
+            // answers instantly, this one asks the server and can reach anything.
+            Button("Search Messages…") { searchMessages?() }
+                .keyboardShortcut("f", modifiers: [.command, .shift])
+                .disabled(app?.session == nil)
         }
 
         CommandMenu("Conversation") {
@@ -119,6 +126,7 @@ private struct ComposerFocusKey: FocusedValueKey { typealias Value = () -> Void 
 private struct SearchFocusKey: FocusedValueKey { typealias Value = () -> Void }
 private struct QuickSwitcherKey: FocusedValueKey { typealias Value = () -> Void }
 private struct NewConversationKey: FocusedValueKey { typealias Value = () -> Void }
+private struct MessageSearchKey: FocusedValueKey { typealias Value = () -> Void }
 private struct InspectorToggleKey: FocusedValueKey { typealias Value = () -> Void }
 
 extension FocusedValues {
@@ -145,6 +153,11 @@ extension FocusedValues {
     var newConversationRequest: (() -> Void)? {
         get { self[NewConversationKey.self] }
         set { self[NewConversationKey.self] = newValue }
+    }
+
+    var messageSearchRequest: (() -> Void)? {
+        get { self[MessageSearchKey.self] }
+        set { self[MessageSearchKey.self] = newValue }
     }
 
     var inspectorToggle: (() -> Void)? {

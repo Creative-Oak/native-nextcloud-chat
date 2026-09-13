@@ -57,6 +57,7 @@ struct KeyboardShortcutsWindow: View {
         ShortcutGroup(title: "Getting around", shortcuts: [
             Shortcut(description: "Go to conversation", keys: "⌘K"),
             Shortcut(description: "Find a conversation", keys: "⌘F"),
+            Shortcut(description: "Search messages on the server", keys: "⇧⌘F"),
             Shortcut(description: "Next / previous conversation", keys: "⌥⌘↓ ⌥⌘↑"),
             Shortcut(description: "Next unread conversation", keys: "⇧⌘]"),
             Shortcut(description: "Show conversation details", keys: "⌥⌘I"),
