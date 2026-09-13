@@ -23,7 +23,9 @@ struct MessageRow: View {
     var onShowParent: (Int) -> Void
 
     @State private var isHovering = false
+    @State private var isShowingReactionDetail = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.talkSession) private var session
 
     var body: some View {
         if message.isSystem {
@@ -58,6 +60,13 @@ struct MessageRow: View {
                         onToggle: { onReact($0, message) }
                     )
                     .padding(.top, 2)
+                    // Right-click a reaction to see who it was.
+                    .contextMenu {
+                        Button("Show Who Reacted") { isShowingReactionDetail = true }
+                    }
+                    .popover(isPresented: $isShowingReactionDetail, arrowEdge: .bottom) {
+                        if let session { ReactionDetailPopover(message: message, session: session) }
+                    }
                 }
 
                 if message.deliveryState.isPending { deliveryStatus }

@@ -60,3 +60,19 @@ enum GlassSpacing {
     /// Distinct controls that share a container only for rendering performance.
     static let distinct: CGFloat = 28
 }
+
+// MARK: - Session in the environment
+
+/// The signed-in session, for the few leaf views that need to make a request of their own
+/// (the "who reacted" popover, the profile card) and would otherwise need it threaded
+/// through half a dozen initializers.
+private struct TalkSessionKey: EnvironmentKey {
+    static let defaultValue: Session? = nil
+}
+
+extension EnvironmentValues {
+    var talkSession: Session? {
+        get { self[TalkSessionKey.self] }
+        set { self[TalkSessionKey.self] = newValue }
+    }
+}

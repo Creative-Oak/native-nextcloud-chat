@@ -162,6 +162,39 @@ extension ConversationService {
         )
     }
 
+    /// `state`: 0 read-write, 1 read-only. Requires the `read-only-rooms` capability.
+    func setReadOnly(_ isReadOnly: Bool, token: String) async throws(TalkError) {
+        _ = try await client.send(
+            OCSRequest.put(Endpoint.room(token) + "/read-only", form: ["state": isReadOnly ? "1" : "0"]),
+            as: ConversationDTO.self
+        )
+    }
+
+    /// Seconds until messages disappear; `0` disables it. Requires `message-expiration`.
+    func setMessageExpiration(seconds: Int, token: String) async throws(TalkError) {
+        _ = try await client.send(
+            OCSRequest.post(Endpoint.room(token) + "/message-expiration", form: ["seconds": String(seconds)]),
+            as: EmptyResponse.self
+        )
+    }
+
+    /// Sets or clears the conversation password. An empty string removes it.
+    func setPassword(_ password: String, token: String) async throws(TalkError) {
+        _ = try await client.send(
+            OCSRequest.put(Endpoint.room(token) + "/password", form: ["password": password]),
+            as: EmptyResponse.self
+        )
+    }
+
+    /// Opens the conversation to guests with a link, or closes it again.
+    func setPublic(_ isPublic: Bool, token: String, password: String? = nil) async throws(TalkError) {
+        let path = Endpoint.room(token) + "/public"
+        let request = isPublic
+            ? OCSRequest.post(path, form: password.map { ["password": $0] } ?? [:])
+            : OCSRequest.delete(path)
+        _ = try await client.send(request, as: EmptyResponse.self)
+    }
+
     /// Deletes the conversation for everyone. Moderators only, and never for a one-to-one —
     /// the server enforces both, and the UI hides the command via `canDeleteConversation`.
     func delete(token: String) async throws(TalkError) {

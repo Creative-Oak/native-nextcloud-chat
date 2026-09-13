@@ -31,16 +31,17 @@ struct ConversationListView: View {
 
     var body: some View {
         List(selection: $selection) {
-            ForEach(model.conversations) { conversation in
-                ConversationRow(conversation: conversation)
-                    .tag(conversation.token)
-                    // Double-clicking a conversation opens it and puts the caret in the
-                    // message field — the thing you were almost certainly about to do.
-                    .onTapGesture(count: 2) {
-                        selection = conversation.token
-                        composerFocused = true
+            ForEach(model.sections, id: \.section) { group in
+                if model.showsSectionHeadings {
+                    Section {
+                        rows(group.items)
+                    } header: {
+                        Label(group.section.title, systemImage: group.section.symbolName)
+                            .font(.caption)
                     }
-                    .contextMenu { contextMenu(for: conversation) }
+                } else {
+                    rows(group.items)
+                }
             }
         }
         .listStyle(.sidebar)
@@ -58,6 +59,21 @@ struct ConversationListView: View {
             guard selection != nil else { return .ignored }
             composerFocused = true
             return .handled
+        }
+    }
+
+    @ViewBuilder
+    private func rows(_ conversations: [Conversation]) -> some View {
+        ForEach(conversations) { conversation in
+            ConversationRow(conversation: conversation)
+                .tag(conversation.token)
+                // Double-clicking a conversation opens it and puts the caret in the
+                // message field — the thing you were almost certainly about to do.
+                .onTapGesture(count: 2) {
+                    selection = conversation.token
+                    composerFocused = true
+                }
+                .contextMenu { contextMenu(for: conversation) }
         }
     }
 

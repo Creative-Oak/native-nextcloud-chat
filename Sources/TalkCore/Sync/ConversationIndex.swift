@@ -107,15 +107,68 @@ struct ConversationIndex: Sendable, Equatable {
         reindex()
     }
 
+    // MARK: - Sections
+
+    /// The sidebar's groups. Favourites first because the user said they matter, then
+    /// everything else by activity, then archived out of the way at the bottom.
+    enum Section: String, Sendable, Hashable, CaseIterable, Identifiable {
+        case favorites, conversations, archived
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .favorites: "Favourites"
+            case .conversations: "Conversations"
+            case .archived: "Archived"
+            }
+        }
+
+        var symbolName: String {
+            switch self {
+            case .favorites: "star"
+            case .conversations: "bubble.left.and.bubble.right"
+            case .archived: "archivebox"
+            }
+        }
+    }
+
+    /// Groups the (already filtered) conversations for display. Empty sections are dropped,
+    /// so a user with no favourites never sees an empty "Favourites" heading.
+    static func sections(for conversations: [Conversation]) -> [(section: Section, items: [Conversation])] {
+        var favorites: [Conversation] = []
+        var regular: [Conversation] = []
+        var archived: [Conversation] = []
+
+        for conversation in conversations {
+            if conversation.isArchived { archived.append(conversation) }
+            else if conversation.isFavorite { favorites.append(conversation) }
+            else { regular.append(conversation) }
+        }
+
+        return [
+            (.favorites, favorites),
+            (.conversations, regular),
+            (.archived, archived)
+        ].filter { !$0.1.isEmpty }
+    }
+
+    /// Everything, including archived — used when the sidebar is showing the archive.
+    var allConversations: [Conversation] { conversations }
+
+    var archivedCount: Int { conversations.count { $0.isArchived } }
+
     // MARK: - Filtering
 
     /// The ⌘F filter. Deliberately simple and synchronous: it runs on every keystroke over
     /// an in-memory array, and anything cleverer would be slower than it is useful.
-    func filtered(by query: String) -> [Conversation] {
+    func filtered(by query: String, includingArchived: Bool = false) -> [Conversation] {
+        let pool = includingArchived ? conversations : visibleConversations
         let query = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else { return visibleConversations }
+        // Searching *does* reach into the archive: hiding a conversation from the list is
+        // not the same as hiding it from search.
+        guard !query.isEmpty else { return pool }
 
-        return visibleConversations.filter { conversation in
+        return conversations.filter { conversation in
             if conversation.displayName.localizedCaseInsensitiveContains(query) { return true }
             if conversation.name.localizedCaseInsensitiveContains(query) { return true }
             if conversation.description.localizedCaseInsensitiveContains(query) { return true }

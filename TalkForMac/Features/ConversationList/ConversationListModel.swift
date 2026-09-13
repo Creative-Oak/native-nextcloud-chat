@@ -33,6 +33,20 @@ final class ConversationListModel {
         index.filtered(by: filterText)
     }
 
+    /// Grouped for the sidebar. While filtering, the results are shown as one flat list —
+    /// section headings during a search are noise.
+    var sections: [(section: ConversationIndex.Section, items: [Conversation])] {
+        guard !isFiltering else {
+            return [(.conversations, conversations)]
+        }
+        return ConversationIndex.sections(for: conversations)
+    }
+
+    /// Whether to show section headings at all — one section doesn't need a label.
+    var showsSectionHeadings: Bool {
+        !isFiltering && sections.count > 1
+    }
+
     var totalUnreadCount: Int { index.totalUnreadCount }
     var isFiltering: Bool { !filterText.trimmingCharacters(in: .whitespaces).isEmpty }
 

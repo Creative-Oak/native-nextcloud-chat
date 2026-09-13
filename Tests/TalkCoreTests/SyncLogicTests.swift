@@ -214,3 +214,54 @@ struct ReadStatePolicyTests {
         #expect(ReadStatePolicy.setReadMarkerOnPoll(readable))
     }
 }
+
+@Suite("Sidebar sections")
+struct SidebarSectionTests {
+    private func make(_ token: String, favorite: Bool = false, archived: Bool = false) -> Conversation {
+        Conversation(
+            token: token,
+            displayName: token,
+            lastActivity: Date(timeIntervalSince1970: 1000),
+            isFavorite: favorite,
+            isArchived: archived
+        )
+    }
+
+    @Test("Favourites, then everything else, then the archive")
+    func grouping() {
+        let sections = ConversationIndex.sections(for: [
+            make("fav", favorite: true),
+            make("normal"),
+            make("old", archived: true)
+        ])
+
+        #expect(sections.map(\.section) == [.favorites, .conversations, .archived])
+        #expect(sections[0].items.map(\.token) == ["fav"])
+        #expect(sections[2].items.map(\.token) == ["old"])
+    }
+
+    @Test("Empty sections don't get a heading")
+    func dropsEmptySections() {
+        let sections = ConversationIndex.sections(for: [make("a"), make("b")])
+        #expect(sections.map(\.section) == [.conversations])
+    }
+
+    @Test("An archived favourite is archived — the archive wins")
+    func archiveWins() {
+        let sections = ConversationIndex.sections(for: [make("x", favorite: true, archived: true)])
+        #expect(sections.map(\.section) == [.archived])
+    }
+
+    @Test("The archive is hidden from the list but not from search")
+    func searchReachesTheArchive() {
+        let index = ConversationIndex([
+            Conversation(token: "a", displayName: "Budget talk"),
+            Conversation(token: "b", displayName: "Budget archive", isArchived: true)
+        ])
+
+        #expect(index.visibleConversations.map(\.token) == ["a"])
+        #expect(index.filtered(by: "").map(\.token) == ["a"])
+        #expect(index.filtered(by: "budget").map(\.token).sorted() == ["a", "b"])
+        #expect(index.archivedCount == 1)
+    }
+}

@@ -13,6 +13,7 @@ struct TalkCommands: Commands {
     @FocusedValue(\.quickSwitcherRequest) private var showQuickSwitcher
     @FocusedValue(\.newConversationRequest) private var newConversation
     @FocusedValue(\.inspectorToggle) private var toggleInspector
+    @Environment(\.openWindow) private var openWindow
 
     var body: some Commands {
         // Replaces the default "New Window" — a second window on a messaging app is rarely
@@ -89,6 +90,11 @@ struct TalkCommands: Commands {
         }
 
         CommandGroup(replacing: .help) {
+            Button("Keyboard Shortcuts") { openWindow(id: TalkWindow.keyboardShortcuts) }
+                .keyboardShortcut("/", modifiers: .command)
+
+            Divider()
+
             Button("Nextcloud Talk Documentation") {
                 if let url = URL(string: "https://nextcloud-talk.readthedocs.io/en/latest/") {
                     NSWorkspace.shared.open(url)

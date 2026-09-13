@@ -1,6 +1,10 @@
 import AppKit
 import SwiftUI
 
+enum TalkWindow {
+    static let keyboardShortcuts = "keyboard-shortcuts"
+}
+
 @main
 struct TalkForMacApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
@@ -13,6 +17,7 @@ struct TalkForMacApp: App {
                 .environment(\.preferences, app.dependencies.preferences)
                 .environment(\.avatarLoader, app.avatarLoader)
                 .environment(\.previewLoader, app.previewLoader)
+                .environment(\.talkSession, app.session)
                 .onAppear { appDelegate.app = app }
                 .frame(minWidth: 720, minHeight: 460)
         }
@@ -21,6 +26,14 @@ struct TalkForMacApp: App {
         .defaultSize(width: 1040, height: 700)
         .windowToolbarStyle(.unified)
         .commands { TalkCommands() }
+
+        // A plain utility window rather than a sheet: you want to be able to leave it open
+        // beside the app while you learn the shortcuts.
+        Window("Keyboard Shortcuts", id: TalkWindow.keyboardShortcuts) {
+            KeyboardShortcutsWindow()
+        }
+        .windowResizability(.contentSize)
+        .defaultPosition(.center)
 
         Settings {
             SettingsView()

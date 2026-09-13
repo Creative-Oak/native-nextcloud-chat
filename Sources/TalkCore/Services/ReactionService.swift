@@ -8,6 +8,13 @@ struct ReactionSummary: Sendable, Equatable {
     static let empty = ReactionSummary(counts: [:], mine: [])
 }
 
+/// One person's reaction, for the "who reacted" popover.
+struct ReactionActor: Sendable, Hashable, Identifiable {
+    var id: String { "\(actor.kind.rawValue):\(actor.id)" }
+    var actor: MessageActor
+    var timestamp: Date?
+}
+
 /// Talk's reaction API. Requires the `reactions` capability and attendee permission 256.
 actor ReactionService {
     private let client: OCSClient
@@ -33,6 +40,25 @@ actor ReactionService {
             as: [String: [ReactionActorDTO]].self
         )
         return summary(from: response.value)
+    }
+
+    /// Who reacted with what. The same endpoint as ``reactions(token:messageID:)``, kept
+    /// separate because the UI that wants names is not the UI that wants counts.
+    func reactionDetail(token: String, messageID: Int) async throws(TalkError) -> [String: [ReactionActor]] {
+        let response = try await client.send(
+            OCSRequest.get(Endpoint.reaction(token, messageID)),
+            as: [String: [ReactionActorDTO]].self
+        )
+        var detail: [String: [ReactionActor]] = [:]
+        for (emoji, actors) in response.value ?? [:] where !actors.isEmpty {
+            detail[emoji] = actors.map { dto in
+                ReactionActor(
+                    actor: MessageActor(type: dto.actorType, id: dto.actorId, displayName: dto.actorDisplayName),
+                    timestamp: dto.timestamp.map { Date(timeIntervalSince1970: TimeInterval($0)) }
+                )
+            }
+        }
+        return detail
     }
 
     private func mutate(

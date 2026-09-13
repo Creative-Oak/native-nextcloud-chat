@@ -9,6 +9,9 @@ struct InspectorView: View {
     @Bindable var model: InspectorModel
     var onOpenMessage: (Int) -> Void
 
+    @Environment(\.talkSession) private var session
+    @State private var settings: ConversationSettingsModel?
+
     var body: some View {
         VStack(spacing: 0) {
             picker
@@ -34,6 +37,21 @@ struct InspectorView: View {
         .frame(minWidth: 240, idealWidth: 280, maxWidth: 380)
         .background(.regularMaterial)
         .task(id: model.conversation.token) { await model.loadIfNeeded() }
+        .safeAreaInset(edge: .bottom) {
+            if let session, model.conversation.isModerator || model.conversation.canLeaveConversation {
+                Button {
+                    settings = ConversationSettingsModel(session: session, conversation: model.conversation)
+                } label: {
+                    Label("Conversation Settings…", systemImage: "gearshape")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.glass)
+                .padding(10)
+            }
+        }
+        .sheet(item: $settings) { model in
+            ConversationSettingsSheet(model: model)
+        }
     }
 
     private var picker: some View {
