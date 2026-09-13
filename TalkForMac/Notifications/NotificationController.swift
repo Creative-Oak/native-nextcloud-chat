@@ -47,8 +47,9 @@ final class NotificationController: NSObject {
         content.title = conversation.displayName
 
         if let message = conversation.lastMessage, preferences.showsNotificationPreviews {
-            let parser = MessageContentParser(currentUserID: "", markdownEnabled: false)
-            let preview = parser.parse(message).preview
+            let preview = MessageContentParser(currentUserID: "", markdownEnabled: false)
+                .parse(message)
+                .preview
             if conversation.isOneToOne || message.isSystem {
                 content.body = preview
             } else {

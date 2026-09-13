@@ -33,15 +33,14 @@ jobs:
           xcodebuild -version
           swift --version
       - name: Build the app
-        run: |
-          xcodebuild build \
-            -project TalkForMac.xcodeproj \
-            -scheme TalkForMac \
-            -configuration Debug \
-            -destination 'platform=macOS' \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGN_IDENTITY="" \
-            | xcbeautify --renderer github-actions || exit ${PIPESTATUS[0]}
+        run: >
+          xcodebuild build
+          -project TalkForMac.xcodeproj
+          -scheme TalkForMac
+          -configuration Debug
+          -destination 'platform=macOS'
+          -quiet
+          CODE_SIGNING_ALLOWED=NO
       - name: Test the core package on macOS
-        # Runs the SwiftData-backed code paths too, which Linux skips.
+        # Also compiles the SwiftData-backed code paths, which the Linux job skips.
         run: swift test

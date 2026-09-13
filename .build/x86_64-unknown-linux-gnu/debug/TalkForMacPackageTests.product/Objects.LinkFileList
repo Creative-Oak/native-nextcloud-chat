@@ -38,6 +38,7 @@
 /home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/TalkCore.swiftmodule.o
 /home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/TalkError.swift.o
 /home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/TalkStore.swift.o
+/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/TranscriptLayout.swift.o
 /home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/URLSessionTransport.swift.o
 /home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/CapabilityTests.swift.o
 /home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/ConversationDecodingTests.swift.o
@@ -51,6 +52,7 @@
 /home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/SyncEngineTests.swift.o
 /home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/SyncLogicTests.swift.o
 /home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/TalkCoreTests.swiftmodule.o
+/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/TranscriptLayoutTests.swift.o
 /home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/resource_bundle_accessor.swift.o
 /home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkForMacPackageDiscoveredTests.build/TalkCoreTests.swift.o
 /home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkForMacPackageDiscoveredTests.build/TalkForMacPackageDiscoveredTests.swiftmodule.o

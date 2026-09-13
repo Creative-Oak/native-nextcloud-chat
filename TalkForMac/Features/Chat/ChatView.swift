@@ -75,7 +75,7 @@ struct ChatView: View {
             .onAppear {
                 // Land at the bottom (or at the unread marker) without an animation, so
                 // opening a conversation looks instantaneous rather than "scrolly".
-                if let unread = model.rows.first(where: { $0.kind == .unreadSeparator })?.id {
+                if let unread = model.rows.first(where: \.isUnreadSeparator)?.id {
                     proxy.scrollTo(unread, anchor: .center)
                 } else {
                     proxy.scrollTo(Self.bottomAnchor, anchor: .bottom)
@@ -189,15 +189,7 @@ private struct DaySeparator: View {
         .padding(.bottom, 4)
     }
 
-    private var label: String {
-        let calendar = Calendar.current
-        if calendar.isDateInToday(day) { return "Today" }
-        if calendar.isDateInYesterday(day) { return "Yesterday" }
-        if let week = calendar.date(byAdding: .day, value: -6, to: Date()), day > week {
-            return day.formatted(.dateTime.weekday(.wide))
-        }
-        return day.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated).year())
-    }
+    private var label: String { RelativeTimestamp.daySeparator(day) }
 }
 
 private struct UnreadSeparator: View {

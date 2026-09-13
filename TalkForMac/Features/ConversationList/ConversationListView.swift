@@ -169,29 +169,9 @@ struct ConversationRow: View {
         }
     }
 
-    private var preview: String {
-        guard let message = conversation.lastMessage else {
-            return conversation.isNoteToSelf ? "Notes to yourself" : "No messages yet"
-        }
+    private var preview: String { ConversationPreview.text(for: conversation) }
 
-        let parser = MessageContentParser(currentUserID: "", markdownEnabled: false)
-        let text = parser.parse(message).preview
-        guard !message.isSystem, !conversation.isOneToOne, !message.actor.id.isEmpty else { return text }
-        return "\(message.actor.resolvedDisplayName): \(text)"
-    }
-
-    /// Compact and relative, the way a sidebar timestamp should be: "9:41", "Tue", "12/03".
-    private var timestamp: String {
-        let date = conversation.lastActivity
-        guard date.timeIntervalSince1970 > 0 else { return "" }
-        let calendar = Calendar.current
-        if calendar.isDateInToday(date) { return date.formatted(.dateTime.hour().minute()) }
-        if calendar.isDateInYesterday(date) { return "Yesterday" }
-        if let week = calendar.date(byAdding: .day, value: -6, to: Date()), date > week {
-            return date.formatted(.dateTime.weekday(.abbreviated))
-        }
-        return date.formatted(.dateTime.day().month(.numeric))
-    }
+    private var timestamp: String { RelativeTimestamp.sidebar(conversation.lastActivity) }
 
     private var accessibilityLabel: String {
         var parts = [conversation.displayName]

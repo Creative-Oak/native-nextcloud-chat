@@ -195,27 +195,6 @@ struct MessageRow: View {
     }
 }
 
-/// Whether this message starts a new visual group.
-struct MessageGroupContext: Equatable {
-    var showsHeader: Bool
-    var showsAvatar: Bool
-
-    /// Consecutive messages from the same person within this window are grouped, the way
-    /// Messages does it.
-    static let groupingWindow: TimeInterval = 5 * 60
-
-    static func between(previous: Message?, current: Message) -> MessageGroupContext {
-        guard let previous, !previous.isSystem, !current.isSystem else {
-            return MessageGroupContext(showsHeader: !current.isSystem, showsAvatar: !current.isSystem)
-        }
-        let sameAuthor = previous.actor.id == current.actor.id && previous.actor.kind == current.actor.kind
-        let closeInTime = current.timestamp.timeIntervalSince(previous.timestamp) < groupingWindow
-        let sameDay = Calendar.current.isDate(previous.timestamp, inSameDayAs: current.timestamp)
-        let grouped = sameAuthor && closeInTime && sameDay
-        return MessageGroupContext(showsHeader: !grouped, showsAvatar: !grouped)
-    }
-}
-
 /// Join/leave/call events, rendered as quiet centred text rather than as messages.
 private struct SystemMessageRow: View {
     let message: Message

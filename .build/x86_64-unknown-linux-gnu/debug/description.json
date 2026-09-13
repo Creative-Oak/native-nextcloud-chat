@@ -133,6 +133,10 @@
         },
         {
           "kind" : "file",
+          "name" : "/home/user/native-nextcloud-chat/Sources/TalkCore/Rendering/TranscriptLayout.swift"
+        },
+        {
+          "kind" : "file",
           "name" : "/home/user/native-nextcloud-chat/Sources/TalkCore/Security/CredentialStore.swift"
         },
         {
@@ -235,6 +239,7 @@
         "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/TalkStore.swift.o",
         "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/MessageContent.swift.o",
         "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/MessageContentParser.swift.o",
+        "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/TranscriptLayout.swift.o",
         "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/CredentialStore.swift.o",
         "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/KeychainStore.swift.o",
         "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/AuthenticationService.swift.o",
@@ -376,6 +381,10 @@
         },
         {
           "kind" : "file",
+          "name" : "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/TranscriptLayout.swift.o"
+        },
+        {
+          "kind" : "file",
           "name" : "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/CredentialStore.swift.o"
         },
         {
@@ -472,6 +481,7 @@
         "/home/user/native-nextcloud-chat/Sources/TalkCore/Persistence/TalkStore.swift",
         "/home/user/native-nextcloud-chat/Sources/TalkCore/Rendering/MessageContent.swift",
         "/home/user/native-nextcloud-chat/Sources/TalkCore/Rendering/MessageContentParser.swift",
+        "/home/user/native-nextcloud-chat/Sources/TalkCore/Rendering/TranscriptLayout.swift",
         "/home/user/native-nextcloud-chat/Sources/TalkCore/Security/CredentialStore.swift",
         "/home/user/native-nextcloud-chat/Sources/TalkCore/Security/KeychainStore.swift",
         "/home/user/native-nextcloud-chat/Sources/TalkCore/Services/AuthenticationService.swift",
@@ -544,6 +554,10 @@
         },
         {
           "kind" : "file",
+          "name" : "/home/user/native-nextcloud-chat/Tests/TalkCoreTests/TranscriptLayoutTests.swift"
+        },
+        {
+          "kind" : "file",
           "name" : "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/DerivedSources/resource_bundle_accessor.swift"
         },
         {
@@ -578,6 +592,7 @@
         "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/StubTransport.swift.o",
         "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/SyncEngineTests.swift.o",
         "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/SyncLogicTests.swift.o",
+        "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/TranscriptLayoutTests.swift.o",
         "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/resource_bundle_accessor.swift.o"
       ],
       "otherArguments" : [
@@ -657,6 +672,10 @@
         },
         {
           "kind" : "file",
+          "name" : "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/TranscriptLayoutTests.swift.o"
+        },
+        {
+          "kind" : "file",
           "name" : "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/resource_bundle_accessor.swift.o"
         },
         {
@@ -677,6 +696,7 @@
         "/home/user/native-nextcloud-chat/Tests/TalkCoreTests/Support/StubTransport.swift",
         "/home/user/native-nextcloud-chat/Tests/TalkCoreTests/SyncEngineTests.swift",
         "/home/user/native-nextcloud-chat/Tests/TalkCoreTests/SyncLogicTests.swift",
+        "/home/user/native-nextcloud-chat/Tests/TalkCoreTests/TranscriptLayoutTests.swift",
         "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/DerivedSources/resource_bundle_accessor.swift"
       ],
       "tempsPath" : "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build",
@@ -878,6 +898,7 @@
       "/home/user/native-nextcloud-chat/Sources/TalkCore/Persistence/TalkStore.swift",
       "/home/user/native-nextcloud-chat/Sources/TalkCore/Rendering/MessageContent.swift",
       "/home/user/native-nextcloud-chat/Sources/TalkCore/Rendering/MessageContentParser.swift",
+      "/home/user/native-nextcloud-chat/Sources/TalkCore/Rendering/TranscriptLayout.swift",
       "/home/user/native-nextcloud-chat/Sources/TalkCore/Security/CredentialStore.swift",
       "/home/user/native-nextcloud-chat/Sources/TalkCore/Security/KeychainStore.swift",
       "/home/user/native-nextcloud-chat/Sources/TalkCore/Services/AuthenticationService.swift",
@@ -944,6 +965,7 @@
       "/home/user/native-nextcloud-chat/Tests/TalkCoreTests/Support/StubTransport.swift",
       "/home/user/native-nextcloud-chat/Tests/TalkCoreTests/SyncEngineTests.swift",
       "/home/user/native-nextcloud-chat/Tests/TalkCoreTests/SyncLogicTests.swift",
+      "/home/user/native-nextcloud-chat/Tests/TalkCoreTests/TranscriptLayoutTests.swift",
       "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/DerivedSources/resource_bundle_accessor.swift",
       "-I",
       "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/Modules",
@@ -1123,6 +1145,10 @@
         },
         {
           "kind" : "file",
+          "name" : "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/TranscriptLayoutTests.swift.o"
+        },
+        {
+          "kind" : "file",
           "name" : "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/resource_bundle_accessor.swift.o"
         }
       ],
@@ -1259,6 +1285,10 @@
         },
         {
           "kind" : "file",
+          "name" : "/home/user/native-nextcloud-chat/Sources/TalkCore/Rendering/TranscriptLayout.swift"
+        },
+        {
+          "kind" : "file",
           "name" : "/home/user/native-nextcloud-chat/Sources/TalkCore/Security/CredentialStore.swift"
         },
         {
@@ -1378,6 +1408,10 @@
         {
           "kind" : "file",
           "name" : "/home/user/native-nextcloud-chat/Tests/TalkCoreTests/SyncLogicTests.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/home/user/native-nextcloud-chat/Tests/TalkCoreTests/TranscriptLayoutTests.swift"
         },
         {
           "kind" : "file",
@@ -1587,6 +1621,10 @@
         },
         {
           "kind" : "file",
+          "name" : "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/TranscriptLayout.swift.o"
+        },
+        {
+          "kind" : "file",
           "name" : "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/URLSessionTransport.swift.o"
         },
         {
@@ -1636,6 +1674,10 @@
         {
           "kind" : "file",
           "name" : "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/TalkCoreTests.swiftmodule.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/TranscriptLayoutTests.swift.o"
         },
         {
           "kind" : "file",
