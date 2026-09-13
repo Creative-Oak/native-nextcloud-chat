@@ -31,7 +31,7 @@ struct ConversationListView: View {
 
     var body: some View {
         List(selection: $selection) {
-            ForEach(model.sections, id: \.section) { group in
+            ForEach(model.sections) { group in
                 if model.showsSectionHeadings {
                     Section {
                         rows(group.items)

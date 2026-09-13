@@ -43,7 +43,7 @@ struct ConversationSettingsSheet: View {
                     if model.capabilities.supportsMessageExpiration {
                         Section("Message expiration") {
                             Picker("Delete messages after", selection: $model.expiration) {
-                                ForEach(ConversationSettingsModel.expirationOptions, id: \.seconds) { option in
+                                ForEach(ConversationSettingsModel.expirationOptions) { option in
                                     Text(option.title).tag(option.seconds)
                                 }
                             }
@@ -169,13 +169,21 @@ final class ConversationSettingsModel: Identifiable {
             || !password.isEmpty
     }
 
-    static let expirationOptions: [(seconds: Int, title: String)] = [
-        (0, "Never"),
-        (3600, "1 hour"),
-        (28800, "8 hours"),
-        (86400, "1 day"),
-        (604800, "1 week"),
-        (2419200, "4 weeks")
+    /// A struct, not a tuple: `ForEach(_:id:)` needs a key path and Swift has none into
+    /// tuple elements.
+    struct ExpirationOption: Identifiable, Hashable {
+        var id: Int { seconds }
+        let seconds: Int
+        let title: String
+    }
+
+    static let expirationOptions: [ExpirationOption] = [
+        ExpirationOption(seconds: 0, title: "Never"),
+        ExpirationOption(seconds: 3600, title: "1 hour"),
+        ExpirationOption(seconds: 28800, title: "8 hours"),
+        ExpirationOption(seconds: 86400, title: "1 day"),
+        ExpirationOption(seconds: 604800, title: "1 week"),
+        ExpirationOption(seconds: 2419200, title: "4 weeks")
     ]
 
     func copyLink() {

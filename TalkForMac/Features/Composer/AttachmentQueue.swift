@@ -91,6 +91,17 @@ final class AttachmentQueue {
     }
 
     private func drain() async {
+        // Repeats rather than running once: files dropped while the queue was tidying up
+        // would otherwise sit as `.queued` forever, because `start()` sees a live pump and
+        // returns without doing anything.
+        repeat {
+            await drainOnce()
+            try? await Task.sleep(for: .seconds(2))
+            clearFinished()
+        } while transfers.contains { $0.state == .queued }
+    }
+
+    private func drainOnce() async {
         while let index = transfers.firstIndex(where: { $0.state == .queued }) {
             let transfer = transfers[index]
             transfers[index].state = .uploading(0)
@@ -119,10 +130,6 @@ final class AttachmentQueue {
                 Log.chat.warning("Attachment failed: \(error.userMessage)")
             }
         }
-
-        // Completed rows linger briefly so the user sees them finish, then clear themselves.
-        try? await Task.sleep(for: .seconds(2))
-        clearFinished()
     }
 
     private func report(_ fraction: Double, for id: UUID) {

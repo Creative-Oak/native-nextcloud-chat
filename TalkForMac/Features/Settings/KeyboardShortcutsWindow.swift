@@ -9,14 +9,14 @@ struct KeyboardShortcutsWindow: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                ForEach(Self.groups, id: \.title) { group in
+                ForEach(Self.groups) { group in
                     VStack(alignment: .leading, spacing: 6) {
                         Text(group.title)
                             .font(.system(size: 11, weight: .semibold))
                             .foregroundStyle(.secondary)
 
                         VStack(spacing: 0) {
-                            ForEach(group.shortcuts, id: \.keys) { shortcut in
+                            ForEach(group.shortcuts) { shortcut in
                                 HStack(alignment: .firstTextBaseline) {
                                     Text(shortcut.description)
                                     Spacer(minLength: 24)
@@ -39,46 +39,55 @@ struct KeyboardShortcutsWindow: View {
         .frame(width: 420, height: 560)
     }
 
-    private struct Group {
+    /// Structs rather than tuples: Swift has no key paths into tuple elements, which
+    /// `ForEach(_:id:)` needs.
+    private struct ShortcutGroup: Identifiable {
+        var id: String { title }
         let title: String
-        let shortcuts: [(description: String, keys: String)]
+        let shortcuts: [Shortcut]
     }
 
-    private static let groups: [Group] = [
-        Group(title: "Getting around", shortcuts: [
-            ("Go to conversation", "⌘K"),
-            ("Find a conversation", "⌘F"),
-            ("Next / previous conversation", "⌥⌘↓ ⌥⌘↑"),
-            ("Next unread conversation", "⇧⌘]"),
-            ("Show conversation details", "⌥⌘I"),
-            ("Refresh conversations", "⌘R")
+    private struct Shortcut: Identifiable {
+        var id: String { keys + description }
+        let description: String
+        let keys: String
+    }
+
+    private static let groups: [ShortcutGroup] = [
+        ShortcutGroup(title: "Getting around", shortcuts: [
+            Shortcut(description: "Go to conversation", keys: "⌘K"),
+            Shortcut(description: "Find a conversation", keys: "⌘F"),
+            Shortcut(description: "Next / previous conversation", keys: "⌥⌘↓ ⌥⌘↑"),
+            Shortcut(description: "Next unread conversation", keys: "⇧⌘]"),
+            Shortcut(description: "Show conversation details", keys: "⌥⌘I"),
+            Shortcut(description: "Refresh conversations", keys: "⌘R")
         ]),
-        Group(title: "In a conversation", shortcuts: [
-            ("Find in conversation", "⌥⌘F"),
-            ("Next / previous match", "⌘G ⇧⌘G"),
-            ("Focus the message field", "⇧⌘K"),
-            ("Reply to the newest message", "⇧⌘R"),
-            ("Edit your last message", "⌘↑"),
-            ("Mark as unread", "⇧⌘U"),
-            ("Favourite / unfavourite", "⇧⌘D")
+        ShortcutGroup(title: "In a conversation", shortcuts: [
+            Shortcut(description: "Find in conversation", keys: "⌥⌘F"),
+            Shortcut(description: "Next / previous match", keys: "⌘G ⇧⌘G"),
+            Shortcut(description: "Focus the message field", keys: "⇧⌘K"),
+            Shortcut(description: "Reply to the newest message", keys: "⇧⌘R"),
+            Shortcut(description: "Edit your last message", keys: "⌘↑"),
+            Shortcut(description: "Mark as unread", keys: "⇧⌘U"),
+            Shortcut(description: "Favourite / unfavourite", keys: "⇧⌘D")
         ]),
-        Group(title: "Writing", shortcuts: [
-            ("Send", "Return"),
-            ("New line", "⇧Return"),
-            ("Send (always)", "⌘Return"),
-            ("Cancel a reply or edit", "Escape"),
-            ("Mention someone", "@"),
-            ("Choose a mention", "↑ ↓ then Return or Tab"),
-            ("Attach a file", "⇧⌘A"),
-            ("Emoji & Symbols", "⌃⌘Space")
+        ShortcutGroup(title: "Writing", shortcuts: [
+            Shortcut(description: "Send", keys: "Return"),
+            Shortcut(description: "New line", keys: "⇧Return"),
+            Shortcut(description: "Send (always)", keys: "⌘Return"),
+            Shortcut(description: "Cancel a reply or edit", keys: "Escape"),
+            Shortcut(description: "Mention someone", keys: "@"),
+            Shortcut(description: "Choose a mention", keys: "↑ ↓ then Return or Tab"),
+            Shortcut(description: "Attach a file", keys: "⇧⌘A"),
+            Shortcut(description: "Emoji & Symbols", keys: "⌃⌘Space")
         ]),
-        Group(title: "App", shortcuts: [
-            ("New conversation", "⌘N"),
-            ("Settings", "⌘,"),
-            ("Close window", "⌘W"),
-            ("Minimise", "⌘M"),
-            ("Hide", "⌘H"),
-            ("Quit", "⌘Q")
+        ShortcutGroup(title: "App", shortcuts: [
+            Shortcut(description: "New conversation", keys: "⌘N"),
+            Shortcut(description: "Settings", keys: "⌘,"),
+            Shortcut(description: "Close window", keys: "⌘W"),
+            Shortcut(description: "Minimise", keys: "⌘M"),
+            Shortcut(description: "Hide", keys: "⌘H"),
+            Shortcut(description: "Quit", keys: "⌘Q")
         ])
     ]
 }

@@ -132,9 +132,17 @@ struct ConversationIndex: Sendable, Equatable {
         }
     }
 
+    /// A section and its rows. A struct rather than a tuple because Swift has no key paths
+    /// into tuple elements, and `ForEach(_:id:)` needs one.
+    struct SectionGroup: Sendable, Identifiable, Equatable {
+        var id: Section { section }
+        var section: Section
+        var items: [Conversation]
+    }
+
     /// Groups the (already filtered) conversations for display. Empty sections are dropped,
     /// so a user with no favourites never sees an empty "Favourites" heading.
-    static func sections(for conversations: [Conversation]) -> [(section: Section, items: [Conversation])] {
+    static func sections(for conversations: [Conversation]) -> [SectionGroup] {
         var favorites: [Conversation] = []
         var regular: [Conversation] = []
         var archived: [Conversation] = []
@@ -146,10 +154,10 @@ struct ConversationIndex: Sendable, Equatable {
         }
 
         return [
-            (.favorites, favorites),
-            (.conversations, regular),
-            (.archived, archived)
-        ].filter { !$0.1.isEmpty }
+            SectionGroup(section: .favorites, items: favorites),
+            SectionGroup(section: .conversations, items: regular),
+            SectionGroup(section: .archived, items: archived)
+        ].filter { !$0.items.isEmpty }
     }
 
     /// Everything, including archived — used when the sidebar is showing the archive.

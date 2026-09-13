@@ -299,14 +299,16 @@ final class NewConversationModel {
 
             let conversation = try await session.conversations.create(request)
 
-            // `invite` only carries the first one; the rest are added afterwards.
-            for entry in selected.dropFirst() where kind != .direct {
-                try? await session.participants.add(entry, to: conversation.token)
+            // `invite` carries at most one person, so anyone else picked is added after the
+            // fact. A group already invited `selected.first` via `invite`; an open room
+            // invited nobody, so everyone picked still needs adding.
+            let remaining: [DirectoryEntry] = switch kind {
+            case .direct: []
+            case .group: Array(selected.dropFirst())
+            case .publicRoom: selected
             }
-            if kind == .publicRoom {
-                for entry in selected {
-                    try? await session.participants.add(entry, to: conversation.token)
-                }
+            for entry in remaining {
+                try? await session.participants.add(entry, to: conversation.token)
             }
 
             return conversation

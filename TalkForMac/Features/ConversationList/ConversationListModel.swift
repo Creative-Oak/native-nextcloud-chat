@@ -35,9 +35,9 @@ final class ConversationListModel {
 
     /// Grouped for the sidebar. While filtering, the results are shown as one flat list —
     /// section headings during a search are noise.
-    var sections: [(section: ConversationIndex.Section, items: [Conversation])] {
+    var sections: [ConversationIndex.SectionGroup] {
         guard !isFiltering else {
-            return [(.conversations, conversations)]
+            return [ConversationIndex.SectionGroup(section: .conversations, items: conversations)]
         }
         return ConversationIndex.sections(for: conversations)
     }
