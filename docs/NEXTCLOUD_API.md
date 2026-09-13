@@ -1,7 +1,9 @@
 # Nextcloud / Nextcloud Talk API reference (verified)
 
-Everything in this file was checked against the official documentation on
-2026-09-13. Sources:
+Everything in this file was checked against primary sources on 2026-09-13. Where the prose
+documentation was vague, the **OpenAPI descriptions the server itself ships** were used
+instead — they are generated from the implementation and settled three shapes the prose got
+wrong or left out (see § 11). Sources:
 
 - Talk API docs — <https://nextcloud-talk.readthedocs.io/en/latest/>
   (`global`, `conversation`, `chat`, `reaction`, `participant`, `avatar`,
@@ -9,6 +11,8 @@ Everything in this file was checked against the official documentation on
 - Server developer manual — Login Flow v2, OCS API overview
 - `nextcloud/server` → `lib/public/RichObjectStrings/Definitions.php` for the
   rich-object parameter schema
+- `nextcloud/server` → `core/openapi.json` and `apps/files_sharing/openapi.json`
+- `nextcloud/spreed` → `openapi-full.json` (Talk's own generated API description)
 
 **Rule for this project:** if an endpoint, parameter or field is not in this file,
 it has not been verified — go and verify it, then add it here. Do not invent fields.
@@ -452,6 +456,93 @@ Cache key includes the conversation's `avatarVersion` so a changed avatar busts 
 cache, and nothing else does. Sizes we request: 64 (sidebar/@2x 32pt) and 128.
 
 ---
+
+## 11. Participants, people search, and conversation management
+
+### Participants — `/ocs/v2.php/apps/spreed/api/v4`
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| GET | `/room/{token}/participants` | `includeStatus` |
+| POST | `/room/{token}/participants` | `newParticipant` (required), `source` |
+| DELETE | `/room/{token}/attendees` | `attendeeId` — **note the different path** |
+| DELETE | `/room/{token}/participants/self` | Leave |
+
+`source` is an enum, verified from Talk's OpenAPI:
+`users`, `groups`, `circles`, `emails`, `federated_users`, `phones`, `teams`.
+
+Participant fields: `attendeeId`, `actorType`, `actorId`, `invitedActorId`, `displayName`,
+`participantType`, `permissions`, `attendeePermissions`, `lastPing`, `inCall`, `sessionIds`,
+`status`/`statusIcon`/`statusMessage`/`statusClearAt`, `attendeePin`, `roomToken`,
+`phoneNumber`, `callId`.
+
+**Trap:** `sessionIds` contains the string `"0"` for a participant with no session. Treating
+a non-empty array as "online" marks everybody online.
+
+### Creating a conversation — `POST /room`
+
+`roomType` (required), plus `roomName`, `invite`, `source`, `description`, `password`,
+`readOnly`, `listable`, `messageExpiration`, `lobbyState`, `permissions`, `mentionPermissions`,
+`recordingConsent`, `emoji`, `avatarColor`, `participants`, `owner`, `preset`.
+
+We send only `roomType`, `roomName`, `invite`, `source`, `description` and `password`.
+`invite` carries one invitee; the rest are added afterwards via the participants endpoint.
+
+### Managing one
+
+| Method | Path | Parameter |
+| --- | --- | --- |
+| PUT | `/room/{token}` | `roomName` |
+| PUT | `/room/{token}/description` | `description` (cap `room-description`) |
+| PUT | `/room/{token}/read-only` | `state` 0/1 (cap `read-only-rooms`) |
+| POST | `/room/{token}/message-expiration` | `seconds`, 0 disables (cap `message-expiration`) |
+| PUT | `/room/{token}/password` | `password` |
+| POST/DELETE | `/room/{token}/public` | optional `password` |
+| DELETE | `/room/{token}` | — |
+
+### People search — Nextcloud core, not Talk
+
+```
+GET /ocs/v2.php/core/autocomplete/get
+    search (required) · itemType · itemId · shareTypes[] · limit · sorter
+```
+
+Talk passes `itemType=call` and `itemId=<token>` (or `new`). `shareTypes[]`: `0` users,
+`1` groups, `7` teams/circles.
+
+Result fields (from core's `AutocompleteResult` schema): `id`, `label`, `icon`, `source`,
+`status`, `subline`, `shareWithDisplayNameUnique`.
+
+**Trap:** `status` is an object when the user has one and an **empty string** when they
+don't. A decoder that expects an object every time fails the whole search.
+
+## 12. Attachments
+
+Three steps, none of them a Talk endpoint except the last:
+
+1. **Upload** — `PUT /remote.php/dav/files/{userId}/{path}`, Basic auth.
+   Useful headers: `X-NC-WebDAV-Auto-Mkcol: 1` (create missing parents instead of a separate
+   `MKCOL`), `OC-Total-Length`, and `If-None-Match: *` so the PUT only creates and can never
+   silently replace someone's file. A clash answers 412, and we retry with a numbered name.
+2. **Share into the conversation** —
+   `POST /ocs/v2.php/apps/files_sharing/api/v1/shares` with `shareType=10` (Talk
+   conversation), `shareWith=<token>`, `path=<path in the user's root>`, `referenceId`, and
+   `talkMetaData` as a JSON string (`messageType`, `caption`, `replyTo`, `threadId`,
+   `threadTitle`, `silent`).
+3. **Thumbnails** — `GET /index.php/core/preview?fileId=&x=&y=&a=1&forceIcon=0&mode=cover`.
+   `forceIcon=0` makes the server answer 404 rather than a generic document icon, so the UI
+   can draw its own symbol instead of a picture of one.
+
+### Shared items — `/ocs/v2.php/apps/spreed/api/v1` (cap `rich-object-list-media`)
+
+| Method | Path | Parameters |
+| --- | --- | --- |
+| GET | `/chat/{token}/share/overview` | `limit` (default 7) |
+| GET | `/chat/{token}/share` | `objectType` (required), `lastKnownMessageId`, `limit` |
+
+**Trap, and the reason to read the OpenAPI:** the overview's `data` is a map of
+*objectType → array of messages*, but a single type's listing is a map of
+*message id → message* — an object, not an array.
 
 ## 9. Things this project deliberately does not use
 

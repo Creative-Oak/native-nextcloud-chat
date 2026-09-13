@@ -53,6 +53,22 @@ TalkForMac.xcodeproj           Xcode 26 project, synchronized folders
 docs/
 ```
 
+### Services
+
+Per account, all actors, all constructed in `Session`:
+
+| Service | Covers |
+| --- | --- |
+| `AuthenticationService` | Login Flow v2, verification, revocation |
+| `CapabilityService` | Capability fetch + Talk-hash invalidation |
+| `ConversationService` | Room list, creation, rename/description/read-only/expiration/password, join/leave |
+| `ChatService` | History, long poll, send/edit/delete, read markers, mention suggestions |
+| `ReactionService` | Add/remove/list, and who reacted |
+| `ParticipantService` | List, invite, remove, leave |
+| `DirectoryService` | Nextcloud core people/group search |
+| `SharedItemsService` | The inspector's Files tab |
+| `AttachmentService` | WebDAV upload, Talk share, previews, download |
+
 ### The one-module trick
 
 `TalkForMac.xcodeproj` compiles `Sources/TalkCore/**` **directly into the app target**
@@ -178,6 +194,33 @@ implementation. What exists instead is a genuine seam and a genuine head start:
 
 What a call implementation would have to add: the signaling stack (internal or external
 HPB), WebRTC, and a call UI. None of the MVP depends on any of it.
+
+## Liquid Glass
+
+macOS 26's `glassEffect(_:in:)` is powerful enough to make a mess with, so the material is
+not applied ad hoc. `UI/Design/GlassStyle.swift` defines four *roles* and every call site
+asks for a role rather than for a material:
+
+| Role | Used by |
+| --- | --- |
+| `.floating` | Controls hovering over the transcript: message actions, the scroll-to-bottom button, the offline pill, the upload rows |
+| `.panel` | Transient surfaces over content: quick switcher, mention list, emoji picker, find bar, image viewer chrome, login card |
+| `.chip` / `.selectedChip` | Reaction pills and the people chips in New Conversation |
+
+Two deliberate decisions:
+
+1. **The transcript is not glass.** Apple's guidance is that Liquid Glass belongs to the
+   layer *above* content, and a chat transcript is content. Messages, the sidebar rows and
+   message text stay ordinary opaque surfaces; if everything is glass, nothing reads as
+   floating.
+2. **Reaction pills share a `GlassEffectContainer`.** With a container spacing wider than the
+   gap between pills, neighbouring reactions merge into one glass shape and a new reaction
+   flows out of the pill beside it rather than popping into place. This is the one place the
+   material does something no other material could.
+
+APIs used, all verified against Apple's documentation rather than memory: `glassEffect(_:in:)`,
+`Glass.regular/.tint(_:)/.interactive(_:)`, `GlassEffectContainer(spacing:)`,
+`glassEffectID(_:in:)`, `.buttonStyle(.glass)` and `.glassProminent`, `ToolbarSpacer`.
 
 ## Mentions
 

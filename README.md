@@ -44,13 +44,24 @@ is revoked when you remove the account.
 
 ## What works
 
-Accounts (Login Flow v2, Keychain, capability discovery) · conversation list with avatars,
-favourites, unread and mention state · chat history with backwards pagination, grouping, day
-separators and a new-messages marker · Markdown, mentions, links, files and rich objects ·
-sending with optimistic delivery and retry · replies, reactions, editing and deleting where
-the server allows it · read markers that only move when you have actually seen a message ·
-live updates over Talk's long poll · notifications and Dock badge · local cache, drafts,
-offline reading · menu commands and keyboard shortcuts throughout.
+**Chat** — accounts (Login Flow v2, Keychain, capability discovery) · conversation list with
+avatars, favourites, unread and mention state, grouped into Favourites / Conversations /
+Archived · chat history with backwards pagination, grouping, day separators and a
+new-messages marker · Markdown, mentions, links, files and rich objects · sending with
+optimistic delivery and retry · replies, reactions (and who reacted), editing and deleting ·
+read markers that only move when you have actually seen a message · live updates over Talk's
+long poll · notifications and Dock badge · local cache, drafts, offline reading.
+
+**Beyond chat** — a third-column inspector with conversation info, participants (invite and
+remove) and shared files · ⌘N new conversation, with Nextcloud's own people search ·
+attachments by drag-and-drop, ⇧⌘A or paste, with real upload progress · images inline with
+an in-app viewer · ⌥⌘F find in conversation · ⌘K quick switcher · moderator settings
+(rename, description, read-only, message expiration, link access) · a keyboard shortcuts
+window.
+
+**Design** — Liquid Glass on macOS 26, applied to the floating layer (message actions,
+panels, reaction pills, upload rows) and deliberately *not* to the transcript, which is
+content. See `docs/ARCHITECTURE.md` § Liquid Glass.
 
 Everything is gated on server capabilities rather than version numbers, so a feature your
 server doesn't support is hidden rather than broken.
@@ -72,7 +83,12 @@ server doesn't support is hidden rather than broken.
 | ⇧⌘R | Reply to the newest message |
 | ⇧⌘U | Mark as unread |
 | ⇧⌘D | Favourite / unfavourite |
+| ⌥⌘F | Find in conversation (⌘G / ⇧⌘G to step) |
+| ⌥⌘I | Show conversation details |
+| ⇧⌘A | Attach a file |
+| ⌘N | New conversation |
 | ⌘R | Refresh conversations |
+| ⌘/ | Keyboard shortcuts |
 | ⌘, | Settings |
 
 ## First build

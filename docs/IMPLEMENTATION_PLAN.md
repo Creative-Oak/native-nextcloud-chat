@@ -105,12 +105,25 @@ target is compiled by CI on a macOS runner. Anything not yet green on CI is mark
 - [ ] Performance pass on a real 10k-message conversation (needs a real server)
 - [ ] First-build pass on macOS: the SwiftUI layer has never been type-checked
 
-## Phase 7 — After the MVP
+## Phase 7 — Beyond the MVP (largely done)
 
-Attachments (drag & drop, paste screenshot, upload progress, Quick Look) · shared-files
-browser · participants inspector (third column) · create conversation · server-side
-message search · pins · reminders · voice messages · polls · user status · typing
-indicators · per-conversation notification settings · federation polish · calls.
+- [x] Liquid Glass design pass (macOS 26), applied to the floating layer only
+- [x] Attachments: drag & drop, ⇧⌘A, paste an image, real byte progress, numbered names
+      instead of overwriting
+- [x] Inline image previews + an in-app viewer with save and open-in-Nextcloud
+- [x] Third-column inspector: info, participants (invite/remove), shared files
+- [x] ⌘N create conversation (direct / group / open) with Nextcloud people search
+- [x] Conversation settings: rename, description, read-only, message expiration, link
+      access, password, leave, delete
+- [x] Find in conversation (⌥⌘F), searching rendered text rather than raw protocol text
+- [x] Sidebar sections, including an archive that stays searchable
+- [x] Who-reacted popover
+- [x] Keyboard shortcuts window (⌘/)
+- [ ] Server-side message search (Talk's unified search provider) for history older than
+      the local cache
+- [ ] Pins, reminders, voice messages, polls (rendered, not yet interactive)
+- [ ] Typing indicators and user-status editing (both need signaling or the status API)
+- [ ] Calls — deliberately out of scope; see ARCHITECTURE.md § Room for calls
 
 ---
 
@@ -140,6 +153,12 @@ indicators · per-conversation notification settings · federation polish · cal
   Found by the 10k-message test taking 34s. *(phase 4)*
 - `NSImage` is not `Sendable`, so `AvatarLoader` cannot be an actor that returns images. It is
   main-actor with an actor-backed disk cache that only moves `Data`. *(phase 2)*
+- The Nextcloud/Talk OpenAPI descriptions are a better source than the prose docs where the
+  two disagree: they settled the shared-items response shape (a map, not an array), the
+  `status`-is-sometimes-a-string quirk in core autocomplete, and the fact that adding a
+  participant POSTs to `/participants` while removing one DELETEs `/attendees`. *(phase 7)*
+- `sessionIds` contains the literal string `"0"` for a participant with no session, so a
+  non-empty array does not mean "online". *(phase 7)*
 - Transcript grouping, previews and relative timestamps started life in the app target where
   they could not be tested; moved into `TalkCore` and covered. The move immediately caught an
   invalid `Date.FormatStyle` symbol. *(phase 6)*

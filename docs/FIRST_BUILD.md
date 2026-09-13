@@ -47,6 +47,8 @@ You can still work on everything except the UI in the meantime with `open Packag
 | Anything about `searchFocused`, `defaultScrollAnchor`, `onKeyPress` | macOS-version-gated SwiftUI APIs — all are macOS 15+ and the target is 26, so this would mean a signature change |
 | `main actor-isolated ... cannot be referenced` | Swift 6 concurrency; the fix is almost always a capture list, not a `@preconcurrency` import |
 | SwiftData macro errors in `CacheModels.swift` | The one file no Linux compiler has ever seen. Its schema is deliberately tiny — five models, scalar columns plus an encoded payload |
+| Anything about `glassEffect`, `GlassEffectContainer`, `.buttonStyle(.glass)` | The Liquid Glass APIs. Declarations were taken from Apple's documentation rather than memory, but they are new; `UI/Design/GlassStyle.swift` is the single place to adjust them |
+| `dropDestination`, `inspector(isPresented:)`, `Layout` conformance | The newer SwiftUI surfaces used by attachments, the third column and the chip flow layout |
 
 Send me the first 20 or so errors and I'll fix them in a batch — they usually come in
 families rather than one at a time.
