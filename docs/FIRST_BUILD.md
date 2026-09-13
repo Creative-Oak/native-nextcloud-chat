@@ -8,6 +8,19 @@ AppKit layer in `TalkForMac/` has never been through a real compiler locally —
 So the first build on your Mac is a real step, not a formality. This is how to get through
 it quickly.
 
+## 0. What has already been checked
+
+`Tools/preflight.sh` runs everything that can be verified without a Mac, and passes:
+
+```
+swift build && swift test          178 tests
+swiftc -parse TalkForMac/**        syntax
+Tools/check_imports.py             framework imports (this caught four certain errors)
+Tools/validate_pbxproj.py          the Xcode project's integrity
+```
+
+What it cannot check is SwiftUI and AppKit *type* correctness. That's what step 1 is for.
+
 ## 1. Open and build
 
 ```sh

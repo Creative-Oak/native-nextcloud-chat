@@ -18,6 +18,10 @@ jobs:
     container: swift:6.1
     steps:
       - uses: actions/checkout@v4
+      - name: Check imports
+        # A missing `import AppKit` in a SwiftUI file is invisible on Linux and an instant
+        # error on a Mac, so it is worth checking where there is no Xcode to tell us.
+        run: python3 Tools/check_imports.py
       - name: Validate the Xcode project
         # Parses project.pbxproj as an OpenStep plist and checks for the things that make
         # Xcode refuse to open a project. Runs on Linux, where there is no Xcode to ask.

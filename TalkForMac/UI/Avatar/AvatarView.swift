@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// A conversation or person avatar, with an attractive fallback.

@@ -1,3 +1,5 @@
+import AppKit
+import Combine
 import SwiftUI
 
 /// The window's content: sidebar plus conversation, or the login screen.
