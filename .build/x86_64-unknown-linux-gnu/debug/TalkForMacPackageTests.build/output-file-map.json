@@ -1,0 +1,11 @@
+{
+  "": {
+    "swift-dependencies": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkForMacPackageTests.build/master.swiftdeps"
+  },
+  "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkForMacPackageTests.derived/runner.swift": {
+    "dependencies": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkForMacPackageTests.build/runner.d",
+    "object": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkForMacPackageTests.build/runner.swift.o",
+    "swiftmodule": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkForMacPackageTests.build/runner~partial.swiftmodule",
+    "swift-dependencies": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkForMacPackageTests.build/runner.swiftdeps"
+  }
+}
