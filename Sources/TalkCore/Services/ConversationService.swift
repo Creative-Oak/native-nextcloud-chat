@@ -1,0 +1,100 @@
+import Foundation
+
+struct ConversationListResult: Sendable {
+    var conversations: [Conversation]
+    /// Echo this back as the next `modifiedSince`; it is the server's clock, not ours.
+    var modifiedBefore: Int?
+    var talkHash: String?
+    /// False for a full refresh, in which case conversations missing from the result have
+    /// genuinely gone away and must be deleted locally.
+    var isIncremental: Bool
+}
+
+/// The Talk conversation (room) API, v4.
+actor ConversationService {
+    private let client: OCSClient
+
+    init(client: OCSClient) {
+        self.client = client
+    }
+
+    /// - Parameters:
+    ///   - modifiedSince: only conversations active since this timestamp. Cheap, but
+    ///     **cannot express removals** — see ``ConversationSyncEngine`` for the policy.
+    ///   - includeStatus: user status for one-to-one conversations.
+    func conversations(
+        modifiedSince: Int? = nil,
+        includeStatus: Bool = true
+    ) async throws(TalkError) -> ConversationListResult {
+        var query: [URLQueryItem] = [
+            // Fetching the sidebar must never make the user look "online" to everyone else.
+            URLQueryItem(name: "noStatusUpdate", value: "1")
+        ]
+        if includeStatus { query.append(URLQueryItem(name: "includeStatus", value: "true")) }
+        if let modifiedSince, modifiedSince > 0 {
+            query.append(URLQueryItem(name: "modifiedSince", value: String(modifiedSince)))
+        }
+
+        let response = try await client.send(OCSRequest.get(Endpoint.rooms, query: query), as: [ConversationDTO].self)
+        let conversations = (response.value ?? []).map { $0.model() }
+
+        Log.sync.debug("Fetched \(conversations.count) conversations (incremental: \(modifiedSince != nil))")
+        return ConversationListResult(
+            conversations: conversations,
+            modifiedBefore: response.headers.talkModifiedBefore,
+            talkHash: response.headers.talkHash,
+            isIncremental: modifiedSince != nil
+        )
+    }
+
+    func conversation(token: String) async throws(TalkError) -> Conversation {
+        try await client.require(OCSRequest.get(Endpoint.room(token)), as: ConversationDTO.self).value.model()
+    }
+
+    /// Fetches (and, server-side, creates on first use) the Note to Self conversation.
+    func noteToSelf() async throws(TalkError) -> Conversation {
+        try await client.require(OCSRequest.get(Endpoint.noteToSelf), as: ConversationDTO.self).value.model()
+    }
+
+    func setFavorite(_ isFavorite: Bool, token: String) async throws(TalkError) {
+        let request = isFavorite
+            ? OCSRequest.post(Endpoint.favorite(token))
+            : OCSRequest.delete(Endpoint.favorite(token))
+        _ = try await client.send(request, as: EmptyResponse.self)
+    }
+
+    func setNotificationLevel(_ level: NotificationLevel, token: String) async throws(TalkError) {
+        _ = try await client.send(
+            OCSRequest.post(Endpoint.notify(token), form: ["level": String(level.rawValue)]),
+            as: EmptyResponse.self
+        )
+    }
+
+    // MARK: - Session
+
+    /// Joins the conversation, creating the session the chat endpoints need.
+    ///
+    /// A 412 from a chat call means this session died and has to be re-established — that
+    /// is the whole reason this exists in a chat-only client.
+    @discardableResult
+    func join(token: String, force: Bool = true) async throws(TalkError) -> Conversation {
+        let request = OCSRequest.post(
+            Endpoint.activeParticipants(token),
+            form: force ? ["force": "true"] : [:]
+        )
+        return try await client.require(request, as: ConversationDTO.self).value.model()
+    }
+
+    func leave(token: String) async throws(TalkError) {
+        _ = try await client.send(OCSRequest.delete(Endpoint.activeParticipants(token)), as: EmptyResponse.self)
+    }
+
+    /// Tells the server whether this client is actively looking at the conversation.
+    /// Requires the `session-state` capability; callers check before calling.
+    func setSessionState(active: Bool, token: String) async throws(TalkError) {
+        _ = try await client.send(
+            OCSRequest.put(Endpoint.sessionState(token), form: ["state": active ? "1" : "0"]),
+            as: EmptyResponse.self
+        )
+    }
+}
