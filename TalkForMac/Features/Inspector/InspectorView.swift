@@ -161,12 +161,10 @@ private struct DetailsTab: View {
     }
 
     private var expiration: String {
-        let seconds = model.conversation.messageExpiration
-        let formatter = DateComponentsFormatter()
-        formatter.allowedUnits = [.day, .hour, .minute]
-        formatter.unitsStyle = .full
-        formatter.maximumUnitCount = 1
-        return formatter.string(from: TimeInterval(seconds)) ?? "\(seconds)s"
+        // `Duration`'s own format style rather than DateComponentsFormatter: it is the
+        // modern API, it localizes the same way, and it works everywhere.
+        Duration.seconds(model.conversation.messageExpiration)
+            .formatted(.units(allowed: [.weeks, .days, .hours, .minutes], width: .wide, maximumUnitCount: 1))
     }
 }
 

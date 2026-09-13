@@ -98,7 +98,7 @@ extension ChatModel {
             guard let self else { return }
             let session = self.session
             let token = self.token
-            do {
+            do throws(TalkError) {
                 let sent = try await session.chat.send(
                     token: token,
                     message: optimistic.text,
@@ -192,7 +192,7 @@ extension ChatModel {
         Task { [weak self] in
             guard let self else { return }
             let session = self.session
-            do {
+            do throws(TalkError) {
                 let updated = try await session.chat.edit(token: self.token, messageID: original.messageID, message: text)
                 self.mutateTimeline { $0.apply([updated]) }
                 await session.store.save(messages: [updated], accountID: session.account.id)
@@ -217,7 +217,7 @@ extension ChatModel {
         Task { [weak self] in
             guard let self else { return }
             let session = self.session
-            do {
+            do throws(TalkError) {
                 // The response is the replacement tombstone, which is also what every other
                 // client will receive — so the row is overwritten, not removed.
                 let tombstone = try await session.chat.delete(token: self.token, messageID: message.messageID)
@@ -256,7 +256,7 @@ extension ChatModel {
             guard let self else { return }
             let session = self.session
             let token = self.token
-            do {
+            do throws(TalkError) {
                 let summary = hadReacted
                     ? try await session.reactions.remove(emoji, token: token, messageID: message.messageID)
                     : try await session.reactions.add(emoji, token: token, messageID: message.messageID)

@@ -51,7 +51,9 @@ extension ChatModel {
             try? await Task.sleep(for: .milliseconds(180))
             guard !Task.isCancelled, let self else { return }
 
-            do {
+            // Typed: the only thing this block throws is a TalkError, and saying so gives
+            // the catch a typed error instead of `any Error`.
+            do throws(TalkError) {
                 let results = try await self.session.chat.mentionSuggestions(
                     token: self.token,
                     search: search,

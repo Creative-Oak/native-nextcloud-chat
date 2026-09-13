@@ -75,7 +75,7 @@ final class InspectorModel {
         isLoading = true
         defer { isLoading = false }
 
-        do {
+        do throws(TalkError) {
             switch tab {
             case .details:
                 break   // already have everything
@@ -98,7 +98,7 @@ final class InspectorModel {
         guard canManageParticipants else { return }
         let previous = participants
         participants.removeAll { $0.attendeeID == participant.attendeeID }
-        do {
+        do throws(TalkError) {
             try await session.participants.remove(attendeeID: participant.attendeeID, from: conversation.token)
         } catch {
             participants = previous
@@ -110,7 +110,7 @@ final class InspectorModel {
         guard canManageParticipants else { return }
         isInviting = true
         defer { isInviting = false }
-        do {
+        do throws(TalkError) {
             try await session.participants.add(entry, to: conversation.token)
             inviteSearch = ""
             inviteResults = []

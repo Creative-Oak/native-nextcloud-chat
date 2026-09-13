@@ -14,7 +14,10 @@ enum ConnectionState: Sendable, Equatable {
 protocol NetworkMonitoring: Sendable {
     var state: ConnectionState { get async }
     /// Emits on every change, starting with the current value.
-    func states() -> AsyncStream<ConnectionState>
+    ///
+    /// `async` because the only real implementation is an actor, and an actor-isolated
+    /// method cannot satisfy a nonisolated requirement under Swift 6 concurrency.
+    func states() async -> AsyncStream<ConnectionState>
 }
 
 #if canImport(Network)
@@ -39,7 +42,7 @@ actor SystemNetworkMonitor: NetworkMonitoring {
         }
     }
 
-    func states() -> AsyncStream<ConnectionState> {
+    func states() async -> AsyncStream<ConnectionState> {
         start()
         let id = UUID()
         let (stream, continuation) = AsyncStream<ConnectionState>.makeStream(bufferingPolicy: .bufferingNewest(4))
@@ -86,7 +89,7 @@ final class StaticNetworkMonitor: NetworkMonitoring, @unchecked Sendable {
         get async { lock.withLock { current } }
     }
 
-    func states() -> AsyncStream<ConnectionState> {
+    func states() async -> AsyncStream<ConnectionState> {
         let (stream, continuation) = AsyncStream<ConnectionState>.makeStream()
         lock.withLock {
             continuations.append(continuation)

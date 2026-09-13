@@ -97,7 +97,9 @@ private struct AccountSettings: View {
                     default:
                         Label(app.connection == .offline ? "Offline" : "Connected",
                               systemImage: app.connection == .offline ? "wifi.slash" : "checkmark.circle.fill")
-                            .foregroundStyle(app.connection == .offline ? .secondary : .green)
+                            // Both branches have to be the same shape style; `.secondary`
+                            // and `.green` are different types.
+                            .foregroundStyle(app.connection == .offline ? Color.secondary : Color.green)
                     }
                 }
 

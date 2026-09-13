@@ -31,6 +31,9 @@ struct WindowConfigurator: NSViewRepresentable {
 extension View {
     /// Remembers this window's size and position across launches.
     func remembersWindowFrame(named name: String) -> some View {
-        background(WindowConfigurator(autosaveName: name).frame(width: 0, height: 0))
+        background {
+            WindowConfigurator(autosaveName: name)
+                .frame(width: 0, height: 0)
+        }
     }
 }

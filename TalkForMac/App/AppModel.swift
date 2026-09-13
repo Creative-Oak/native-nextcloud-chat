@@ -275,7 +275,7 @@ final class AppModel {
         networkTask?.cancel()
         let monitor = dependencies.network
         networkTask = Task { [weak self] in
-            for await state in monitor.states() {
+            for await state in await monitor.states() {
                 guard let self else { return }
                 self.connection = state
                 if state == .online, let session = self.session {

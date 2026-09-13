@@ -1,6 +1,20 @@
 import Foundation
 import Observation
 
+/// The defaults keys, at file scope rather than nested in ``Preferences`` so they keep the
+/// isolation they need: one of them is read from a `@Sendable` closure off the main actor,
+/// and a member of a `@MainActor` type could not be.
+private enum Key {
+    static let showNotifications = "notifications.enabled"
+    static let notificationSound = "notifications.sound"
+    static let notificationPreviews = "notifications.previews"
+    static let dockBadge = "notifications.dockBadge"
+    static let sendOnReturn = "composer.sendOnReturn"
+    static let allowInsecureLocalServers = "advanced.allowInsecureLocalServers"
+    static let developerMode = "advanced.developerMode"
+    static let lastSelectedToken = "state.lastSelectedToken"
+}
+
 /// User preferences.
 ///
 /// `UserDefaults` only — no credentials, no message content, nothing that would be a
@@ -24,18 +38,7 @@ final class Preferences {
     }
 
     /// Read directly from `UserDefaults` by code that can't reach the main actor.
-    static let allowInsecureLocalServersKey = Key.allowInsecureLocalServers
-
-    fileprivate enum Key {
-        static let showNotifications = "notifications.enabled"
-        static let notificationSound = "notifications.sound"
-        static let notificationPreviews = "notifications.previews"
-        static let dockBadge = "notifications.dockBadge"
-        static let sendOnReturn = "composer.sendOnReturn"
-        static let allowInsecureLocalServers = "advanced.allowInsecureLocalServers"
-        static let developerMode = "advanced.developerMode"
-        static let lastSelectedToken = "state.lastSelectedToken"
-    }
+    nonisolated static let allowInsecureLocalServersKey = Key.allowInsecureLocalServers
 
     var showsNotifications: Bool {
         get { defaults.bool(forKey: Key.showNotifications) }

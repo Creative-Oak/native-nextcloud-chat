@@ -262,7 +262,7 @@ final class NewConversationModel {
             try? await Task.sleep(for: .milliseconds(200))
             guard !Task.isCancelled, let self else { return }
             defer { self.isSearching = false }
-            do {
+            do throws(TalkError) {
                 // A direct conversation can only be with a person, so don't offer groups.
                 let types = self.kind == .direct ? [0] : [0, 1, 7]
                 let found = try await self.session.directory.search(term, shareTypes: types)
@@ -282,7 +282,7 @@ final class NewConversationModel {
         defer { isCreating = false }
         error = nil
 
-        do {
+        do throws(TalkError) {
             let request: NewConversation
             switch kind {
             case .direct:

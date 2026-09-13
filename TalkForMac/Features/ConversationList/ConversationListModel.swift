@@ -127,7 +127,7 @@ final class ConversationListModel {
         let service = session.conversations
         let token = conversation.token
         Task { [weak self] in
-            do {
+            do throws(TalkError) {
                 try await service.setFavorite(newValue, token: token)
             } catch {
                 // Put it back: the sidebar must never disagree with the server for long.
@@ -145,7 +145,7 @@ final class ConversationListModel {
         let service = session.conversations
         let token = conversation.token
         Task { [weak self] in
-            do {
+            do throws(TalkError) {
                 try await service.setNotificationLevel(level, token: token)
             } catch {
                 self?.index.update(token: token) { $0.notificationLevel = previous }
@@ -163,7 +163,7 @@ final class ConversationListModel {
         let chat = session.chat
         let token = conversation.token
         Task {
-            do {
+            do throws(TalkError) {
                 try await chat.markUnread(token: token)
             } catch {
                 Log.ui.warning("Couldn’t mark as unread: \(error.userMessage)")

@@ -228,7 +228,7 @@ final class ChatModel {
         isLoadingOlder = true
         defer { isLoadingOlder = false }
 
-        do {
+        do throws(TalkError) {
             let batch = try await session.chatSync.loadOlder(token: token, before: oldest)
             if batch.messages.isEmpty {
                 canLoadOlder = false
@@ -284,7 +284,7 @@ final class ChatModel {
             guard let self else { return }
             defer { self.isSendingReadMarker = false }
             let marker = self.pendingReadMarker
-            do {
+            do throws(TalkError) {
                 try await self.session.chat.markRead(token: self.token, lastReadMessageID: marker)
             } catch {
                 Log.chat.warning("Couldn’t update the read marker: \(error.userMessage)")
@@ -335,8 +335,10 @@ final class ChatModel {
     /// Set to move the composer's caret after the model rewrites the text.
     var caretRequest: Int?
 
-    private(set) var mentionQuery: MentionComposer.Query?
-    private(set) var mentionSuggestions: [MentionSuggestion] = []
+    // Not `private(set)`: the mention logic lives in ChatModel+Mentions.swift, and
+    // `private` is file-scoped.
+    var mentionQuery: MentionComposer.Query?
+    var mentionSuggestions: [MentionSuggestion] = []
     var highlightedMentionIndex = 0
     @ObservationIgnored var mentionTask: Task<Void, Never>?
     /// Guards the text+caret rewrite when a suggestion is accepted. Without it, setting the

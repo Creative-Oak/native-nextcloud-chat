@@ -16,13 +16,22 @@ struct MessageContentView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             ForEach(Array(content.blocks.enumerated()), id: \.offset) { _, block in
-                blockView(block)
+                MessageBlockView(block: block, isFromMe: isFromMe)
             }
         }
     }
+}
 
-    @ViewBuilder
-    private func blockView(_ block: MessageBlock) -> some View {
+/// One block. A separate view rather than a `@ViewBuilder` method on ``MessageContentView``
+/// because blocks nest: a quote contains blocks, which may themselves be quotes. A method
+/// returning `some View` cannot recurse — its opaque type would be defined in terms of
+/// itself — but a nominal view can, because `MessageBlockView` is a complete type before
+/// its own `body` is ever looked at.
+private struct MessageBlockView: View {
+    let block: MessageBlock
+    let isFromMe: Bool
+
+    var body: some View {
         switch block {
         case .paragraph(let nodes):
             Text(MessageAttributedString.make(nodes, isFromMe: isFromMe))
@@ -39,7 +48,7 @@ struct MessageContentView: View {
                     .frame(width: 3)
                 VStack(alignment: .leading, spacing: 4) {
                     ForEach(Array(blocks.enumerated()), id: \.offset) { _, inner in
-                        blockView(inner)
+                        MessageBlockView(block: inner, isFromMe: isFromMe)
                     }
                 }
                 .foregroundStyle(.secondary)

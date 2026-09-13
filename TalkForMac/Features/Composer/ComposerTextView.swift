@@ -85,7 +85,7 @@ struct ComposerTextView: NSViewRepresentable {
 
         if isFocused, textView.window?.firstResponder !== textView {
             DispatchQueue.main.async {
-                textView.window?.makeFirstResponder(textView)
+                _ = textView.window?.makeFirstResponder(textView)
                 textView.setSelectedRange(NSRange(location: textView.string.count, length: 0))
             }
         }

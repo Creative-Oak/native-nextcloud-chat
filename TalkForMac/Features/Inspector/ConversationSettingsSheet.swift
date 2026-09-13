@@ -199,7 +199,7 @@ final class ConversationSettingsModel: Identifiable {
         defer { isSaving = false }
         error = nil
 
-        do {
+        do throws(TalkError) {
             if name != original.name, canRename {
                 try await session.conversations.rename(token: conversation.token, to: name)
             }
@@ -226,7 +226,7 @@ final class ConversationSettingsModel: Identifiable {
     }
 
     func leave() async -> Bool {
-        do {
+        do throws(TalkError) {
             try await session.participants.leave(token: conversation.token)
             return true
         } catch {
@@ -236,7 +236,7 @@ final class ConversationSettingsModel: Identifiable {
     }
 
     func delete() async -> Bool {
-        do {
+        do throws(TalkError) {
             try await session.conversations.delete(token: conversation.token)
             return true
         } catch {

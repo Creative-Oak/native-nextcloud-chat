@@ -74,7 +74,9 @@ private struct PreviewLoaderKey: EnvironmentKey {
 }
 
 private struct OpenAttachmentKey: EnvironmentKey {
-    static let defaultValue: ((RichObject) -> Void)? = nil
+    // `@MainActor` rather than a bare function type: a bare one is not `Sendable`, which
+    // a `static let` has to be under Swift 6. Every caller is a view anyway.
+    static let defaultValue: (@MainActor (RichObject) -> Void)? = nil
 }
 
 extension EnvironmentValues {
@@ -84,7 +86,7 @@ extension EnvironmentValues {
     }
 
     /// Opens an attachment in the in-app viewer. Set by the chat view.
-    var openAttachment: ((RichObject) -> Void)? {
+    var openAttachment: (@MainActor (RichObject) -> Void)? {
         get { self[OpenAttachmentKey.self] }
         set { self[OpenAttachmentKey.self] = newValue }
     }
