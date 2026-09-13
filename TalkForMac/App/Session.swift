@@ -14,6 +14,10 @@ struct Session: Sendable {
     let chat: ChatService
     let reactions: ReactionService
     let capabilities: CapabilityService
+    let participants: ParticipantService
+    let directory: DirectoryService
+    let sharedItems: SharedItemsService
+    let attachments: AttachmentService
 
     let conversationSync: ConversationSyncEngine
     let chatSync: ActiveChatSyncEngine
@@ -31,6 +35,16 @@ struct Session: Sendable {
         chat = ChatService(client: client)
         reactions = ReactionService(client: client, currentUserID: account.userID)
         capabilities = CapabilityService(client: client)
+        participants = ParticipantService(client: client)
+        directory = DirectoryService(client: client)
+        sharedItems = SharedItemsService(client: client)
+        attachments = AttachmentService(
+            server: account.server,
+            credentials: credentials,
+            userID: account.userID,
+            transport: transport,
+            client: client
+        )
 
         conversationSync = ConversationSyncEngine(service: conversations)
         chatSync = ActiveChatSyncEngine(chat: chat, conversations: conversations)

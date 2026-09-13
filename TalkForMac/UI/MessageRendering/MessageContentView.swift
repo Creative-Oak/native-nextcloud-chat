@@ -161,10 +161,25 @@ private struct CodeBlockView: View {
 }
 
 /// A file, poll or location shared into the conversation.
+///
+/// Images show themselves; everything else gets a compact row that says what it is. The
+/// alternative — a generic document icon for a photo — is the thing that makes a chat
+/// client feel like a file browser.
 private struct AttachmentView: View {
     let object: RichObject
 
+    @Environment(\.openAttachment) private var openAttachment
+
     var body: some View {
+        if object.isImage && object.previewAvailable {
+            InlineImageView(object: object)
+                .contextMenu { menu }
+        } else {
+            fileRow
+        }
+    }
+
+    private var fileRow: some View {
         HStack(spacing: 10) {
             Image(systemName: symbol)
                 .font(.title2)
@@ -188,16 +203,26 @@ private struct AttachmentView: View {
         .background(.quaternary.opacity(0.4), in: .rect(cornerRadius: 8))
         .contentShape(.rect)
         .onTapGesture { open() }
-        .contextMenu {
-            if object.link != nil {
-                Button("Open in Nextcloud") { open() }
-                Button("Copy Link") {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(object.link?.absoluteString ?? "", forType: .string)
-                }
+        .contextMenu { menu }
+        .help(object.name)
+    }
+
+    @ViewBuilder
+    private var menu: some View {
+        if object.isImage && object.previewAvailable {
+            Button("Open Preview") { openAttachment?(object) }
+        }
+        if object.link != nil {
+            Button("Open in Nextcloud") { open() }
+            Button("Copy Link") {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(object.link?.absoluteString ?? "", forType: .string)
             }
         }
-        .help(object.name)
+        Button("Copy File Name") {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(object.name, forType: .string)
+        }
     }
 
     private var symbol: String {
@@ -225,6 +250,10 @@ private struct AttachmentView: View {
     }
 
     private func open() {
+        if object.isImage && object.previewAvailable, let openAttachment {
+            openAttachment(object)
+            return
+        }
         guard let link = object.link else { return }
         NSWorkspace.shared.open(link)
     }

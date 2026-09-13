@@ -204,3 +204,85 @@ struct TranscriptLayoutTests {
         #expect(RelativeTimestamp.daySeparator(noon.addingTimeInterval(-24 * 3600), now: noon, calendar: calendar) == "Yesterday")
     }
 }
+
+@Suite("Message search")
+struct MessageSearchTests {
+    private let parser = MessageContentParser(currentUserID: "alice")
+
+    private func message(_ id: Int, _ text: String, actor: String = "bob", parameters: [String: RichObject] = [:]) -> Message {
+        Message(
+            messageID: id,
+            token: "tok",
+            actor: MessageActor(kind: .users, id: actor, displayName: actor.capitalized),
+            timestamp: Date(timeIntervalSince1970: TimeInterval(1_757_000_000 + id)),
+            text: text,
+            parameters: parameters
+        )
+    }
+
+    @Test("Finds matches newest first")
+    func newestFirst() {
+        let matches = MessageSearch.matches(
+            in: [message(1, "budget draft"), message(2, "the budget again"), message(3, "unrelated")],
+            query: "budget",
+            parser: parser
+        )
+        #expect(matches.map(\.messageID) == [2, 1])
+    }
+
+    @Test("Ignores case and accents")
+    func caseAndAccents() {
+        let matches = MessageSearch.matches(in: [message(1, "Café plans")], query: "cafe", parser: parser)
+        #expect(matches.count == 1)
+    }
+
+    @Test("Searches what's on screen, not the raw protocol text")
+    func searchesRenderedText() {
+        // A file share's text is "{file}" — searching for the filename must still find it.
+        let fileMessage = message(1, "{file}", parameters: [
+            "file": RichObject(type: .file, id: "1", name: "budget-2026.xlsx")
+        ])
+        #expect(MessageSearch.matches(in: [fileMessage], query: "budget", parser: parser).count == 1)
+        #expect(MessageSearch.matches(in: [fileMessage], query: "{file}", parser: parser).isEmpty)
+
+        // Likewise a mention: the raw text has a placeholder, the rendered text has the name.
+        let mention = message(2, "ping {mention-user1}", parameters: [
+            "mention-user1": RichObject(type: .user, id: "carol", name: "Carol Cortez")
+        ])
+        #expect(MessageSearch.matches(in: [mention], query: "carol", parser: parser).count == 1)
+    }
+
+    @Test("Finds by author as well as by content")
+    func searchesAuthor() {
+        #expect(MessageSearch.matches(in: [message(1, "hello", actor: "carol")], query: "carol", parser: parser).count == 1)
+    }
+
+    @Test("A one-character query returns nothing rather than everything")
+    func minimumLength() {
+        #expect(MessageSearch.matches(in: [message(1, "anything")], query: "a", parser: parser).isEmpty)
+        #expect(MessageSearch.matches(in: [message(1, "anything")], query: "  ", parser: parser).isEmpty)
+    }
+
+    @Test("Deleted and cache-only messages never appear in results")
+    func skipsInvisible() {
+        var deleted = message(1, "secret plans")
+        deleted.isDeleted = true
+        var system = message(2, "secret plans")
+        system.kind = .system
+        system.systemMessage = "message_deleted"
+
+        #expect(MessageSearch.matches(in: [deleted, system], query: "secret", parser: parser).isEmpty)
+    }
+
+    @Test("Results are capped so a common word can't build a huge list")
+    func respectsLimit() {
+        let many = (1...500).map { message($0, "budget line \($0)") }
+        #expect(MessageSearch.matches(in: many, query: "budget", parser: parser, limit: 50).count == 50)
+    }
+
+    @Test("Highlight ranges come back for the matched part")
+    func highlightRange() throws {
+        let range = try #require(MessageSearch.highlightRange(of: "bud", in: "the BUDGET line"))
+        #expect("the BUDGET line"[range] == "BUD")
+    }
+}

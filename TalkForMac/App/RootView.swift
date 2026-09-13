@@ -13,6 +13,7 @@ struct RootView: View {
     @State private var searchFocusRequest = false
     @State private var isShowingQuickSwitcher = false
     @State private var isShowingInspector = false
+    @State private var isShowingNewConversation = false
 
     var body: some View {
         @Bindable var app = app
@@ -104,6 +105,26 @@ struct RootView: View {
         }
         .navigationTitle(app.chat?.conversation.displayName ?? "Talk")
         .toolbar { toolbar }
+        // The Mac inspector paradigm rather than a reproduction of Talk's web sidebar: it
+        // slides in beside the conversation and the transcript keeps its place.
+        .inspector(isPresented: $isShowingInspector) {
+            if let inspector = app.inspector {
+                InspectorView(model: inspector) { messageID in
+                    app.chat?.highlightRequest = messageID
+                }
+                .inspectorColumnWidth(min: 240, ideal: 290, max: 380)
+            }
+        }
+        .sheet(isPresented: $isShowingNewConversation) {
+            if let session = app.session {
+                NewConversationSheet(session: session) { conversation in
+                    isShowingNewConversation = false
+                    app.conversationCreated(conversation)
+                }
+            }
+        }
+        .focusedSceneValue(\.newConversationRequest, { isShowingNewConversation = true })
+        .focusedSceneValue(\.inspectorToggle, { withAnimation(.smooth) { isShowingInspector.toggle() } })
     }
 
     @ToolbarContentBuilder

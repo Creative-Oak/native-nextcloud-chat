@@ -11,6 +11,8 @@ struct ComposerView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            AttachmentTray(queue: model.attachments)
+
             if let replyingTo = model.replyingTo {
                 ComposerContextBar(
                     symbol: "arrowshape.turn.up.left",
@@ -39,6 +41,18 @@ struct ComposerView: View {
 
     private var editor: some View {
         HStack(alignment: .bottom, spacing: 8) {
+            if model.attachments.canAttach {
+                Button(action: chooseFiles) {
+                    Image(systemName: "paperclip")
+                        .font(.system(size: 13))
+                        .frame(width: 16, height: 16)
+                }
+                .buttonStyle(.glass)
+                .buttonBorderShape(.circle)
+                .help("Attach a file (⇧⌘A)")
+                .keyboardShortcut("a", modifiers: [.command, .shift])
+            }
+
             ComposerTextView(
                 text: $model.draftText,
                 isFocused: $isFocused,
@@ -126,6 +140,21 @@ struct ComposerView: View {
             .padding(.leading, 12)
             .offset(y: -(height + 24))
         }
+    }
+
+    /// ⇧⌘A and the paperclip. An open panel rather than a custom picker, because the
+    /// system one already knows about tags, recents, iCloud and everything else.
+    private func chooseFiles() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = true
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.prompt = "Send"
+        panel.message = "Choose files to send to \(model.conversation.displayName)"
+
+        guard panel.runModal() == .OK else { return }
+        model.attachments.enqueue(urls: panel.urls, replyTo: model.replyingTo?.messageID)
+        model.cancelReply()
     }
 
     private func cancelContext() {

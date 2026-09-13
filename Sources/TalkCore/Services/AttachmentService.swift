@@ -203,3 +203,63 @@ actor AttachmentService {
         _ = try await client.send(OCSRequest.post(Endpoint.shares, form: form), as: EmptyResponse.self)
     }
 }
+
+// MARK: - Reading files back
+
+extension AttachmentService {
+    /// A thumbnail for a shared file, from Nextcloud's own preview service.
+    ///
+    /// `forceIcon=0` means the server returns 404 rather than a generic document icon when
+    /// it can't render a preview — so the UI can show its own symbol instead of a picture
+    /// of a symbol.
+    func preview(fileID: String, width: Int, height: Int) async throws(TalkError) -> Data {
+        // Not an OCS call: the preview service is a plain route that answers with an image.
+        let request = HTTPRequest(
+            method: .get,
+            url: server.url(
+                path: "/index.php/core/preview",
+                query: [
+                    URLQueryItem(name: "fileId", value: fileID),
+                    URLQueryItem(name: "x", value: String(width)),
+                    URLQueryItem(name: "y", value: String(height)),
+                    URLQueryItem(name: "a", value: "1"),
+                    URLQueryItem(name: "forceIcon", value: "0"),
+                    URLQueryItem(name: "mode", value: "cover")
+                ]
+            ),
+            headers: ["Authorization": credentials.authorizationHeaderValue],
+            body: nil,
+            timeout: 30
+        )
+        let response = try await transport.send(request)
+        guard (200...299).contains(response.status) else {
+            throw TalkError.from(status: response.status, headers: response.headers)
+        }
+        return response.body
+    }
+
+    /// Downloads a file from the user's Nextcloud over WebDAV.
+    func download(path: String) async throws(TalkError) -> Data {
+        let request = HTTPRequest(
+            method: .get,
+            url: server.url(path: Endpoint.webDAV(userID: userID, path: path)),
+            headers: ["Authorization": credentials.authorizationHeaderValue],
+            body: nil,
+            timeout: 300
+        )
+        let response = try await transport.send(request)
+        guard (200...299).contains(response.status) else {
+            throw TalkError.from(status: response.status, headers: response.headers)
+        }
+        return response.body
+    }
+
+    /// Downloads by the file's numeric id, which is what a chat message carries. Uses the
+    /// preview service at full size for images and WebDAV for anything else.
+    func downloadSharedFile(_ object: RichObject) async throws(TalkError) -> Data {
+        if let path = object.path, !path.isEmpty {
+            return try await download(path: path)
+        }
+        throw .unexpectedResponse("That file has no path to download from")
+    }
+}

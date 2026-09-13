@@ -12,6 +12,7 @@ struct TalkForMacApp: App {
                 .environment(app)
                 .environment(\.preferences, app.dependencies.preferences)
                 .environment(\.avatarLoader, app.avatarLoader)
+                .environment(\.previewLoader, app.previewLoader)
                 .onAppear { appDelegate.app = app }
                 .frame(minWidth: 720, minHeight: 460)
         }

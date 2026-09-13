@@ -11,16 +11,16 @@ struct TalkCommands: Commands {
     @FocusedValue(\.composerFocusRequest) private var focusComposer
     @FocusedValue(\.searchFocusRequest) private var focusSearch
     @FocusedValue(\.quickSwitcherRequest) private var showQuickSwitcher
+    @FocusedValue(\.newConversationRequest) private var newConversation
+    @FocusedValue(\.inspectorToggle) private var toggleInspector
 
     var body: some Commands {
         // Replaces the default "New Window" — a second window on a messaging app is rarely
         // what anyone wants, and ⌘N should start a conversation.
         CommandGroup(replacing: .newItem) {
-            Button("New Conversation…") { }
+            Button("New Conversation…") { newConversation?() }
                 .keyboardShortcut("n", modifiers: .command)
-                // Phase 7: creating conversations. Disabled rather than absent, so the
-                // shortcut doesn't silently do nothing somewhere else.
-                .disabled(true)
+                .disabled(app?.canCreateConversations != true)
         }
 
         CommandGroup(after: .newItem) {
@@ -30,9 +30,15 @@ struct TalkCommands: Commands {
         }
 
         CommandGroup(replacing: .textEditing) {
-            Button("Find…") { focusSearch?() }
+            Button("Find Conversation…") { focusSearch?() }
                 .keyboardShortcut("f", modifiers: .command)
                 .disabled(app?.session == nil)
+
+            Button("Find in Conversation…") {
+                app?.chat?.isSearching = true
+            }
+            .keyboardShortcut("f", modifiers: [.command, .option])
+            .disabled(app?.chat == nil)
         }
 
         CommandMenu("Conversation") {
@@ -74,6 +80,10 @@ struct TalkCommands: Commands {
 
             Divider()
 
+            Button("Show Conversation Details") { toggleInspector?() }
+                .keyboardShortcut("i", modifiers: [.command, .option])
+                .disabled(app?.chat == nil)
+
             Button("Open in Nextcloud") { app?.openSelectionInBrowser() }
                 .disabled(app?.selectedToken == nil)
         }
@@ -102,6 +112,8 @@ private struct AppModelFocusedKey: FocusedValueKey { typealias Value = AppModel 
 private struct ComposerFocusKey: FocusedValueKey { typealias Value = () -> Void }
 private struct SearchFocusKey: FocusedValueKey { typealias Value = () -> Void }
 private struct QuickSwitcherKey: FocusedValueKey { typealias Value = () -> Void }
+private struct NewConversationKey: FocusedValueKey { typealias Value = () -> Void }
+private struct InspectorToggleKey: FocusedValueKey { typealias Value = () -> Void }
 
 extension FocusedValues {
     var appModel: AppModel? {
@@ -122,5 +134,15 @@ extension FocusedValues {
     var quickSwitcherRequest: (() -> Void)? {
         get { self[QuickSwitcherKey.self] }
         set { self[QuickSwitcherKey.self] = newValue }
+    }
+
+    var newConversationRequest: (() -> Void)? {
+        get { self[NewConversationKey.self] }
+        set { self[NewConversationKey.self] = newValue }
+    }
+
+    var inspectorToggle: (() -> Void)? {
+        get { self[InspectorToggleKey.self] }
+        set { self[InspectorToggleKey.self] = newValue }
     }
 }

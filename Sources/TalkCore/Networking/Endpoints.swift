@@ -39,6 +39,10 @@ enum Endpoint {
     // Core
     static let autocomplete = "\(ocs)/core/autocomplete/get"
 
+    /// Nextcloud's thumbnail service. Built with query items at the call site so the
+    /// parameters are escaped properly.
+    static let preview = "/index.php/core/preview"
+
     // Files sharing (not Talk — the Files app's share API, used for attachments)
     static let shares = "\(ocs)/apps/files_sharing/api/v1/shares"
 

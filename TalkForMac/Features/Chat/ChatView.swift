@@ -18,6 +18,7 @@ struct ChatView: View {
     @State private var highlightedMessageID: Int?
     @State private var didInitialScroll = false
     @State private var highlightClearTask: Task<Void, Never>?
+    @State private var viewingAttachment: RichObject?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -37,6 +38,39 @@ struct ChatView: View {
         }
         .background(Color(nsColor: .textBackgroundColor))
         .navigationTitle(model.conversation.displayName)
+        // Drop anywhere in the conversation, not just on the composer — that is where
+        // people aim, and aiming at a 30pt field with a file in hand is a chore.
+        .dropDestination(for: URL.self) { urls, _ in
+            guard model.attachments.canAttach, model.conversation.canPostMessages else { return false }
+            model.attachments.enqueue(urls: urls, replyTo: model.replyingTo?.messageID)
+            model.cancelReply()
+            return true
+        } isTargeted: { targeted in
+            withAnimation(.smooth(duration: 0.15)) { model.attachments.setDropTargeted(targeted) }
+        }
+        .overlay {
+            if model.attachments.isDropTargeted && model.conversation.canPostMessages {
+                DropTargetOverlay()
+            }
+        }
+        .overlay {
+            if let viewingAttachment {
+                AttachmentViewer(object: viewingAttachment) {
+                    withAnimation(.smooth(duration: 0.2)) { self.viewingAttachment = nil }
+                }
+            }
+        }
+        .overlay(alignment: .top) {
+            if model.isSearching {
+                ChatSearchBar(model: model)
+                    .padding(.top, 52)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .animation(.smooth(duration: 0.2), value: model.isSearching)
+        .environment(\.openAttachment) { object in
+            withAnimation(.smooth(duration: 0.2)) { viewingAttachment = object }
+        }
     }
 
     private var transcript: some View {
@@ -87,6 +121,13 @@ struct ChatView: View {
             }
             .onAppear {
                 if !model.rows.isEmpty { positionInitially(proxy) }
+            }
+            // The inspector (and anything else outside this view) asks for a message by
+            // setting `highlightRequest`; the scrolling itself stays here.
+            .onChange(of: model.highlightRequest) { _, requested in
+                guard let requested else { return }
+                highlightedMessageID = requested
+                model.highlightRequest = nil
             }
             .onChange(of: highlightedMessageID) { _, newValue in
                 guard let newValue, let row = model.rows.first(where: { $0.message?.messageID == newValue }) else { return }

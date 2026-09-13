@@ -24,6 +24,7 @@
 /home/user/native-nextcloud-chat/Sources/TalkCore/Persistence/TalkStore.swift
 /home/user/native-nextcloud-chat/Sources/TalkCore/Rendering/MessageContent.swift
 /home/user/native-nextcloud-chat/Sources/TalkCore/Rendering/MessageContentParser.swift
+/home/user/native-nextcloud-chat/Sources/TalkCore/Rendering/MessageSearch.swift
 /home/user/native-nextcloud-chat/Sources/TalkCore/Rendering/TranscriptLayout.swift
 /home/user/native-nextcloud-chat/Sources/TalkCore/Security/CredentialStore.swift
 /home/user/native-nextcloud-chat/Sources/TalkCore/Security/KeychainStore.swift

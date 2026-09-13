@@ -13,6 +13,8 @@ final class ChatModel {
     private(set) var timeline = MessageTimeline()
     /// The transcript's display list. Rebuilt when the timeline changes — never per render.
     private(set) var rows: [ChatRow] = []
+    /// Files on their way into this conversation.
+    let attachments: AttachmentQueue
     private(set) var syncState: ChatSyncState = .idle
     private(set) var isLoadingOlder = false
     /// False once we've paged back to the beginning of the conversation.
@@ -31,6 +33,42 @@ final class ChatModel {
         }
     }
 
+    // MARK: - Search
+
+    /// The in-conversation find bar (⌥⌘F).
+    var isSearching = false {
+        didSet { if !isSearching { searchText = "" } }
+    }
+
+    var searchText = "" {
+        didSet { refreshSearch() }
+    }
+
+    private(set) var searchMatches: [MessageSearch.Match] = []
+    private(set) var currentMatch = 0
+
+    private func refreshSearch() {
+        searchMatches = MessageSearch.matches(in: timeline.messages, query: searchText, parser: parser)
+        currentMatch = 0
+        if let first = searchMatches.first { highlightRequest = first.messageID }
+    }
+
+    /// ⌘G and ⇧⌘G, and the chevrons in the find bar.
+    func stepSearch(by offset: Int) {
+        guard !searchMatches.isEmpty else { return }
+        currentMatch = (currentMatch + offset + searchMatches.count) % searchMatches.count
+        highlightRequest = searchMatches[currentMatch].messageID
+    }
+
+    func jump(to match: MessageSearch.Match) {
+        guard let index = searchMatches.firstIndex(of: match) else { return }
+        currentMatch = index
+        highlightRequest = match.messageID
+    }
+
+    /// Set to ask the transcript to scroll to and flash a message — used by the inspector's
+    /// "show in conversation" and by tapping a reply's quote.
+    var highlightRequest: Int?
     /// The message being replied to, shown above the composer.
     var replyingTo: Message?
     /// The message being edited, if any.
@@ -95,6 +133,7 @@ final class ChatModel {
     ) {
         self.session = session
         self.conversation = conversation
+        self.attachments = AttachmentQueue(session: session, token: conversation.token)
         self.readContext = readContext
         self.onReadMarker = onReadMarker
     }

@@ -77,6 +77,17 @@ final class ConversationListModel {
         notifyAboutNewActivity(change)
     }
 
+    /// Puts a just-created conversation straight into the sidebar.
+    func insert(_ conversation: Conversation) {
+        index.apply(ConversationListResult(
+            conversations: [conversation],
+            modifiedBefore: nil,
+            talkHash: nil,
+            isIncremental: true
+        ))
+        announcedActivity[conversation.token] = conversation.unreadMessages
+    }
+
     /// Local echo for the read marker, so the unread dot disappears the moment the user
     /// reads something rather than on the next refresh.
     func markRead(token: String, upTo messageID: Int) {

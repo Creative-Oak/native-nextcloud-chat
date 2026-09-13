@@ -26,6 +26,8 @@ final class AppModel {
     private(set) var conversationList: ConversationListModel?
     /// The open conversation, if any.
     private(set) var chat: ChatModel?
+    /// The third column's state, rebuilt when the conversation changes.
+    private(set) var inspector: InspectorModel?
 
     var selectedToken: String? {
         didSet {
@@ -43,6 +45,8 @@ final class AppModel {
     let notifications: NotificationController
     /// Built per session; avatars are account-scoped because the URLs are.
     private(set) var avatarLoader: AvatarLoader?
+    /// Thumbnails for shared files, likewise per account.
+    private(set) var previewLoader: PreviewLoader?
 
     private var networkTask: Task<Void, Never>?
     private var conversationSyncTask: Task<Void, Never>?
@@ -92,6 +96,7 @@ final class AppModel {
             client: session.client,
             supportsConversationAvatars: account.capabilities.supportsConversationAvatars
         )
+        previewLoader = PreviewLoader(session: session)
 
         let list = ConversationListModel(session: session, notifications: notifications)
         list.isCurrentlyVisible = { [weak self] token in
@@ -162,6 +167,7 @@ final class AppModel {
         await dependencies.store.deleteAccount(id: account.id)
 
         avatarLoader = nil
+        previewLoader = nil
         conversationList = nil
         chat = nil
         selectedToken = nil
@@ -183,9 +189,12 @@ final class AppModel {
         else {
             let previous = chat
             chat = nil
+            inspector = nil
             Task { await previous?.deactivate() }
             return
         }
+
+        inspector = InspectorModel(session: session, conversation: conversation)
 
         let previous = chat
         let model = ChatModel(
@@ -278,6 +287,18 @@ final class AppModel {
                 }
             }
         }
+    }
+
+    var canCreateConversations: Bool {
+        session?.capabilitySnapshot.canCreateConversations ?? false
+    }
+
+    /// Called after the New Conversation sheet creates one: show it immediately rather than
+    /// waiting for the next sync to notice it exists.
+    func conversationCreated(_ conversation: Conversation) {
+        conversationList?.insert(conversation)
+        selectedToken = conversation.token
+        refreshNow()
     }
 
     func refreshNow() {
