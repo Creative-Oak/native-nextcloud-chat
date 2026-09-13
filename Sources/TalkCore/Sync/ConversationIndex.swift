@@ -169,12 +169,11 @@ struct ConversationIndex: Sendable, Equatable {
 
     /// The ⌘F filter. Deliberately simple and synchronous: it runs on every keystroke over
     /// an in-memory array, and anything cleverer would be slower than it is useful.
-    func filtered(by query: String, includingArchived: Bool = false) -> [Conversation] {
-        let pool = includingArchived ? conversations : visibleConversations
+    func filtered(by query: String) -> [Conversation] {
         let query = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        // Searching *does* reach into the archive: hiding a conversation from the list is
-        // not the same as hiding it from search.
-        guard !query.isEmpty else { return pool }
+        // With no query, the archive stays out of the way. With one, it is searched too:
+        // hiding a conversation from a list is not the same as hiding it from search.
+        guard !query.isEmpty else { return visibleConversations }
 
         return conversations.filter { conversation in
             if conversation.displayName.localizedCaseInsensitiveContains(query) { return true }

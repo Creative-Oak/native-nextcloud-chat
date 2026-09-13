@@ -1,7 +1,6 @@
 import AppKit
 import Foundation
 import Observation
-import UniformTypeIdentifiers
 
 /// Files on their way into the open conversation.
 ///
@@ -103,8 +102,8 @@ final class AttachmentQueue {
 
     private func drainOnce() async {
         while let index = transfers.firstIndex(where: { $0.state == .queued }) {
-            let transfer = transfers[index]
             transfers[index].state = .uploading(0)
+            let transfer = transfers[index]
 
             let folder = session.capabilitySnapshot.config.attachmentsFolder ?? AttachmentService.defaultFolder
             let reference = session.capabilitySnapshot.supportsReferenceIDs ? ReferenceID.generate() : nil
