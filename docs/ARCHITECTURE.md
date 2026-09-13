@@ -162,14 +162,22 @@ Cached data stays on screen. On recovery, engines restart with a full refresh.
 
 ## Room for calls (later, not now)
 
-Two seams exist so calls can be added without surgery:
+No speculative abstraction has been built for calls — there is no `CallTransport` protocol
+with one implementation, because that is architecture theatre until there is a second
+implementation. What exists instead is a genuine seam and a genuine head start:
 
-1. `LiveUpdateTransport` — protocol with a long-polling implementation today. A
-   signaling-based implementation can replace it per-conversation without touching
-   engines or UI.
-2. `CallCapability` is already parsed and `hasCall` / `callFlag` / `participantFlags`
-   are already modelled, so the sidebar and header can surface an ongoing call before
-   any call code exists.
+1. **`ActiveChatSyncEngine` is the seam.** It is the only thing that knows *how* live
+   updates arrive. It exposes `AsyncStream<ChatSyncEvent>` and nothing above it knows about
+   long polling. A signaling-based implementation replaces the inside of that one actor;
+   `ChatModel` and the views do not change. That is as much decoupling as is useful, and it
+   cost nothing to have.
+2. **The call fields are already modelled.** `hasCall`, `callFlag`, `callStartTime`,
+   `canStartCall` and `participantType` are parsed and carried through to `Conversation`, so
+   the sidebar and the conversation header can show "call in progress" before a single line
+   of call code exists.
+
+What a call implementation would have to add: the signaling stack (internal or external
+HPB), WebRTC, and a call UI. None of the MVP depends on any of it.
 
 ## Mentions
 

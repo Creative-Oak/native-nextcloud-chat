@@ -96,10 +96,14 @@ target is compiled by CI on a macOS runner. Anything not yet green on CI is mark
 - [x] Settings scene: General, Notifications, Accounts, Advanced
 - [x] Empty states, offline indicator, quiet inline errors (no modal alert storms)
 - [x] Reduced-motion respected; VoiceOver labels on sidebar rows and avatars
-- [ ] ⌘N create conversation (phase 7 — the UI exists and is disabled)
-- [ ] ⌘K quick switcher
+- [x] ⌘K quick switcher
+- [x] Mention autocomplete, with the `@"quoted id"` syntax taken from the docs
+- [x] Window frame restoration; quit-safe drafts; double-click a conversation
+- [x] Talk-hash capability refresh wired end to end
+- [x] Tooling that stands in for the compiler: `Tools/preflight.sh`
+- [ ] ⌘N create conversation (phase 7 — the menu item exists and is disabled)
 - [ ] Performance pass on a real 10k-message conversation (needs a real server)
-- [ ] First-build pass on macOS: the SwiftUI layer has never been compiled
+- [ ] First-build pass on macOS: the SwiftUI layer has never been type-checked
 
 ## Phase 7 — After the MVP
 
@@ -112,10 +116,11 @@ indicators · per-conversation notification settings · federation polish · cal
 
 ## Known gaps
 
-- **The SwiftUI/AppKit layer has not been compiled.** It was written on Linux, where no
+- **The SwiftUI/AppKit layer has not been type-checked.** It was written on Linux, where no
   macOS SDK exists. Everything in `Sources/TalkCore` is built and tested on every change
-  (145 tests); `TalkForMac/` is verified only by `swiftc -parse` locally and by the macOS
-  CI job. Expect a first-build error pass.
+  (178 tests); `TalkForMac/` is checked by `Tools/preflight.sh` — syntax, framework imports,
+  duplicate declarations, and the Xcode project's integrity — and type-checked only by the
+  macOS CI job. Expect a first-build error pass; see docs/FIRST_BUILD.md.
 - **Not yet run against a real server.** Every request shape is verified against the
   documentation and against fixtures, but no live Nextcloud has answered one of them.
 
@@ -138,3 +143,11 @@ indicators · per-conversation notification settings · federation polish · cal
 - Transcript grouping, previews and relative timestamps started life in the app target where
   they could not be tested; moved into `TalkCore` and covered. The move immediately caught an
   invalid `Date.FormatStyle` symbol. *(phase 6)*
+- Four SwiftUI files used AppKit types with only `import SwiftUI` — invisible on Linux, four
+  instant errors on a Mac. `Tools/check_imports.py` now catches that family. *(phase 6)*
+- `ChatModel.deactivate()` scheduled the shared engine's stop in a detached Task, so
+  switching conversations could stop the engine *after* the next one started it. *(phase 6)*
+- The scroll-to-bottom button only flipped the "am I at the bottom" flag without scrolling,
+  and the initial scroll ran before the cached rows existed. *(phase 6)*
+- Accepting a mention re-detected the mention it had just completed and reopened the
+  popover; the rewrite has to be atomic with respect to detection. *(phase 6)*
