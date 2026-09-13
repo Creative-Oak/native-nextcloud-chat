@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core:
+    # The whole non-UI application builds and tests here, which is what keeps the layering
+    # honest: if anything in Sources/TalkCore reaches for SwiftUI or AppKit, this fails.
+    name: Core (Linux)
+    runs-on: ubuntu-latest
+    container: swift:6.1
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: swift build
+      - name: Test
+        run: swift test
+
+  app:
+    name: App (macOS)
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+      - name: Build the app
+        run: |
+          xcodebuild build \
+            -project TalkForMac.xcodeproj \
+            -scheme TalkForMac \
+            -configuration Debug \
+            -destination 'platform=macOS' \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGN_IDENTITY="" \
+            | xcbeautify --renderer github-actions || exit ${PIPESTATUS[0]}
+      - name: Test the core package on macOS
+        # Runs the SwiftData-backed code paths too, which Linux skips.
+        run: swift test

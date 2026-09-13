@@ -1,0 +1,97 @@
+import Foundation
+import SwiftData
+
+/// Everything that exists *because* an account is signed in.
+///
+/// One session per account. Nothing here is a singleton, which is what makes multiple
+/// accounts a UI problem later rather than an architecture problem.
+struct Session: Sendable {
+    let account: Account
+    let client: OCSClient
+    let store: TalkStore
+
+    let conversations: ConversationService
+    let chat: ChatService
+    let reactions: ReactionService
+    let capabilities: CapabilityService
+
+    let conversationSync: ConversationSyncEngine
+    let chatSync: ActiveChatSyncEngine
+
+    var capabilitySnapshot: TalkCapabilities { account.capabilities }
+
+    init(account: Account, credentials: Credentials, transport: any HTTPTransport, store: TalkStore) {
+        self.account = account
+        self.store = store
+
+        let client = OCSClient(server: account.server, credentials: credentials, transport: transport)
+        self.client = client
+
+        conversations = ConversationService(client: client)
+        chat = ChatService(client: client)
+        reactions = ReactionService(client: client, currentUserID: account.userID)
+        capabilities = CapabilityService(client: client)
+
+        conversationSync = ConversationSyncEngine(service: conversations)
+        chatSync = ActiveChatSyncEngine(chat: chat, conversations: conversations)
+    }
+
+    func shutdown() async {
+        await conversationSync.stop()
+        await chatSync.stop()
+    }
+}
+
+/// Process-wide services that exist whether or not anyone is signed in.
+@MainActor
+final class AppDependencies {
+    let transport: any HTTPTransport
+    let credentialStore: any CredentialStore
+    let authentication: AuthenticationService
+    let network: any NetworkMonitoring
+    let modelContainer: ModelContainer
+    let store: TalkStore
+    let preferences: Preferences
+
+    static let userAgent: String = {
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1"
+        let device = Host.current().localizedName ?? "Mac"
+        // This string becomes the app password's name in the user's security settings, so
+        // it has to identify both the app and which Mac it came from.
+        return "Talk for Mac \(version) (\(device))"
+    }()
+
+    init(inMemory: Bool = false) {
+        transport = URLSessionTransport(userAgent: Self.userAgent)
+        credentialStore = KeychainStore()
+        preferences = Preferences()
+        authentication = AuthenticationService(
+            transport: transport,
+            credentialStore: credentialStore,
+            userAgent: Self.userAgent,
+            allowInsecureHTTP: preferences.allowsInsecureLocalServers
+        )
+        network = SystemNetworkMonitor()
+
+        do {
+            modelContainer = try ModelContainer.talkContainer(inMemory: inMemory)
+        } catch {
+            // A corrupt or unreadable cache must not stop the app from launching: fall back
+            // to memory and refill from the server.
+            Log.persistence.error("Couldn’t open the on-disk cache, continuing in memory: \(error.localizedDescription)")
+            // swiftlint:disable:next force_try
+            modelContainer = try! ModelContainer(
+                for: Schema(CacheSchema.models),
+                configurations: [ModelConfiguration(isStoredInMemoryOnly: true)]
+            )
+        }
+        store = TalkStore(modelContainer: modelContainer)
+    }
+
+    func makeSession(account: Account) throws -> Session {
+        guard let credentials = try credentialStore.credentials(for: account.id) else {
+            throw TalkError.notAuthenticated
+        }
+        return Session(account: account, credentials: credentials, transport: transport, store: store)
+    }
+}

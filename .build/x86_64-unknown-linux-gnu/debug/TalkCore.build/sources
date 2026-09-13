@@ -2,6 +2,7 @@
 /home/user/native-nextcloud-chat/Sources/TalkCore/Models/Actor.swift
 /home/user/native-nextcloud-chat/Sources/TalkCore/Models/Capabilities.swift
 /home/user/native-nextcloud-chat/Sources/TalkCore/Models/Conversation.swift
+/home/user/native-nextcloud-chat/Sources/TalkCore/Models/Draft.swift
 /home/user/native-nextcloud-chat/Sources/TalkCore/Models/Message.swift
 /home/user/native-nextcloud-chat/Sources/TalkCore/Models/RichObject.swift
 /home/user/native-nextcloud-chat/Sources/TalkCore/Networking/Credentials.swift
@@ -16,6 +17,8 @@
 /home/user/native-nextcloud-chat/Sources/TalkCore/Networking/ServerAddress.swift
 /home/user/native-nextcloud-chat/Sources/TalkCore/Networking/TalkError.swift
 /home/user/native-nextcloud-chat/Sources/TalkCore/Networking/URLSessionTransport.swift
+/home/user/native-nextcloud-chat/Sources/TalkCore/Persistence/CacheModels.swift
+/home/user/native-nextcloud-chat/Sources/TalkCore/Persistence/TalkStore.swift
 /home/user/native-nextcloud-chat/Sources/TalkCore/Rendering/MessageContent.swift
 /home/user/native-nextcloud-chat/Sources/TalkCore/Rendering/MessageContentParser.swift
 /home/user/native-nextcloud-chat/Sources/TalkCore/Security/CredentialStore.swift
@@ -27,7 +30,11 @@
 /home/user/native-nextcloud-chat/Sources/TalkCore/Services/ReactionService.swift
 /home/user/native-nextcloud-chat/Sources/TalkCore/Support/LenientDecoding.swift
 /home/user/native-nextcloud-chat/Sources/TalkCore/Support/Log.swift
+/home/user/native-nextcloud-chat/Sources/TalkCore/Support/NetworkMonitor.swift
+/home/user/native-nextcloud-chat/Sources/TalkCore/Support/ReferenceID.swift
+/home/user/native-nextcloud-chat/Sources/TalkCore/Sync/ActiveChatSyncEngine.swift
 /home/user/native-nextcloud-chat/Sources/TalkCore/Sync/Backoff.swift
 /home/user/native-nextcloud-chat/Sources/TalkCore/Sync/ConversationIndex.swift
+/home/user/native-nextcloud-chat/Sources/TalkCore/Sync/ConversationSyncEngine.swift
 /home/user/native-nextcloud-chat/Sources/TalkCore/Sync/MessageTimeline.swift
 /home/user/native-nextcloud-chat/Sources/TalkCore/Sync/ReadStatePolicy.swift

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- A messaging client has no business reading the user's disk. -->
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+	<!-- Outgoing HTTPS to the user's Nextcloud. No server socket, ever. -->
+	<key>com.apple.security.network.client</key>
+	<true/>
+	<!-- Phase 7, for attaching files the user picks. -->
+	<key>com.apple.security.files.user-selected.read-only</key>
+	<true/>
+</dict>
+</plist>

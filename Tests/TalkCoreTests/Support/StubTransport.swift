@@ -8,6 +8,17 @@ final class StubTransport: HTTPTransport, @unchecked Sendable {
     private let lock = NSLock()
     private var handler: Handler
     private var recorded: [HTTPRequest] = []
+    private var totalRequests = 0
+
+    /// Artificial latency. The sync engines re-poll the instant a response arrives (a real
+    /// long poll blocks for 30s server-side), so without this a test that waits for a
+    /// condition would drive millions of requests per second.
+    var latency: Duration = .milliseconds(1)
+
+    /// Requests are recorded for assertions, but only the first `recordLimit` of them:
+    /// an engine test can issue thousands, and keeping them all is how a test suite ends
+    /// up being OOM-killed.
+    private let recordLimit = 500
 
     init(handler: @escaping Handler) {
         self.handler = handler
@@ -28,10 +39,14 @@ final class StubTransport: HTTPTransport, @unchecked Sendable {
 
     var requests: [HTTPRequest] { lock.withLock { recorded } }
     var lastRequest: HTTPRequest? { lock.withLock { recorded.last } }
-    var requestCount: Int { lock.withLock { recorded.count } }
+    var requestCount: Int { lock.withLock { totalRequests } }
 
     func send(_ request: HTTPRequest) async throws(TalkError) -> HTTPResponse {
-        lock.withLock { recorded.append(request) }
+        lock.withLock {
+            totalRequests += 1
+            if recorded.count < recordLimit { recorded.append(request) }
+        }
+        if latency > .zero { try? await Task.sleep(for: latency) }
         do {
             return try handler(request)
         } catch let error as TalkError {

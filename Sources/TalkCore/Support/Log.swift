@@ -27,6 +27,11 @@ enum Log {
     /// Developer mode unlocks verbose logging that may include message content.
     /// Off by default, and only settable from the Advanced settings pane in a DEBUG build.
     nonisolated(unsafe) static var isDeveloperModeEnabled = false
+
+    /// Where `os` doesn't exist (Linux CI), logging goes to stderr — which would bury the
+    /// test output. Opt in with `TALK_LOG=1`.
+    nonisolated(unsafe) static let isStderrLoggingEnabled =
+        ProcessInfo.processInfo.environment["TALK_LOG"] != nil
 }
 
 struct LogCategory: Sendable {
@@ -56,6 +61,7 @@ struct LogCategory: Sendable {
         #if canImport(os)
         logger.debug("\(message(), privacy: .private)")
         #else
+        guard Log.isStderrLoggingEnabled else { return }
         FileHandle.standardError.write(Data("[\(name)] \(message())\n".utf8))
         #endif
     }
@@ -65,6 +71,7 @@ struct LogCategory: Sendable {
         // Explicitly public: the rule above guarantees nothing secret reaches this call.
         logger.log(level: level.osLevel, "\(message, privacy: .public)")
         #else
+        guard Log.isStderrLoggingEnabled else { return }
         FileHandle.standardError.write(Data("[\(level.label)] [\(name)] \(message)\n".utf8))
         #endif
     }
