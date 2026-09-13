@@ -27,3 +27,7 @@
 /home/user/native-nextcloud-chat/Sources/TalkCore/Services/ReactionService.swift
 /home/user/native-nextcloud-chat/Sources/TalkCore/Support/LenientDecoding.swift
 /home/user/native-nextcloud-chat/Sources/TalkCore/Support/Log.swift
+/home/user/native-nextcloud-chat/Sources/TalkCore/Sync/Backoff.swift
+/home/user/native-nextcloud-chat/Sources/TalkCore/Sync/ConversationIndex.swift
+/home/user/native-nextcloud-chat/Sources/TalkCore/Sync/MessageTimeline.swift
+/home/user/native-nextcloud-chat/Sources/TalkCore/Sync/ReadStatePolicy.swift

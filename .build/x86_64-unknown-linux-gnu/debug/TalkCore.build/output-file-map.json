@@ -175,5 +175,29 @@
     "object": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/Log.swift.o",
     "swiftmodule": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/Log~partial.swiftmodule",
     "swift-dependencies": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/Log.swiftdeps"
+  },
+  "/home/user/native-nextcloud-chat/Sources/TalkCore/Sync/Backoff.swift": {
+    "dependencies": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/Backoff.d",
+    "object": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/Backoff.swift.o",
+    "swiftmodule": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/Backoff~partial.swiftmodule",
+    "swift-dependencies": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/Backoff.swiftdeps"
+  },
+  "/home/user/native-nextcloud-chat/Sources/TalkCore/Sync/ConversationIndex.swift": {
+    "dependencies": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/ConversationIndex.d",
+    "object": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/ConversationIndex.swift.o",
+    "swiftmodule": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/ConversationIndex~partial.swiftmodule",
+    "swift-dependencies": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/ConversationIndex.swiftdeps"
+  },
+  "/home/user/native-nextcloud-chat/Sources/TalkCore/Sync/MessageTimeline.swift": {
+    "dependencies": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/MessageTimeline.d",
+    "object": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/MessageTimeline.swift.o",
+    "swiftmodule": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/MessageTimeline~partial.swiftmodule",
+    "swift-dependencies": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/MessageTimeline.swiftdeps"
+  },
+  "/home/user/native-nextcloud-chat/Sources/TalkCore/Sync/ReadStatePolicy.swift": {
+    "dependencies": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/ReadStatePolicy.d",
+    "object": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/ReadStatePolicy.swift.o",
+    "swiftmodule": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/ReadStatePolicy~partial.swiftmodule",
+    "swift-dependencies": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCore.build/ReadStatePolicy.swiftdeps"
   }
 }

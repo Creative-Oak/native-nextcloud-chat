@@ -32,6 +32,12 @@
     "swiftmodule": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/MessageDecodingTests~partial.swiftmodule",
     "swift-dependencies": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/MessageDecodingTests.swiftdeps"
   },
+  "/home/user/native-nextcloud-chat/Tests/TalkCoreTests/MessageTimelineTests.swift": {
+    "dependencies": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/MessageTimelineTests.d",
+    "object": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/MessageTimelineTests.swift.o",
+    "swiftmodule": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/MessageTimelineTests~partial.swiftmodule",
+    "swift-dependencies": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/MessageTimelineTests.swiftdeps"
+  },
   "/home/user/native-nextcloud-chat/Tests/TalkCoreTests/OCSClientTests.swift": {
     "dependencies": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/OCSClientTests.d",
     "object": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/OCSClientTests.swift.o",
@@ -49,6 +55,12 @@
     "object": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/StubTransport.swift.o",
     "swiftmodule": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/StubTransport~partial.swiftmodule",
     "swift-dependencies": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/StubTransport.swiftdeps"
+  },
+  "/home/user/native-nextcloud-chat/Tests/TalkCoreTests/SyncLogicTests.swift": {
+    "dependencies": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/SyncLogicTests.d",
+    "object": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/SyncLogicTests.swift.o",
+    "swiftmodule": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/SyncLogicTests~partial.swiftmodule",
+    "swift-dependencies": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/SyncLogicTests.swiftdeps"
   },
   "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/DerivedSources/resource_bundle_accessor.swift": {
     "dependencies": "/home/user/native-nextcloud-chat/.build/x86_64-unknown-linux-gnu/debug/TalkCoreTests.build/resource_bundle_accessor.d",
