@@ -1,0 +1,16 @@
+# Swift Package Manager
+.build/
+.swiftpm/
+Package.resolved
+
+# The stub-module type-check scratch tree (Tools/uicheck)
+.uicheck/
+
+# Xcode
+*.xcuserdatad/
+xcuserdata/
+DerivedData/
+*.xcworkspace/xcshareddata/IDEWorkspaceChecks.plist
+
+# macOS
+.DS_Store
