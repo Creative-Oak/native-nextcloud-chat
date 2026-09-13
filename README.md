@@ -7,7 +7,7 @@ rendering chat content — it talks to the documented Nextcloud and Talk HTTP AP
 The benchmark is Messages.app: instant launch from cache, native scrolling and selection,
 real menu commands, keyboard-first navigation, unread state you can trust.
 
-> **Status:** the chat-first MVP. Calls are deliberately out of scope for v1; the
+> **Status:** v1.0 — chat, complete. Calls are deliberately out of scope for v1; the
 > architecture leaves room for them.
 
 ## Requirements
@@ -24,8 +24,10 @@ open TalkForMac.xcodeproj      # then ⌘R
 
 The project uses Xcode 16+ synchronized folder groups, so new files under `TalkForMac/`
 and `Sources/TalkCore/` are picked up automatically — there is no file list to maintain.
-`python3 Tools/validate_pbxproj.py` checks the project file's integrity without Xcode, and
-runs in CI.
+
+`./Tools/preflight.sh` runs everything that can be checked without a Mac: the core build and
+its tests, a Swift 6 type-check of the whole app against stand-in SwiftUI/AppKit modules,
+the framework-import check, and the Xcode project's integrity. All of it runs in CI too.
 
 The non-UI half of the app is also a Swift package, so it builds and tests from the
 command line — including on Linux, which is what keeps the layering honest:
@@ -56,8 +58,8 @@ long poll · notifications and Dock badge · local cache, drafts, offline readin
 remove) and shared files · ⌘N new conversation, with Nextcloud's own people search ·
 attachments by drag-and-drop, ⇧⌘A or paste, with real upload progress · images inline with
 an in-app viewer · ⌥⌘F find in conversation · ⌘K quick switcher · moderator settings
-(rename, description, read-only, message expiration, link access) · a keyboard shortcuts
-window.
+(rename, description, read-only, message expiration, link access) · ⇧⌘F server-side search
+across your whole message history · a keyboard shortcuts window.
 
 **Design** — Liquid Glass on macOS 26, applied to the floating layer (message actions,
 panels, reaction pills, upload rows) and deliberately *not* to the transcript, which is
@@ -84,6 +86,7 @@ server doesn't support is hidden rather than broken.
 | ⇧⌘U | Mark as unread |
 | ⇧⌘D | Favourite / unfavourite |
 | ⌥⌘F | Find in conversation (⌘G / ⇧⌘G to step) |
+| ⇧⌘F | Search messages on the server |
 | ⌥⌘I | Show conversation details |
 | ⇧⌘A | Attach a file |
 | ⌘N | New conversation |
@@ -93,8 +96,11 @@ server doesn't support is hidden rather than broken.
 
 ## First build
 
-The SwiftUI layer was written without a macOS SDK available, so expect a first-build error
-pass. [`docs/FIRST_BUILD.md`](docs/FIRST_BUILD.md) explains what to expect and what is worth
+This was written without a macOS SDK, so Xcode has never built it. The app *is* type-checked
+here — `Tools/uicheck` stands in modules named SwiftUI, AppKit and SwiftData and runs the
+real sources through the Swift 6 type checker against them, and it runs in CI — but SwiftData's
+macros, the Keychain and how Liquid Glass actually renders can only be seen on a Mac.
+[`docs/FIRST_BUILD.md`](docs/FIRST_BUILD.md) explains what to expect and what is worth
 checking once it runs.
 
 ## Documentation
@@ -111,3 +117,10 @@ There are no credentials in this repository and the normal login flow works agai
 server. For a development instance on plain HTTP, turn on **Settings → Advanced → Allow
 insecure local servers** — it permits HTTP for `localhost` and private-network addresses
 only, never for a public host.
+
+## Licence
+
+Not yet chosen — this repository has no `LICENSE` file, so by default all rights are
+reserved. If you intend to publish it, add one: Nextcloud's own clients are AGPL-3.0, which
+is the conventional choice for something that talks to a Nextcloud server, but nothing here
+forces it.

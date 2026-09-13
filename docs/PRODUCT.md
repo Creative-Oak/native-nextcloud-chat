@@ -61,10 +61,14 @@ The user can:
 reactions, edit/delete, read state, mentions, conversation filtering, notifications,
 local cache, drafts, keyboard, native UI.
 
-**Phase 7+ (designed for, not built yet):** attachments and drag-and-drop upload,
-inline images and Quick Look, shared-file browser, participants inspector, conversation
-creation, server-side message search, pins, reminders, voice messages, polls, user
-status, typing indicators, per-conversation notification settings.
+**Phase 7, shipped in 1.0:** attachments and drag-and-drop upload, inline images and an
+in-app viewer, shared-file browser, participants inspector, conversation creation and
+moderator settings, per-conversation notification settings, find in conversation, and
+server-side message search across the whole history.
+
+**Phase 7, still open:** pins, reminders, voice messages, interactive polls, user-status
+editing, typing indicators. The last two need Talk's signaling API; polls and voice
+messages are shown but not yet answered or played.
 
 **Explicitly out of scope for v1:** calls, audio, video, screen sharing, signaling.
 The architecture leaves room for them (see `ARCHITECTURE.md` § Room for calls) but

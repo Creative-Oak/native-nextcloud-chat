@@ -30,6 +30,11 @@ jobs:
         run: swift build
       - name: Test
         run: swift test
+      - name: Type check the app target
+        # The app is type-checked against stand-in SwiftUI/AppKit modules (Tools/uicheck),
+        # so a wrong argument label or an isolation mistake fails here rather than in the
+        # macOS job ten minutes later.
+        run: ./Tools/uicheck/run.sh
 
   app:
     name: App (macOS)
