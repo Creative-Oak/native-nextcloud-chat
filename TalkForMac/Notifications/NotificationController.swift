@@ -99,9 +99,9 @@ extension NotificationController: UNUserNotificationCenterDelegate {
         didReceive response: UNNotificationResponse
     ) async {
         let token = response.notification.request.content.userInfo["token"] as? String
-        await MainActor.run {
+        await MainActor.run { [weak self] in
             NSApplication.shared.activate(ignoringOtherApps: true)
-            if let token { onOpenConversation?(token) }
+            if let token { self?.onOpenConversation?(token) }
         }
     }
 

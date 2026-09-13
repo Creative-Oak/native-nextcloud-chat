@@ -11,11 +11,14 @@ import Observation
 final class ChatModel {
     private(set) var conversation: Conversation
     private(set) var timeline = MessageTimeline()
+    /// The transcript's display list. Rebuilt when the timeline changes — never per render.
+    private(set) var rows: [ChatRow] = []
     private(set) var syncState: ChatSyncState = .idle
     private(set) var isLoadingOlder = false
     /// False once we've paged back to the beginning of the conversation.
     private(set) var canLoadOlder = true
-    private(set) var lastError: TalkError?
+    /// Shown as a quiet inline bar, never as a modal alert.
+    var lastError: TalkError?
 
     /// The user explicitly chose Mark as Unread; nothing may quietly undo that.
     private(set) var userMarkedUnread = false
@@ -44,9 +47,45 @@ final class ChatModel {
     private var pendingReadMarker: Int = 0
     private var isSendingReadMarker = false
 
+    /// Parsed message content, keyed by row identity. Not observed: it is a memo of a pure
+    /// function, and making it observable would invalidate the view that filled it.
+    @ObservationIgnored private var contentCache: [String: (source: String, content: MessageContent)] = [:]
+    @ObservationIgnored private lazy var parser = MessageContentParser(
+        currentUserID: session.account.userID,
+        markdownEnabled: session.capabilitySnapshot.supportsMarkdown
+    )
+
     var token: String { conversation.token }
     var capabilities: TalkCapabilities { session.capabilitySnapshot }
     var messages: [Message] { timeline.messages }
+
+    /// Every timeline mutation goes through here so the display list and the timeline can
+    /// never disagree.
+    func mutateTimeline(_ body: (inout MessageTimeline) -> Void) {
+        body(&timeline)
+        rebuildRows()
+    }
+
+    func rebuildRows() {
+        rows = ChatRow.build(messages: timeline.messages, firstUnreadMessageID: firstUnreadMessageID)
+    }
+
+    /// Parsed content for a message, memoized. Re-parses only when the text actually
+    /// changed (an edit), which is what keeps scrolling cheap.
+    func content(for message: Message) -> MessageContent {
+        let source = message.text
+        if let cached = contentCache[message.localID], cached.source == source {
+            return cached.content
+        }
+        let parsed = parser.parse(message)
+        contentCache[message.localID] = (source, parsed)
+        return parsed
+    }
+
+    /// True when this message is mine — drives the subtle "my messages" treatment.
+    func isFromMe(_ message: Message) -> Bool {
+        session.account.isMe(message.actor)
+    }
 
     init(
         session: Session,
@@ -66,9 +105,10 @@ final class ChatModel {
         // Cache first: an already-read conversation opens with its history on screen in the
         // same frame, with no spinner and no flash of empty state.
         let cached = await session.store.messages(token: token, accountID: session.account.id, limit: 200)
-        timeline.apply(cached.filter { !$0.deliveryState.isPending })
+        mutateTimeline { $0.apply(cached.filter { !$0.deliveryState.isPending }) }
         restorePendingMessages(from: cached)
         firstUnreadMessageID = computeFirstUnread()
+        rebuildRows()
 
         await restoreDraft()
         pushReadContext()
@@ -76,9 +116,10 @@ final class ChatModel {
         syncTask?.cancel()
         let token = self.token
         let lastKnown = timeline.lastServerMessageID
+        let sync = session.chatSync
         syncTask = Task { [weak self] in
-            guard let self else { return }
-            for await event in await self.session.chatSync.activate(token: token, lastKnownMessageID: lastKnown) {
+            for await event in await sync.activate(token: token, lastKnownMessageID: lastKnown) {
+                guard let self else { return }
                 await self.handle(event)
             }
         }
@@ -88,7 +129,8 @@ final class ChatModel {
         syncTask?.cancel()
         syncTask = nil
         saveDraftNow()
-        Task { [session] in await session.chatSync.stop() }
+        let sync = session.chatSync
+        Task { await sync.stop() }
     }
 
     func applicationDidBecomeActive() async {
@@ -114,7 +156,8 @@ final class ChatModel {
     }
 
     private func apply(_ batch: ChatBatch) async {
-        let change = timeline.apply(batch.messages)
+        var change = MessageTimeline.Change()
+        mutateTimeline { change = $0.apply(batch.messages) }
         guard !change.isEmpty else { return }
 
         await session.store.save(messages: batch.messages, accountID: session.account.id)
@@ -141,7 +184,7 @@ final class ChatModel {
             if batch.messages.isEmpty {
                 canLoadOlder = false
             } else {
-                timeline.apply(batch.messages)
+                mutateTimeline { $0.apply(batch.messages) }
                 await session.store.save(messages: batch.messages, accountID: session.account.id)
                 canLoadOlder = batch.mayHaveMore
             }
@@ -155,7 +198,8 @@ final class ChatModel {
 
     private func pushReadContext() {
         let context = currentContext()
-        Task { [session] in await session.chatSync.setReadContext(context) }
+        let sync = session.chatSync
+        Task { await sync.setReadContext(context) }
     }
 
     private func currentContext() -> ReadStateContext {
@@ -182,15 +226,17 @@ final class ChatModel {
 
     private func sendReadMarker(_ messageID: Int) {
         guard capabilities.canSetReadMarker else { return }
+        // Coalesced: scrolling through a hundred messages sends one marker, not a hundred.
         pendingReadMarker = max(pendingReadMarker, messageID)
         guard !isSendingReadMarker else { return }
         isSendingReadMarker = true
 
-        Task { [session, token] in
-            defer { isSendingReadMarker = false }
-            let marker = pendingReadMarker
+        Task { [weak self] in
+            guard let self else { return }
+            defer { self.isSendingReadMarker = false }
+            let marker = self.pendingReadMarker
             do {
-                try await session.chat.markRead(token: token, lastReadMessageID: marker)
+                try await self.session.chat.markRead(token: self.token, lastReadMessageID: marker)
             } catch {
                 Log.chat.warning("Couldn’t update the read marker: \(error.userMessage)")
             }
@@ -202,9 +248,9 @@ final class ChatModel {
         userMarkedUnread = true
         conversation.unreadMessages = max(conversation.unreadMessages, 1)
         pushReadContext()
-        Task { [session, token] in
-            try? await session.chat.markUnread(token: token)
-        }
+        let chat = session.chat
+        let token = self.token
+        Task { try? await chat.markUnread(token: token) }
     }
 
     private func computeFirstUnread() -> Int? {
@@ -217,7 +263,9 @@ final class ChatModel {
     /// Called when the user leaves the conversation, so the separator doesn't persist into
     /// the next visit.
     func clearUnreadSeparator() {
+        guard firstUnreadMessageID != nil else { return }
         firstUnreadMessageID = nil
+        rebuildRows()
     }
 
     // MARK: - Drafts
@@ -252,7 +300,9 @@ final class ChatModel {
             replyToMessageID: replyingTo?.messageID,
             editingMessageID: editing?.messageID
         )
-        Task { [session] in await session.store.save(draft: draft, accountID: session.account.id) }
+        let store = session.store
+        let accountID = session.account.id
+        Task { await store.save(draft: draft, accountID: accountID) }
     }
 
     private func restorePendingMessages(from cached: [Message]) {
@@ -264,6 +314,7 @@ final class ChatModel {
                 restored.deliveryState = .failed(reason: "Not sent")
             }
             timeline.addPending(restored)
+            rebuildRows()
         }
     }
 }

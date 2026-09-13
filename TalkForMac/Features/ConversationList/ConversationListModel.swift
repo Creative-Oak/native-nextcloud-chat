@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Observation
 
@@ -14,7 +15,7 @@ final class ConversationListModel {
     var filterText = ""
     private(set) var isLoadingFirstTime = false
 
-    private let session: Session
+    let session: Session
     private let notifications: NotificationController
     /// Tokens we have already notified about, so a re-fetch doesn't re-announce old news.
     private var announcedActivity: [String: Int] = [:]
@@ -92,12 +93,14 @@ final class ConversationListModel {
         index.update(token: conversation.token) { $0.isFavorite = newValue }
         persist(token: conversation.token)
 
-        Task {
+        let service = session.conversations
+        let token = conversation.token
+        Task { [weak self] in
             do {
-                try await session.conversations.setFavorite(newValue, token: conversation.token)
+                try await service.setFavorite(newValue, token: token)
             } catch {
                 // Put it back: the sidebar must never disagree with the server for long.
-                index.update(token: conversation.token) { $0.isFavorite = !newValue }
+                self?.index.update(token: token) { $0.isFavorite = !newValue }
                 Log.ui.warning("Couldn’t change favourite: \(error.userMessage)")
             }
         }
@@ -108,11 +111,13 @@ final class ConversationListModel {
         index.update(token: conversation.token) { $0.notificationLevel = level }
         persist(token: conversation.token)
 
-        Task {
+        let service = session.conversations
+        let token = conversation.token
+        Task { [weak self] in
             do {
-                try await session.conversations.setNotificationLevel(level, token: conversation.token)
+                try await service.setNotificationLevel(level, token: token)
             } catch {
-                index.update(token: conversation.token) { $0.notificationLevel = previous }
+                self?.index.update(token: token) { $0.notificationLevel = previous }
                 Log.ui.warning("Couldn’t change notifications: \(error.userMessage)")
             }
         }
@@ -122,18 +127,26 @@ final class ConversationListModel {
     /// otherwise rather than failing when used.
     func markUnread(_ conversation: Conversation) {
         guard session.capabilitySnapshot.canMarkUnread else { return }
-        index.update(token: conversation.token) { conversation in
-            conversation.unreadMessages = max(conversation.unreadMessages, 1)
-        }
-        notifications.updateBadge(count: index.totalUnreadCount)
+        showUnread(token: conversation.token)
 
+        let chat = session.chat
+        let token = conversation.token
         Task {
             do {
-                try await session.chat.markUnread(token: conversation.token)
+                try await chat.markUnread(token: token)
             } catch {
                 Log.ui.warning("Couldn’t mark as unread: \(error.userMessage)")
             }
         }
+    }
+
+    /// Local echo only — for when the request was already sent by ``ChatModel``.
+    func showUnread(token: String) {
+        index.update(token: token) { conversation in
+            conversation.unreadMessages = max(conversation.unreadMessages, 1)
+        }
+        announcedActivity[token] = index[token]?.unreadMessages ?? 1
+        notifications.updateBadge(count: index.totalUnreadCount)
     }
 
     // MARK: - Keyboard navigation
@@ -176,6 +189,30 @@ final class ConversationListModel {
 
     private func persist(token: String) {
         guard let conversation = index[token] else { return }
-        Task { await session.store.save(conversations: [conversation], accountID: session.account.id) }
+        let store = session.store
+        let accountID = session.account.id
+        Task { await store.save(conversations: [conversation], accountID: accountID) }
+    }
+}
+
+// MARK: - Menu helpers
+
+extension ConversationListModel {
+    /// Whether the server supports Mark as Unread. The menu item is hidden when it doesn't,
+    /// rather than offered and then failing.
+    var hasMarkUnread: Bool { session.capabilitySnapshot.canMarkUnread }
+
+    /// The conversation's URL in the Nextcloud web UI.
+    func webURL(for conversation: Conversation) -> URL {
+        session.account.server.url(path: "/index.php/call/\(conversation.token)")
+    }
+
+    func copyLink(to conversation: Conversation) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(webURL(for: conversation).absoluteString, forType: .string)
+    }
+
+    func openInBrowser(_ conversation: Conversation) {
+        NSWorkspace.shared.open(webURL(for: conversation))
     }
 }

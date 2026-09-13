@@ -30,7 +30,7 @@ enum Log {
 
     /// Where `os` doesn't exist (Linux CI), logging goes to stderr — which would bury the
     /// test output. Opt in with `TALK_LOG=1`.
-    nonisolated(unsafe) static let isStderrLoggingEnabled =
+    static let isStderrLoggingEnabled =
         ProcessInfo.processInfo.environment["TALK_LOG"] != nil
 }
 

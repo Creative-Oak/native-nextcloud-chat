@@ -41,6 +41,8 @@ final class AppModel {
 
     let dependencies: AppDependencies
     let notifications: NotificationController
+    /// Built per session; avatars are account-scoped because the URLs are.
+    private(set) var avatarLoader: AvatarLoader?
 
     private var networkTask: Task<Void, Never>?
     private var conversationSyncTask: Task<Void, Never>?
@@ -49,6 +51,11 @@ final class AppModel {
         self.dependencies = dependencies
         self.notifications = NotificationController(preferences: dependencies.preferences)
         Log.isDeveloperModeEnabled = dependencies.preferences.isDeveloperModeEnabled
+
+        // Clicking a notification opens that conversation.
+        notifications.onOpenConversation = { [weak self] token in
+            self?.selectedToken = token
+        }
     }
 
     // MARK: - Lifecycle
@@ -75,6 +82,11 @@ final class AppModel {
     func activate(account: Account) async throws {
         let session = try dependencies.makeSession(account: account)
         self.session = session
+        avatarLoader = AvatarLoader(
+            client: session.client,
+            server: account.server,
+            supportsConversationAvatars: account.capabilities.supportsConversationAvatars
+        )
         phase = .ready
 
         let list = ConversationListModel(session: session, notifications: notifications)
@@ -102,6 +114,7 @@ final class AppModel {
         await dependencies.store.deleteAccount(id: session.account.id)
 
         self.session = nil
+        avatarLoader = nil
         conversationList = nil
         chat = nil
         selectedToken = nil
@@ -133,11 +146,13 @@ final class AppModel {
             readContext: { [weak self] in self?.currentReadContext() ?? ReadStateContext() },
             onReadMarker: { [weak self] token, messageID in
                 self?.conversationList?.markRead(token: token, upTo: messageID)
+                self?.notifications.clearNotifications(for: token)
             }
         )
         chat = model
 
         Task {
+            // Tear the old one down first, so two long polls never overlap.
             previous?.deactivate()
             await model.activate()
         }
@@ -156,9 +171,13 @@ final class AppModel {
 
     private func activationChanged() {
         guard let session else { return }
+        let context = currentReadContext(isScrolledToLatest: chat?.isScrolledToLatest ?? false)
+        let isActive = isApplicationActive
+        let chat = self.chat
+
         Task {
-            await session.chatSync.setReadContext(currentReadContext(isScrolledToLatest: chat?.isScrolledToLatest ?? false))
-            if isApplicationActive {
+            await session.chatSync.setReadContext(context)
+            if isActive {
                 // Coming back to the app is the moment to notice anything we missed.
                 await session.conversationSync.applicationDidBecomeActive()
                 await chat?.applicationDidBecomeActive()
@@ -191,6 +210,7 @@ final class AppModel {
                 }
             }
         }
+        
     }
 
     private func observeNetwork() {
@@ -202,8 +222,10 @@ final class AppModel {
                 self.connection = state
                 if state == .online, let session = self.session {
                     // Back on the network: refresh fully, since anything could have changed.
-                    await session.conversationSync.refreshNow(full: true)
-                    await self.chat?.reconnect()
+                    let sync = session.conversationSync
+                    let chat = self.chat
+                    await sync.refreshNow(full: true)
+                    await chat?.reconnect()
                 }
             }
         }
@@ -211,6 +233,42 @@ final class AppModel {
 
     func refreshNow() {
         guard let session else { return }
-        Task { await session.conversationSync.refreshNow(full: true) }
+        let sync = session.conversationSync
+        Task { await sync.refreshNow(full: true) }
+    }
+
+    // MARK: - Menu commands
+    //
+    // These live here rather than in the views because the menu bar is outside the view
+    // hierarchy and reaches the current window through focused values.
+
+    func selectRelative(offset: Int) {
+        guard let next = conversationList?.conversation(after: selectedToken, offset: offset) else { return }
+        selectedToken = next.token
+    }
+
+    func selectNextUnread() {
+        guard let next = conversationList?.nextUnread(after: selectedToken) else { return }
+        selectedToken = next.token
+    }
+
+    func markSelectedUnread() {
+        guard let chat, let list = conversationList else { return }
+        // ChatModel sends the request; the list only needs the local echo, or we'd send two.
+        chat.markUnread()
+        list.showUnread(token: chat.token)
+        // Leaving it selected would immediately mark it read again, which is not what the
+        // command means.
+        selectedToken = nil
+    }
+
+    func toggleFavoriteOnSelection() {
+        guard let token = selectedToken, let conversation = conversationList?[token] else { return }
+        conversationList?.toggleFavorite(conversation)
+    }
+
+    func openSelectionInBrowser() {
+        guard let token = selectedToken, let conversation = conversationList?[token] else { return }
+        conversationList?.openInBrowser(conversation)
     }
 }

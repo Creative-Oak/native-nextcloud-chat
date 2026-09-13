@@ -55,7 +55,7 @@ final class AppDependencies {
 
     static let userAgent: String = {
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1"
-        let device = Host.current().localizedName ?? "Mac"
+        let device = ProcessInfo.processInfo.hostName
         // This string becomes the app password's name in the user's security settings, so
         // it has to identify both the app and which Mac it came from.
         return "Talk for Mac \(version) (\(device))"

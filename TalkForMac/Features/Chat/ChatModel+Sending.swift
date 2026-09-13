@@ -64,7 +64,7 @@ extension ChatModel {
             deliveryState: .sending
         )
 
-        timeline.addPending(optimistic)
+        mutateTimeline { $0.addPending(optimistic) }
         draftText = ""
         replyingTo = nil
         saveDraftNow()
@@ -77,37 +77,45 @@ extension ChatModel {
     /// receive reconciles instead of being duplicated.
     func retry(_ message: Message) {
         guard message.deliveryState.isPending else { return }
-        timeline.updateDeliveryState(localID: message.localID, to: .sending)
+        mutateTimeline { $0.updateDeliveryState(localID: message.localID, to: .sending) }
         transmit(message, replyTo: message.parent?.messageID)
     }
 
     func discard(_ message: Message) {
         guard message.deliveryState.isPending else { return }
-        timeline.remove(localID: message.localID)
-        Task { [session, token] in
-            await session.store.deleteMessage(localID: message.localID, token: token, accountID: session.account.id)
-        }
+        mutateTimeline { $0.remove(localID: message.localID) }
+        let store = session.store
+        let accountID = session.account.id
+        let token = self.token
+        Task { await store.deleteMessage(localID: message.localID, token: token, accountID: accountID) }
     }
 
     private func transmit(_ optimistic: Message, replyTo: Int?) {
-        Task { [session, token] in
+        // Only send a reference id the server knows what to do with.
+        let referenceID = capabilities.supportsReferenceIDs ? optimistic.referenceID : nil
+
+        Task { [weak self] in
+            guard let self else { return }
+            let session = self.session
+            let token = self.token
             do {
                 let sent = try await session.chat.send(
                     token: token,
                     message: optimistic.text,
                     replyTo: replyTo,
-                    // Only send a reference id the server knows what to do with.
-                    referenceID: capabilities.supportsReferenceIDs ? optimistic.referenceID : nil
+                    referenceID: referenceID
                 )
                 // The long poll may have delivered this already; the timeline handles both
                 // orders and will not duplicate.
-                timeline.apply([sent])
+                self.mutateTimeline { $0.apply([sent]) }
                 await session.store.save(messages: [sent], accountID: session.account.id)
                 await session.store.deleteMessage(localID: optimistic.localID, token: token, accountID: session.account.id)
             } catch {
-                timeline.updateDeliveryState(localID: optimistic.localID, to: .failed(reason: error.userMessage))
+                self.mutateTimeline {
+                    $0.updateDeliveryState(localID: optimistic.localID, to: .failed(reason: error.userMessage))
+                }
                 // Keep failed sends across relaunches so nothing the user typed is lost.
-                if let failed = timeline.message(localID: optimistic.localID) {
+                if let failed = self.timeline.message(localID: optimistic.localID) {
                     await session.store.save(messages: [failed], accountID: session.account.id)
                 }
                 Log.chat.warning("Send failed: \(error.userMessage)")
@@ -127,6 +135,13 @@ extension ChatModel {
     func cancelReply() {
         replyingTo = nil
         saveDraftNow()
+    }
+
+    /// ⇧⌘R — reply to the newest message that can be replied to.
+    func replyToLatest() {
+        guard let message = timeline.messages.last(where: { $0.isReplyable && !$0.deliveryState.isPending && !$0.isSystem })
+        else { return }
+        beginReply(to: message)
     }
 
     // MARK: - Edit
@@ -168,20 +183,22 @@ extension ChatModel {
         var optimistic = original
         optimistic.text = text
         optimistic.lastEdit = Message.EditInfo(actor: me, timestamp: Date())
-        timeline.apply([optimistic])
+        mutateTimeline { $0.apply([optimistic]) }
 
         editing = nil
         draftText = ""
         saveDraftNow()
 
-        Task { [session, token] in
+        Task { [weak self] in
+            guard let self else { return }
+            let session = self.session
             do {
-                let updated = try await session.chat.edit(token: token, messageID: original.messageID, message: text)
-                timeline.apply([updated])
+                let updated = try await session.chat.edit(token: self.token, messageID: original.messageID, message: text)
+                self.mutateTimeline { $0.apply([updated]) }
                 await session.store.save(messages: [updated], accountID: session.account.id)
             } catch {
-                timeline.apply([original])   // put the original text back
-                lastError = error
+                self.mutateTimeline { $0.apply([original]) }   // put the original text back
+                self.lastError = error
                 Log.chat.warning("Edit failed: \(error.userMessage)")
             }
         }
@@ -197,15 +214,17 @@ extension ChatModel {
 
     func delete(_ message: Message) {
         guard canDelete(message) else { return }
-        Task { [session, token] in
+        Task { [weak self] in
+            guard let self else { return }
+            let session = self.session
             do {
                 // The response is the replacement tombstone, which is also what every other
                 // client will receive — so the row is overwritten, not removed.
-                let tombstone = try await session.chat.delete(token: token, messageID: message.messageID)
-                timeline.apply([tombstone])
+                let tombstone = try await session.chat.delete(token: self.token, messageID: message.messageID)
+                self.mutateTimeline { $0.apply([tombstone]) }
                 await session.store.save(messages: [tombstone], accountID: session.account.id)
             } catch {
-                lastError = error
+                self.lastError = error
                 Log.chat.warning("Delete failed: \(error.userMessage)")
             }
         }
@@ -231,20 +250,23 @@ extension ChatModel {
             optimistic.myReactions.insert(emoji)
             optimistic.reactions[emoji] = (optimistic.reactions[emoji] ?? 0) + 1
         }
-        timeline.apply([optimistic])
+        mutateTimeline { $0.apply([optimistic]) }
 
-        Task { [session, token] in
+        Task { [weak self] in
+            guard let self else { return }
+            let session = self.session
+            let token = self.token
             do {
                 let summary = hadReacted
                     ? try await session.reactions.remove(emoji, token: token, messageID: message.messageID)
                     : try await session.reactions.add(emoji, token: token, messageID: message.messageID)
-                timeline.applyReactions(summary, toMessageID: message.messageID)
-                if let updated = timeline.message(id: message.messageID) {
+                self.mutateTimeline { $0.applyReactions(summary, toMessageID: message.messageID) }
+                if let updated = self.timeline.message(id: message.messageID) {
                     await session.store.save(messages: [updated], accountID: session.account.id)
                 }
             } catch {
-                timeline.apply([message])   // revert
-                lastError = error
+                self.mutateTimeline { $0.apply([message]) }   // revert
+                self.lastError = error
                 Log.chat.warning("Reaction failed: \(error.userMessage)")
             }
         }

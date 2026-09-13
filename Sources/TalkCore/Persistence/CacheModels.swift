@@ -12,7 +12,7 @@ import SwiftData
 /// activity" and "messages in this conversation, by id".
 @Model
 final class CachedAccount {
-    #Index<CachedAccount>([\.identifier])
+    // `.unique` implies an index; adding an explicit one as well is redundant.
     @Attribute(.unique) var identifier: String
     var addedAt: Date
     var payload: Data

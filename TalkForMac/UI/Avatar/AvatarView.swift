@@ -26,7 +26,7 @@ struct AvatarView: View {
         .clipShape(.circle)
         .overlay {
             // A hairline keeps light avatars from bleeding into a light sidebar.
-            Circle().strokeBorder(.separator.opacity(0.5), lineWidth: 0.5)
+            Circle().strokeBorder(Color(nsColor: .separatorColor).opacity(0.6), lineWidth: 0.5)
         }
         .overlay(alignment: .bottomTrailing) { statusIndicator }
         .task(id: taskID) { await load() }
@@ -109,7 +109,7 @@ struct AvatarView: View {
         let pixels = Int(size * 2)
         let isDark = colorScheme == .dark
 
-        if let cached = await loader.cachedImage(for: subject, size: pixels, dark: isDark) {
+        if let cached = loader.cachedImage(for: subject, size: pixels, dark: isDark) {
             image = cached
             return
         }
@@ -168,7 +168,14 @@ struct ActorAvatarView: View {
 
     private func load() async {
         guard let loader, actor.kind == .users, !actor.id.isEmpty else { return }
-        let fetched = await loader.image(for: .user(id: actor.id), size: Int(size * 2), dark: colorScheme == .dark)
+        let subject = AvatarLoader.Subject.user(id: actor.id)
+        let pixels = Int(size * 2)
+        let isDark = colorScheme == .dark
+        if let cached = loader.cachedImage(for: subject, size: pixels, dark: isDark) {
+            image = cached
+            return
+        }
+        let fetched = await loader.image(for: subject, size: pixels, dark: isDark)
         withAnimation(.easeOut(duration: 0.15)) { image = fetched }
     }
 }
