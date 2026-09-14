@@ -118,6 +118,8 @@ struct InlineImageView: View {
                     }
                     .contentShape(.rect)
                     .onTapGesture { openAttachment?(object) }
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityLabel(object.name)
                     .help(object.name)
             } else if didFail {
                 EmptyView()

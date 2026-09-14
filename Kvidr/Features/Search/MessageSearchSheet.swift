@@ -123,6 +123,7 @@ struct MessageSearchSheet: View {
                                 model.highlighted = index
                                 onOpen(hit)
                             }
+                            .accessibilityAddTraits(.isButton)
                         Divider().padding(.leading, 52)
                     }
 

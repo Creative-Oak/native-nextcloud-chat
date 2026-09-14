@@ -45,6 +45,7 @@ struct QuickSwitcher: View {
                                         highlighted = index
                                         pick()
                                     }
+                                    .accessibilityAddTraits(.isButton)
                             }
                         }
                     }

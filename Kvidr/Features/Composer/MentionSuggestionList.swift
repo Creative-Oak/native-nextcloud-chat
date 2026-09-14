@@ -12,6 +12,7 @@ struct MentionSuggestionList: View {
                 row(suggestion, isHighlighted: index == highlighted)
                     .contentShape(.rect)
                     .onTapGesture { onPick(suggestion) }
+                    .accessibilityAddTraits(.isButton)
             }
         }
         // Inset, so the highlight is a rounded pill inside the panel rather than a band

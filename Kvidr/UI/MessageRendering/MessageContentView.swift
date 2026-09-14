@@ -222,6 +222,7 @@ private struct AttachmentView: View {
         .background(.quaternary.opacity(0.4), in: .rect(cornerRadius: 8))
         .contentShape(.rect)
         .onTapGesture { open() }
+        .accessibilityAddTraits(.isButton)
         .contextMenu { menu }
         .help(object.name)
     }
