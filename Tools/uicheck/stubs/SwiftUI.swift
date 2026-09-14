@@ -821,6 +821,7 @@ public enum ScrollPhase: Equatable, Sendable {
 
 public struct GeometryProxy: Sendable {
     public var size: CGSize { .zero }
+    public func frame(in coordinateSpace: CoordinateSpace) -> CGRect { .zero }
     public var safeAreaInsets: EdgeInsets { EdgeInsets() }
     public subscript<T>(anchor: Anchor<T>) -> T { anchor.value }
 }
@@ -1120,6 +1121,7 @@ extension View {
     public func navigationTitle(_ title: String) -> StubView { StubView() }
     public func navigationSubtitle(_ subtitle: String) -> StubView { StubView() }
     public func navigationSplitViewColumnWidth(min: CGFloat? = nil, ideal: CGFloat, max: CGFloat? = nil) -> StubView { StubView() }
+    public func navigationSplitViewColumnWidth(_ width: CGFloat) -> StubView { StubView() }
     public func toolbar<C: ToolbarContent>(@ToolbarContentBuilder content: () -> C) -> StubView { StubView() }
 
     public func scrollContentBackground(_ visibility: Visibility) -> StubView { StubView() }

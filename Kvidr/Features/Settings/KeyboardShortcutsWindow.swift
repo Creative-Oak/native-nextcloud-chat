@@ -61,6 +61,7 @@ struct KeyboardShortcutsWindow: View {
             Shortcut(description: "Next / previous conversation", keys: "⌥⌘↓ ⌥⌘↑"),
             Shortcut(description: "Next unread conversation", keys: "⇧⌘]"),
             Shortcut(description: "Show conversation details", keys: "⌥⌘I"),
+            Shortcut(description: "Compact / full sidebar", keys: "⌃⌘S"),
             Shortcut(description: "Refresh conversations", keys: "⌘R")
         ]),
         ShortcutGroup(title: "In a conversation", shortcuts: [

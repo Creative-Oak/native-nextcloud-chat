@@ -41,6 +41,8 @@ public struct Selector: Equatable, Hashable, Sendable {
 @MainActor open class NSWindow: NSResponder {
     public static var allowsAutomaticWindowTabbing: Bool = true
     open var firstResponder: NSResponder? { nil }
+    open var contentView: NSView? { nil }
+    open var mouseLocationOutsideOfEventStream: NSPoint { .zero }
     open var frameAutosaveName: String = ""
     open var frame: NSRect { .zero }
     open var isRestorable: Bool = true
@@ -239,6 +241,12 @@ public struct NSFont: Sendable {
 
 @MainActor open class NSEvent: NSObject {
     public enum EventType: Sendable { case leftMouseDown, rightMouseDown, mouseMoved }
+    public struct EventTypeMask: OptionSet, Sendable {
+        public let rawValue: UInt64
+        public init(rawValue: UInt64) { self.rawValue = rawValue }
+        public static let leftMouseDown = EventTypeMask(rawValue: 1 << 1)
+        public static let leftMouseUp = EventTypeMask(rawValue: 1 << 2)
+    }
     public struct ModifierFlags: OptionSet, Sendable {
         public let rawValue: UInt
         public init(rawValue: UInt) { self.rawValue = rawValue }
@@ -246,7 +254,14 @@ public struct NSFont: Sendable {
     }
     open var type: EventType { .leftMouseDown }
     open var modifierFlags: ModifierFlags { [] }
+    open var window: NSWindow? { nil }
+    open var locationInWindow: NSPoint { .zero }
+    public class var pressedMouseButtons: Int { 0 }
+    public class func addLocalMonitorForEvents(matching mask: EventTypeMask, handler block: @escaping (NSEvent) -> NSEvent?) -> Any? { nil }
+    public class func removeMonitor(_ eventMonitor: Any) {}
 }
+
+@MainActor open class NSSplitView: NSView {}
 
 
 

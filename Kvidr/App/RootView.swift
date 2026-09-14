@@ -58,8 +58,26 @@ struct RootView: View {
         .overlay { quickSwitcher }
         .focusedSceneValue(\.appModel, app)
         .focusedSceneValue(\.composerFocusRequest, { composerFocused = true })
-        .focusedSceneValue(\.searchFocusRequest, { searchFocusRequest = true })
+        .focusedSceneValue(\.searchFocusRequest, requestSearchFocus)
         .focusedSceneValue(\.quickSwitcherRequest, { isShowingQuickSwitcher = true })
+        .focusedSceneValue(\.sidebarModeToggle, toggleSidebarMode)
+    }
+
+    /// Straight from the model rather than the environment: the environment's copy is
+    /// optional, for views that can be previewed without one, and this view always has it.
+    private var preferences: Preferences { app.dependencies.preferences }
+
+    /// ⌘F. The search field is part of the full sidebar, so a compact sidebar widens
+    /// first; the list that appears takes the request from there.
+    private func requestSearchFocus() {
+        if preferences.sidebarMode == .compact {
+            withAnimation(.smooth(duration: 0.2)) { preferences.sidebarMode = .standard }
+        }
+        searchFocusRequest = true
+    }
+
+    private func toggleSidebarMode() {
+        withAnimation(.smooth(duration: 0.2)) { preferences.sidebarMode.toggle() }
     }
 
     @ViewBuilder
@@ -88,24 +106,39 @@ struct RootView: View {
     @ViewBuilder
     private var splitView: some View {
         @Bindable var app = app
+        @Bindable var preferences = preferences
 
         NavigationSplitView(columnVisibility: $columnVisibility) {
-            if let list = app.conversationList {
-                ConversationListView(
-                    model: list,
-                    selection: $app.selectedToken,
-                    composerFocused: $composerFocused,
-                    searchFocusRequest: searchFocusRequest,
-                    onSearchFocusHandled: { searchFocusRequest = false }
-                )
-                .navigationSplitViewColumnWidth(min: 220, ideal: 280, max: 420)
-                // No sidebar toggle, as in Messages: the sidebar is not something you
-                // fold away by hand. It goes only when the inspector needs its room in
-                // a narrow window, and comes back on its own — see `reconcileColumns`.
-                // The toggle is the sidebar column's item, so the removal goes here;
-                // on the split view itself it did nothing.
-                .toolbar(removing: .sidebarToggle)
+            // The width and the toolbar removal belong to the *column*, not to the list
+            // inside it, and `SidebarColumn` always has something standing in the column
+            // for them to apply to — even before the cache has opened.
+            SidebarColumn(
+                list: app.conversationList,
+                mode: preferences.sidebarMode,
+                selection: $app.selectedToken,
+                composerFocused: $composerFocused,
+                searchFocusRequest: searchFocusRequest,
+                onSearchFocusHandled: { searchFocusRequest = false }
+            )
+            // Pinned: one width, no range. Measured on macOS 26: a single width sets the
+            // split view item's minimum and maximum thickness to that number, the column
+            // sits there from the first layout, and changing the number moves it — with
+            // nothing for AppKit's autosaved divider position to override, since there is
+            // nowhere else the column may be. A range (`min:ideal:max:`) is what let the
+            // divider drag anywhere and the saved position win the next launch: the
+            // `ideal` counts only the first time, and after that the column goes to
+            // wherever it was last dragged, clamped. What a drag of the divider does now
+            // is choose between the two widths — see `SidebarDividerTracker`.
+            .navigationSplitViewColumnWidth(preferences.sidebarMode.width)
+            .background {
+                SidebarDividerTracker(mode: $preferences.sidebarMode)
             }
+            // No sidebar toggle, as in Messages: the sidebar is not something you
+            // fold away by hand. It goes only when the inspector needs its room in
+            // a narrow window, and comes back on its own — see `reconcileColumns`.
+            // The toggle is the sidebar column's item, so the removal goes here;
+            // on the split view itself it did nothing.
+            .toolbar(removing: .sidebarToggle)
         } detail: {
             // The inspector is a panel inside this column, not a column of its own. A
             // column brings a section of the toolbar with it, and the toolbar lays its
@@ -115,7 +148,7 @@ struct RootView: View {
             HStack(spacing: 0) {
                 Group {
                     if let chat = app.chat {
-                        ChatView(model: chat, composerFocused: $composerFocused, onShowDetails: toggleInspector)
+                        ChatView(model: chat, composerFocused: $composerFocused)
                             // A fresh view per conversation: no state bleeds between them.
                             .id(chat.token)
                     } else if app.phase == .ready {
@@ -167,6 +200,7 @@ struct RootView: View {
         }
         .onChange(of: isShowingInspector) { _, _ in reconcileColumns() }
         .onChange(of: columnVisibility) { _, _ in reconcileColumns() }
+        .onChange(of: preferences.sidebarMode) { _, _ in reconcileColumns() }
         .sheet(item: $conversationSettings) { model in
             ConversationSettingsSheet(model: model)
         }
@@ -241,14 +275,19 @@ struct RootView: View {
     }
 
     /// Sidebar, conversation and inspector side by side need about this much: the
-    /// sidebar at its ideal width, the panel, and a conversation column wide enough to
-    /// read — bubbles run to 520, and the header wants room on either side of them.
+    /// full sidebar, the panel, and a conversation column wide enough to read —
+    /// bubbles run to 520, and the header wants room on either side of them.
     /// Messages draws the same line at about the same place: at 860 it shows the
     /// sidebar or the inspector, never both.
-    private static let widthForThreeColumns: CGFloat = 1040
+    private static let widthForThreeColumnsWithFullSidebar: CGFloat = 1040
+
+    /// The compact sidebar asks for less, by exactly the width it gives up.
+    private var widthForThreeColumns: CGFloat {
+        Self.widthForThreeColumnsWithFullSidebar - (SidebarMode.standard.width - preferences.sidebarMode.width)
+    }
 
     private var isTooNarrowForThreeColumns: Bool {
-        contentWidth > 0 && contentWidth < Self.widthForThreeColumns
+        contentWidth > 0 && contentWidth < widthForThreeColumns
     }
 
     /// The inspector is open and there is no room for the sidebar beside it. Holds
@@ -350,6 +389,19 @@ struct RootView: View {
                     }
                     .help("Conversation settings")
                 }
+            }
+        } else if app.chat != nil {
+            // The way in, at the window's top-right corner, and only while there is a
+            // conversation to inspect. It is an `else` on the branch above rather than a
+            // separate condition, so the button and the panel's own controls can never
+            // both claim that corner — the button is gone the moment the panel is there.
+            ToolbarSpacer(.flexible)
+
+            ToolbarItem(placement: .primaryAction) {
+                Button(action: toggleInspector) {
+                    Label("Conversation Details", systemImage: "info.circle")
+                }
+                .help("Show conversation details (⌥⌘I)")
             }
         }
     }

@@ -62,7 +62,9 @@ struct ConversationListView: View {
         .searchable(text: $model.filterText, placement: .sidebar, prompt: "Search Conversations")
         .searchFocused($isSearchFocused)
         .overlay { emptyState }
-        .onChange(of: searchFocusRequest) { _, requested in
+        // `initial:` because ⌘F from the compact sidebar creates this list with the
+        // request already set — a change-only observer would never see it.
+        .onChange(of: searchFocusRequest, initial: true) { _, requested in
             if requested {
                 isSearchFocused = true
                 onSearchFocusHandled()
@@ -87,7 +89,7 @@ struct ConversationListView: View {
             // the sidebar (below) is what moves focus on to the composer.
             ConversationRow(conversation: conversation, isSelected: selection == conversation.token)
                 .tag(conversation.token)
-                .contextMenu { contextMenu(for: conversation) }
+                .contextMenu { ConversationContextMenu(model: model, conversation: conversation) }
         }
     }
 
@@ -108,38 +110,6 @@ struct ConversationListView: View {
         }
     }
 
-    @ViewBuilder
-    private func contextMenu(for conversation: Conversation) -> some View {
-        Button(conversation.isFavorite ? "Remove from Favourites" : "Add to Favourites") {
-            model.toggleFavorite(conversation)
-        }
-
-        if model.hasMarkUnread {
-            Button("Mark as Unread") { model.markUnread(conversation) }
-                .disabled(conversation.unreadMessages > 0)
-        }
-
-        Divider()
-
-        Menu("Notifications") {
-            ForEach(NotificationLevel.allCases) { level in
-                Button {
-                    model.setNotificationLevel(level, for: conversation)
-                } label: {
-                    if conversation.notificationLevel == level {
-                        Label(level.title, systemImage: "checkmark")
-                    } else {
-                        Text(level.title)
-                    }
-                }
-            }
-        }
-
-        Divider()
-
-        Button("Copy Link") { model.copyLink(to: conversation) }
-        Button("Open in Nextcloud") { model.openInBrowser(conversation) }
-    }
 }
 
 /// The pinned favourites, as a grid of faces above the list.
@@ -163,7 +133,11 @@ private struct PinnedConversations: View {
                 } label: {
                     VStack(spacing: 6) {
                         AvatarView(conversation: conversation, size: 62)
-                            .overlay(alignment: .topTrailing) { badge(for: conversation, selected: isSelected) }
+                            .overlay(alignment: .topTrailing) {
+                                if conversation.hasUnread {
+                                    UnreadDot(isSelected: isSelected)
+                                }
+                            }
                         Text(Self.title(for: conversation))
                             .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
                             .foregroundStyle(isSelected ? .white : .primary)
@@ -203,23 +177,6 @@ private struct PinnedConversations: View {
               let first = conversation.displayName.split(separator: " ", omittingEmptySubsequences: true).first
         else { return conversation.displayName }
         return String(first)
-    }
-
-    @ViewBuilder
-    private func badge(for conversation: Conversation, selected: Bool) -> some View {
-        if conversation.hasUnread {
-            Circle()
-                .fill(selected ? Color.white : Color.accentColor)
-                .frame(width: 12, height: 12)
-                // A ring in the colour behind it, so the dot reads as sitting on top of
-                // the avatar rather than punched out of it.
-                .overlay {
-                    Circle().stroke(
-                        selected ? Color(nsColor: .selectedContentBackgroundColor) : Color(nsColor: .windowBackgroundColor),
-                        lineWidth: 2
-                    )
-                }
-        }
     }
 
     private func label(for conversation: Conversation) -> String {

@@ -14,6 +14,7 @@ struct TalkCommands: Commands {
     @FocusedValue(\.newConversationRequest) private var newConversation
     @FocusedValue(\.messageSearchRequest) private var searchMessages
     @FocusedValue(\.inspectorToggle) private var toggleInspector
+    @FocusedValue(\.sidebarModeToggle) private var toggleSidebarMode
     @Environment(\.openWindow) private var openWindow
 
     var body: some Commands {
@@ -46,6 +47,14 @@ struct TalkCommands: Commands {
             // answers instantly, this one asks the server and can reach anything.
             Button("Search Messages…") { searchMessages?() }
                 .keyboardShortcut("f", modifiers: [.command, .shift])
+                .disabled(app?.session == nil)
+        }
+
+        // Where Show/Hide Sidebar would be, had this app one: the sidebar does not hide,
+        // it folds down to a column of faces, and this is the keyboard's way to do that.
+        CommandGroup(after: .sidebar) {
+            Button(isSidebarCompact ? "Use Full Sidebar" : "Use Compact Sidebar") { toggleSidebarMode?() }
+                .keyboardShortcut("s", modifiers: [.command, .control])
                 .disabled(app?.session == nil)
         }
 
@@ -110,6 +119,10 @@ struct TalkCommands: Commands {
         }
     }
 
+    private var isSidebarCompact: Bool {
+        app?.dependencies.preferences.sidebarMode == .compact
+    }
+
     private var isSelectedFavorite: Bool {
         guard let app, let token = app.selectedToken else { return false }
         return app.conversationList?[token]?.isFavorite ?? false
@@ -128,6 +141,7 @@ private struct QuickSwitcherKey: FocusedValueKey { typealias Value = () -> Void 
 private struct NewConversationKey: FocusedValueKey { typealias Value = () -> Void }
 private struct MessageSearchKey: FocusedValueKey { typealias Value = () -> Void }
 private struct InspectorToggleKey: FocusedValueKey { typealias Value = () -> Void }
+private struct SidebarModeToggleKey: FocusedValueKey { typealias Value = () -> Void }
 
 extension FocusedValues {
     var appModel: AppModel? {
@@ -163,5 +177,10 @@ extension FocusedValues {
     var inspectorToggle: (() -> Void)? {
         get { self[InspectorToggleKey.self] }
         set { self[InspectorToggleKey.self] = newValue }
+    }
+
+    var sidebarModeToggle: (() -> Void)? {
+        get { self[SidebarModeToggleKey.self] }
+        set { self[SidebarModeToggleKey.self] = newValue }
     }
 }

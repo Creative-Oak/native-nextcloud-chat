@@ -13,6 +13,7 @@ private enum Key {
     static let allowInsecureLocalServers = "advanced.allowInsecureLocalServers"
     static let developerMode = "advanced.developerMode"
     static let lastSelectedToken = "state.lastSelectedToken"
+    static let sidebarMode = "sidebar.mode"
 }
 
 /// User preferences.
@@ -72,6 +73,12 @@ final class Preferences {
         didSet { defaults.set(lastSelectedToken, forKey: Key.lastSelectedToken) }
     }
 
+    /// Which of its two widths the sidebar is at. Remembered like the window frame is:
+    /// the sidebar you folded down stays folded down next time.
+    var sidebarMode: SidebarMode {
+        didSet { defaults.set(sidebarMode.rawValue, forKey: Key.sidebarMode) }
+    }
+
     /// Read directly from `UserDefaults` by code that can't reach the main actor.
     nonisolated static let allowInsecureLocalServersKey = Key.allowInsecureLocalServers
 
@@ -95,5 +102,6 @@ final class Preferences {
         allowsInsecureLocalServers = defaults.bool(forKey: Key.allowInsecureLocalServers)
         isDeveloperModeEnabled = defaults.bool(forKey: Key.developerMode)
         lastSelectedToken = defaults.string(forKey: Key.lastSelectedToken)
+        sidebarMode = defaults.string(forKey: Key.sidebarMode).flatMap(SidebarMode.init(rawValue:)) ?? .standard
     }
 }
