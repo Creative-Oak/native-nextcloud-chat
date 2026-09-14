@@ -58,6 +58,11 @@ struct ComposerTextView: NSViewRepresentable {
         textView.isContinuousSpellCheckingEnabled = true
         textView.isGrammarCheckingEnabled = false
         textView.textContainer?.widthTracksTextView = true
+        // NSTextContainer pads line fragments by 5pt unless told not to, which puts the
+        // text and the caret 5pt right of where the placeholder overlay draws — so an
+        // empty field shows its cursor sitting inside the first letter of the
+        // placeholder. Zero here makes the text origin genuinely the leading edge.
+        textView.textContainer?.lineFragmentPadding = 0
         textView.string = text
 
         context.coordinator.textView = textView

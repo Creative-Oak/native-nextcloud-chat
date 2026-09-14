@@ -155,6 +155,7 @@ public struct NSColor: Sendable {
 
 @MainActor open class NSTextContainer: NSObject {
     open var widthTracksTextView: Bool = true
+    open var lineFragmentPadding: CGFloat = 5
 }
 
 @MainActor open class NSLayoutManager: NSObject {
