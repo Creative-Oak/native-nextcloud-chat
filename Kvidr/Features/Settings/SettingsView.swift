@@ -59,10 +59,10 @@ private struct NotificationSettings: View {
                 Toggle("Show unread count on the Dock icon", isOn: $preferences.showsDockBadge)
 
                 Section {
-                    Text("Talk for Mac follows each conversation’s notification setting from Nextcloud. Change it by right-clicking a conversation in the sidebar.")
+                    Text("kvidr follows each conversation’s notification setting from Nextcloud. Change it by right-clicking a conversation in the sidebar.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    Text("Notifications arrive while Talk for Mac is running. Closing the window keeps it running; quitting it does not.")
+                    Text("Notifications arrive while kvidr is running. Closing the window keeps it running; quitting it does not.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

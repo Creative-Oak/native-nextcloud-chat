@@ -1,4 +1,4 @@
-# Talk for Mac — Product Definition
+# kvidr — Product Definition
 
 **One line:** Nextcloud Talk, but as a genuinely excellent Mac messaging app.
 
@@ -11,7 +11,7 @@ two disagree, we follow Apple's platform conventions, not Talk's web UI.
 
 ## What this is
 
-A real macOS application (bundle id `dk.creativeoak.TalkForMac`, deployment target macOS 26) written in Swift and SwiftUI (with AppKit where AppKit is
+A real macOS application (bundle id `app.kvidr.mac`, deployment target macOS 26) written in Swift and SwiftUI (with AppKit where AppKit is
 genuinely better), talking directly to the documented Nextcloud and Nextcloud Talk
 HTTP APIs.
 

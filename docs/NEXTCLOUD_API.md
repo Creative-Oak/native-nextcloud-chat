@@ -30,7 +30,7 @@ All OCS calls live under `/ocs/v2.php/…`. We use **v2 only**.
 | `OCS-APIRequest` | `true` |
 | `Accept` | `application/json` |
 | `Authorization` | `Basic base64(loginName:appPassword)` |
-| `User-Agent` | `Talk for Mac/<version> (macOS)` |
+| `User-Agent` | `kvidr/<version> (macOS)` |
 
 **Envelope**
 
@@ -80,7 +80,7 @@ POST {server}/index.php/login/v2
 ```
 
 No auth. Send a descriptive `User-Agent` — **it becomes the name of the app password
-in the user's Security settings**, so we send `Talk for Mac (<host name>)`.
+in the user's Security settings**, so we send `kvidr (<host name>)`.
 
 Response (plain JSON, *not* an OCS envelope):
 
@@ -611,9 +611,9 @@ entry without them cannot be navigated to and is dropped.
 A macOS app that is not running cannot poll. Nextcloud's push
 (`/ocs/v2.php/apps/notifications/api/v2/push`) is built for the proprietary
 Nextcloud push proxy, which forwards to APNs/FCM using the *Nextcloud* app's
-certificates. For Talk for Mac to receive push while terminated we would need:
+certificates. For kvidr to receive push while terminated we would need:
 
-1. An Apple Developer account and an APNs key for `dk.creativeoak.TalkForMac`.
+1. An Apple Developer account and an APNs key for `app.kvidr.mac`.
 2. Registration of a device token + an RSA public key with the Nextcloud server
    (`POST …/api/v2/push`, fields `pushTokenHash`, `devicePublicKey`, `proxyServer`).
 3. A push proxy we host that speaks Nextcloud's proxy protocol and relays to APNs.

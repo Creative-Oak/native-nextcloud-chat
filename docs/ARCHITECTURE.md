@@ -4,7 +4,7 @@
 
 ```
             ┌───────────────────────────────────────────────┐
-  UI        │ SwiftUI views + AppKit representables         │  TalkForMac/
+  UI        │ SwiftUI views + AppKit representables         │  Kvidr/
             │ small @Observable feature models              │
             └───────────────▲───────────────────────────────┘
                             │ domain models, never DTOs
@@ -47,9 +47,9 @@ Sources/TalkCore/              Foundation-only. The whole non-UI application.
   Rendering/                   MessageContentParser → [MessageContentNode]
   Support/                     Logging, clocks, backoff, reachability
 Tests/TalkCoreTests/           Unit tests + sanitized JSON fixtures
-TalkForMac/                    The macOS app target (SwiftUI + AppKit + notifications)
+Kvidr/                    The macOS app target (SwiftUI + AppKit + notifications)
   App/ Features/ UI/ Notifications/ Resources/
-TalkForMac.xcodeproj           Xcode 26 project, synchronized folders
+Kvidr.xcodeproj           Xcode 26 project, synchronized folders
 docs/
 ```
 
@@ -71,13 +71,13 @@ Per account, all actors, all constructed in `Session`:
 
 ### The one-module trick
 
-`TalkForMac.xcodeproj` compiles `Sources/TalkCore/**` **directly into the app target**
+`Kvidr.xcodeproj` compiles `Sources/TalkCore/**` **directly into the app target**
 via a synchronized folder group, rather than linking the package as a library. That is
 why:
 
 > **No file in this repository ever writes `import TalkCore`.**
 
-In the Xcode build everything is one module (`TalkForMac`). In the SwiftPM build,
+In the Xcode build everything is one module (`Kvidr`). In the SwiftPM build,
 `TalkCore` is its own module and the tests use `@testable import TalkCore`. The SwiftPM
 build is what enforces the layering: if a core file ever reaches for a UI type, or
 imports SwiftUI, `swift build` fails on Linux immediately.
@@ -240,7 +240,7 @@ for the compiler on the UI layer:
 1. `swift build` / `swift test` compile and run **all** of `Sources/TalkCore` — which is why
    as much logic as possible lives there, including transcript grouping, previews, relative
    timestamps and mention syntax, none of which are inherently UI.
-2. `swiftc -parse` over `TalkForMac/**` catches syntax errors.
+2. `swiftc -parse` over `Kvidr/**` catches syntax errors.
 3. `Tools/validate_pbxproj.py` parses the hand-written Xcode project as an OpenStep plist
    and checks for dangling references and malformed targets, so the worst failure —
    "the project won't open" — is caught without Xcode.
@@ -249,7 +249,7 @@ The macOS CI job is what actually type-checks the SwiftUI layer.
 
 ## Logging
 
-`os.Logger` with subsystem `dk.creativeoak.TalkForMac` and categories
+`os.Logger` with subsystem `app.kvidr.mac` and categories
 `auth`, `api`, `sync`, `chat`, `persistence`, `notification`, `ui`.
 `Authorization` headers and app passwords are never logged in any build. Message bodies
 are `private` in the log format and only materialize under the developer-mode flag.

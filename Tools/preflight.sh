@@ -17,7 +17,7 @@ echo "==> Imports"
 python3 Tools/check_imports.py
 
 echo "==> Xcode project"
-python3 Tools/validate_pbxproj.py TalkForMac.xcodeproj/project.pbxproj
+python3 Tools/validate_pbxproj.py Kvidr.xcodeproj/project.pbxproj
 
 echo
 echo "All checks that don't need a Mac have passed."

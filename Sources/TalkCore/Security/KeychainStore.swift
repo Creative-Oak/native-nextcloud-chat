@@ -16,7 +16,7 @@ struct KeychainStore: CredentialStore {
     let service: String
 
     init(service: String? = nil) {
-        self.service = service ?? Bundle.main.bundleIdentifier ?? "dk.creativeoak.TalkForMac"
+        self.service = service ?? Bundle.main.bundleIdentifier ?? "app.kvidr.mac"
     }
 
     func credentials(for accountID: String) throws -> Credentials? {

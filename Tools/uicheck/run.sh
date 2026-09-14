@@ -39,13 +39,13 @@ mkdir -p "$SRC"
 while IFS= read -r file; do
     target="$SRC/$(echo "$file" | tr '/' '_')"
     sed -E 's/#selector\(NS[A-Za-z]+\.([A-Za-z]+)\(_:\)\)/Selector("\1")/g' "$file" > "$target"
-done < <(find Sources/TalkCore TalkForMac -name '*.swift' \
+done < <(find Sources/TalkCore Kvidr -name '*.swift' \
     ! -path '*/Persistence/*' ! -path '*/Security/KeychainStore.swift')
 
 cp Tools/uicheck/shims/*.swift "$SRC" 2>/dev/null || true
 
 # shellcheck disable=SC2086
-$SWIFTC -typecheck -module-name TalkForMacCheck \
+$SWIFTC -typecheck -module-name KvidrCheck \
     -swift-version 6 \
     -I "$MODULES" \
     "$SRC"/*.swift
@@ -59,6 +59,6 @@ while IFS= read -r file; do
         echo "$output"
         failed=1
     fi
-done < <(find Sources/TalkCore TalkForMac -name '*.swift' \
+done < <(find Sources/TalkCore Kvidr -name '*.swift' \
     \( -path '*/Persistence/*' -o -path '*/Security/KeychainStore.swift' \))
 [ "$failed" -eq 0 ] || { echo "syntax errors in the files that can only be parsed"; exit 1; }

@@ -69,7 +69,7 @@ enum TalkError: Error, Sendable, Equatable {
         case .invalidServerURL(let input):
             "“\(input)” doesn’t look like a Nextcloud address."
         case .insecureServer(let host):
-            "\(host) doesn’t use HTTPS. Talk for Mac requires a secure connection."
+            "\(host) doesn’t use HTTPS. kvidr requires a secure connection."
         case .missingCapability(let name):
             "This server’s Talk version doesn’t support \(name)."
         case .notAuthenticated:

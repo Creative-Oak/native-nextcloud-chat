@@ -23,7 +23,7 @@ struct LoginView: View {
                     .foregroundStyle(Color.accentColor.gradient)
 
                 VStack(spacing: 4) {
-                    Text("Talk for Mac")
+                    Text("kvidr")
                         .font(.system(size: 22, weight: .semibold))
                     Text("Connect your Nextcloud to start chatting.")
                         .font(.callout)

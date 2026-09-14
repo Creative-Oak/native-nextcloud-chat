@@ -2,7 +2,7 @@
 
 Living document. Checked off as work lands; new discoveries get appended.
 
-**Decisions (2026-09-13):** name *Talk for Mac*, bundle `dk.creativeoak.TalkForMac`,
+**Decisions (2026-09-13):** name *kvidr*, bundle `app.kvidr.mac`,
 deployment target **macOS 26**, persistence **SwiftData**, **macOS CI** on GitHub Actions.
 
 **Build constraint:** the authoring environment is Linux with the Swift 6.1.2 toolchain.
@@ -26,7 +26,7 @@ target is compiled by CI on a macOS runner. Anything not yet green on CI is mark
 ## Phase 1 — Skeleton, auth, capabilities ✅
 
 - [x] `Package.swift` (TalkCore + tests), Linux build green
-- [x] `TalkForMac.xcodeproj` with synchronized folders, macOS 26, sandbox + network entitlement
+- [x] `Kvidr.xcodeproj` with synchronized folders, macOS 26, sandbox + network entitlement
 - [x] Logging (`Log.swift`) with the seven categories and redaction rules
 - [x] `KeychainStore` (+ in-memory `CredentialStore` for tests)
 - [x] `OCSClient`: OCS envelope, typed `TalkError`, Basic auth, `OCS-APIRequest`,
@@ -131,7 +131,7 @@ target is compiled by CI on a macOS runner. Anything not yet green on CI is mark
 
 - **The app has never been built by Xcode.** It was written on Linux, where no macOS SDK
   exists. Everything in `Sources/TalkCore` is built and tested on every change;
-  `TalkForMac/` is **type-checked** by `Tools/preflight.sh` against stand-in SwiftUI,
+  `Kvidr/` is **type-checked** by `Tools/preflight.sh` against stand-in SwiftUI,
   AppKit, SwiftData, Combine and UserNotifications modules (`Tools/uicheck`) under Swift 6,
   which is what catches a wrong argument label, a missing member or an isolation mistake
   before Xcode does. What that cannot check is the parts with no stand-in: how Liquid Glass

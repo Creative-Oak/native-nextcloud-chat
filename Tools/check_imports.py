@@ -39,7 +39,7 @@ def strip_comments(source):
 def check():
     problems = []
 
-    for path in sorted(glob.glob("TalkForMac/**/*.swift", recursive=True)):
+    for path in sorted(glob.glob("Kvidr/**/*.swift", recursive=True)):
         source = open(path, encoding="utf-8").read()
         body = strip_comments(source)
         header = source[:600]
@@ -69,7 +69,7 @@ if __name__ == "__main__":
     for problem in found:
         print("  problem:", problem)
     if not found:
-        app = len(glob.glob("TalkForMac/**/*.swift", recursive=True))
+        app = len(glob.glob("Kvidr/**/*.swift", recursive=True))
         core = len(glob.glob("Sources/TalkCore/**/*.swift", recursive=True))
         print(f"imports OK — {app} app files, {core} core files")
     sys.exit(1 if found else 0)

@@ -6,9 +6,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "AA0000000000000000000050"
-               BuildableName = "Talk for Mac.app"
-               BlueprintName = "TalkForMac"
-               ReferencedContainer = "container:TalkForMac.xcodeproj">
+               BuildableName = "kvidr.app"
+               BlueprintName = "Kvidr"
+               ReferencedContainer = "container:Kvidr.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -22,9 +22,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "AA0000000000000000000050"
-            BuildableName = "Talk for Mac.app"
-            BlueprintName = "TalkForMac"
-            ReferencedContainer = "container:TalkForMac.xcodeproj">
+            BuildableName = "kvidr.app"
+            BlueprintName = "Kvidr"
+            ReferencedContainer = "container:Kvidr.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </LaunchAction>
@@ -33,9 +33,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "AA0000000000000000000050"
-            BuildableName = "Talk for Mac.app"
-            BlueprintName = "TalkForMac"
-            ReferencedContainer = "container:TalkForMac.xcodeproj">
+            BuildableName = "kvidr.app"
+            BlueprintName = "Kvidr"
+            ReferencedContainer = "container:Kvidr.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>

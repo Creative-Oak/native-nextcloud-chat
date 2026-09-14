@@ -74,7 +74,7 @@ final class AppDependencies {
         let device = ProcessInfo.processInfo.hostName
         // This string becomes the app password's name in the user's security settings, so
         // it has to identify both the app and which Mac it came from.
-        return "Talk for Mac \(version) (\(device))"
+        return "kvidr \(version) (\(device))"
     }()
 
     init(inMemory: Bool = false) {

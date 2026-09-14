@@ -113,7 +113,7 @@ private actor AvatarDiskCache {
 
     init() {
         let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
-        directory = caches?.appendingPathComponent("dk.creativeoak.TalkForMac/Avatars", isDirectory: true)
+        directory = caches?.appendingPathComponent("app.kvidr.mac/Avatars", isDirectory: true)
         if let directory {
             try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         }

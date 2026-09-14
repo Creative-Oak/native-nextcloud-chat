@@ -25,7 +25,7 @@ jobs:
       - name: Validate the Xcode project
         # Parses project.pbxproj as an OpenStep plist and checks for the things that make
         # Xcode refuse to open a project. Runs on Linux, where there is no Xcode to ask.
-        run: python3 Tools/validate_pbxproj.py TalkForMac.xcodeproj/project.pbxproj
+        run: python3 Tools/validate_pbxproj.py Kvidr.xcodeproj/project.pbxproj
       - name: Build
         run: swift build
       - name: Test
@@ -48,8 +48,8 @@ jobs:
       - name: Build the app
         run: >
           xcodebuild build
-          -project TalkForMac.xcodeproj
-          -scheme TalkForMac
+          -project Kvidr.xcodeproj
+          -scheme Kvidr
           -configuration Debug
           -destination 'platform=macOS'
           -quiet

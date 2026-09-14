@@ -1,4 +1,4 @@
-# Talk for Mac
+# kvidr
 
 A native macOS client for [Nextcloud Talk](https://nextcloud.com/talk/), focused on text
 chat. Swift and SwiftUI, with AppKit where AppKit behaves better. No Electron, no web view
@@ -19,10 +19,10 @@ real menu commands, keyboard-first navigation, unread state you can trust.
 ## Building
 
 ```sh
-open TalkForMac.xcodeproj      # then ⌘R
+open Kvidr.xcodeproj      # then ⌘R
 ```
 
-The project uses Xcode 16+ synchronized folder groups, so new files under `TalkForMac/`
+The project uses Xcode 16+ synchronized folder groups, so new files under `Kvidr/`
 and `Sources/TalkCore/` are picked up automatically — there is no file list to maintain.
 
 `./Tools/preflight.sh` runs everything that can be checked without a Mac: the core build and
@@ -39,7 +39,7 @@ swift test
 
 ## Signing in
 
-Talk for Mac uses **Login Flow v2**: you enter your server address, approve the app in your
+kvidr uses **Login Flow v2**: you enter your server address, approve the app in your
 browser, and the app receives a device-specific app password. Your Nextcloud password is
 never typed into, or seen by, this app. The app password is stored in the macOS Keychain and
 is revoked when you remove the account.

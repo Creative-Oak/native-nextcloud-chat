@@ -6,7 +6,7 @@ enum TalkWindow {
 }
 
 @main
-struct TalkForMacApp: App {
+struct KvidrApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var app = AppModel()
 

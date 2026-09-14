@@ -14,7 +14,7 @@ import os
 /// poll tokens, or message bodies. Message bodies may only be logged via
 /// ``LogCategory/sensitive(_:)``, which is silent unless developer mode is on.
 enum Log {
-    static let subsystem = "dk.creativeoak.TalkForMac"
+    static let subsystem = "app.kvidr.mac"
 
     static let auth = LogCategory("auth")
     static let api = LogCategory("api")

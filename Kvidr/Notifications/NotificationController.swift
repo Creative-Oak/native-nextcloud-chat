@@ -4,7 +4,7 @@ import UserNotifications
 
 /// macOS notifications and the Dock badge.
 ///
-/// Scope note: a Mac app that is not running cannot receive anything. Talk for Mac follows
+/// Scope note: a Mac app that is not running cannot receive anything. kvidr follows
 /// the ordinary macOS messaging-app model — it keeps running after its last window closes
 /// and syncs while running. What real push would require is written up in
 /// docs/NEXTCLOUD_API.md § 10; there is no fake push architecture here.

@@ -5,7 +5,7 @@ Parses project.pbxproj as an OpenStep plist and checks the things that make Xcod
 refuse to open a project: malformed syntax, a missing rootObject, dangling object
 references, and targets that don't point at real build phases or configurations.
 
-Run:  python3 Tools/validate_pbxproj.py TalkForMac.xcodeproj/project.pbxproj
+Run:  python3 Tools/validate_pbxproj.py Kvidr.xcodeproj/project.pbxproj
 """
 import re
 import sys
@@ -179,7 +179,7 @@ def validate(path):
 
 
 if __name__ == "__main__":
-    paths = sys.argv[1:] or ["TalkForMac.xcodeproj/project.pbxproj"]
+    paths = sys.argv[1:] or ["Kvidr.xcodeproj/project.pbxproj"]
     failures = []
     for path in paths:
         failures += validate(path)

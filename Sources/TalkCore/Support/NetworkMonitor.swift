@@ -61,7 +61,7 @@ actor SystemNetworkMonitor: NetworkMonitoring {
             let state: ConnectionState = path.status == .satisfied ? .online : .offline
             Task { await self?.update(state) }
         }
-        monitor.start(queue: DispatchQueue(label: "dk.creativeoak.TalkForMac.network"))
+        monitor.start(queue: DispatchQueue(label: "app.kvidr.mac.network"))
     }
 
     private func update(_ state: ConnectionState) {

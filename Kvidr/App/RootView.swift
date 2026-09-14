@@ -36,7 +36,7 @@ struct RootView: View {
                 splitView
             }
         }
-        .remembersWindowFrame(named: "TalkForMacMain")
+        .remembersWindowFrame(named: "KvidrMain")
         .task { await app.start() }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             app.isApplicationActive = true
@@ -156,7 +156,7 @@ struct RootView: View {
             if app.connection == .offline {
                 Label("Offline", systemImage: "wifi.slash")
                     .foregroundStyle(.secondary)
-                    .help("Showing cached conversations. Talk for Mac will reconnect on its own.")
+                    .help("Showing cached conversations. kvidr will reconnect on its own.")
             }
         }
 
@@ -211,7 +211,7 @@ private struct ReauthenticationView: View {
                 .foregroundStyle(.secondary)
             Text("Sign in again")
                 .font(.title2.weight(.semibold))
-            Text("Talk for Mac’s access to \(account.server.displayString) has expired or was revoked.")
+            Text("kvidr’s access to \(account.server.displayString) has expired or was revoked.")
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 360)

@@ -19,7 +19,7 @@ A v1.0 native macOS client for Nextcloud Talk's text chat — 91 Swift files and
 | | |
 | --- | --- |
 | `Sources/TalkCore/` | Everything that isn't UI: models, OCS networking, services, the two sync engines, message rendering, the SwiftData cache, the Keychain wrapper. A Swift package, so it builds and tests on Linux — which is what has kept it free of any UI dependency. |
-| `TalkForMac/` | SwiftUI and AppKit. The app target. |
+| `Kvidr/` | SwiftUI and AppKit. The app target. |
 
 Both are in the Xcode target through Xcode 16+ **synchronized folder groups**, so there is
 no file list to maintain — new files appear in the target automatically.
@@ -69,7 +69,7 @@ Four areas, and the first build's errors will be concentrated in them:
    same reason.
 3. **Liquid Glass** — the declarations are type-checked against the stub, but how
    `glassEffect`, `GlassEffectContainer` and `.buttonStyle(.glass)` actually *render* is
-   not. `TalkForMac/UI/Design/GlassStyle.swift` is the single place to adjust them.
+   not. `Kvidr/UI/Design/GlassStyle.swift` is the single place to adjust them.
 4. **Runtime behaviour** — layout, animation, scroll position, focus, and every
    interaction with a real server. No type checker has an opinion about these.
 
@@ -88,7 +88,7 @@ Four areas, and the first build's errors will be concentrated in them:
 
 ```sh
 git clone <this repo> && cd native-nextcloud-chat
-open TalkForMac.xcodeproj
+open Kvidr.xcodeproj
 ```
 
 ⌘B.
@@ -97,7 +97,7 @@ If Xcode refuses to open the project at all, that is a different problem from a 
 error. Run the validator and send me its output:
 
 ```sh
-python3 Tools/validate_pbxproj.py TalkForMac.xcodeproj/project.pbxproj
+python3 Tools/validate_pbxproj.py Kvidr.xcodeproj/project.pbxproj
 ```
 
 While the app target is broken you can still work on everything else with
@@ -105,16 +105,16 @@ While the app target is broken you can still work on everything else with
 
 ### Step 2 — Signing
 
-**Select your team**: TalkForMac target → Signing & Capabilities → Team. Signing style is
+**Select your team**: Kvidr target → Signing & Capabilities → Team. Signing style is
 already Automatic and the hardened runtime is on.
 
-The bundle identifier is `dk.creativeoak.TalkForMac`. If that clashes with something you
+The bundle identifier is `app.kvidr.mac`. If that clashes with something you
 already have, or a free personal team refuses it, change `PRODUCT_BUNDLE_IDENTIFIER` and
 nothing else — the Keychain's service name is read from the running bundle, so it follows
 along. (Changing it does orphan credentials stored under the old identifier: you sign in
 again, and the old app password is still revocable in Nextcloud's device list.)
 
-The entitlements (`TalkForMac.entitlements`) are set and should not need touching:
+The entitlements (`Kvidr.entitlements`) are set and should not need touching:
 
 | Entitlement | Why |
 | --- | --- |
@@ -137,7 +137,7 @@ seen by, this app. The app password goes into the Keychain and is revoked when y
 the account.
 
 It appears in Nextcloud under *Settings → Security → Devices & sessions* as
-`Talk for Mac 1.0.0 (<your Mac's hostname>)`, which is also how you revoke it.
+`kvidr 1.0.0 (<your Mac's hostname>)`, which is also how you revoke it.
 
 macOS will ask about notifications on first launch. Declining is fine — everything else
 still works.
@@ -159,7 +159,7 @@ for a public host. That is the only way to get this app to speak plain HTTP, on 
 | SwiftData macro errors in `CacheModels.swift` | The likeliest place to need a fix — macros can't be stood in for, so this file is only parsed here |
 | `KeychainStore.swift` errors | Same reason: Security.framework has no stand-in |
 | Anything about `glassEffect`, `GlassEffectContainer`, `.buttonStyle(.glass)` | The Liquid Glass APIs. Declarations came from Apple's documentation rather than memory and are checked against the stub, but they are new; `UI/Design/GlassStyle.swift` is the single place to adjust them |
-| `cannot find type 'X' in scope` in `TalkForMac/` | A core type that didn't make it into the target — check the synchronized group still covers `Sources/TalkCore` |
+| `cannot find type 'X' in scope` in `Kvidr/` | A core type that didn't make it into the target — check the synchronized group still covers `Sources/TalkCore` |
 | A SwiftUI signature mismatch anywhere else | The stub said one thing and your SDK says another. Fix the app, then the stub |
 | `main actor-isolated ... cannot be referenced` | Swift 6 concurrency. The stub models isolation, so this should be rare; the fix is almost always a capture list, not a `@preconcurrency` import |
 
@@ -174,7 +174,7 @@ batch is usually one fix repeated.
 | Launches to an empty window and stays empty | The cache failed to open. `AppDependencies.init` falls back to an in-memory store and logs it; the conversation list should still fill from the network within a second |
 | A feature is missing from a menu | That is by design: everything is gated on a server capability, not a version number. `docs/NEXTCLOUD_API.md` § 3 lists which capability gates what |
 | Requests fail against a working server | Turn on verbose logging (below) and send me a request/response pair |
-| Notifications never appear | System Settings → Notifications → Talk for Mac; then Settings → Notifications in the app |
+| Notifications never appear | System Settings → Notifications → kvidr; then Settings → Notifications in the app |
 
 ### Logs
 
@@ -182,7 +182,7 @@ batch is usually one fix repeated.
 off by default, deliberately. Then:
 
 ```sh
-log stream --predicate 'subsystem == "dk.creativeoak.TalkForMac"' --level debug
+log stream --predicate 'subsystem == "app.kvidr.mac"' --level debug
 ```
 
 Categories are `auth`, `api`, `sync`, `chat`, `persistence`, `notification`, `ui`. No
@@ -196,7 +196,7 @@ Linux checks on every push, so keep them passing:
 ```sh
 swift build && swift test                # works anywhere
 python3 Tools/check_imports.py           # works anywhere
-python3 Tools/validate_pbxproj.py TalkForMac.xcodeproj/project.pbxproj
+python3 Tools/validate_pbxproj.py Kvidr.xcodeproj/project.pbxproj
 ```
 
 `Tools/uicheck/run.sh` is the odd one out: it exists for machines with no macOS SDK, and I

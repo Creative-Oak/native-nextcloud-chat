@@ -7,7 +7,7 @@ import Foundation
 
 struct KeychainStore: CredentialStore {
     let service: String
-    init(service: String = "dk.creativeoak.TalkForMac") { self.service = service }
+    init(service: String = "app.kvidr.mac") { self.service = service }
     func credentials(for accountID: String) throws -> Credentials? { nil }
     func store(_ credentials: Credentials, for accountID: String) throws {}
     func remove(for accountID: String) throws {}

@@ -43,7 +43,7 @@ struct LoginFlowTests {
         AuthenticationService(
             transport: transport,
             credentialStore: store,
-            userAgent: "Talk for Mac/1.0 (Mac)",
+            userAgent: "kvidr/1.0 (Mac)",
             isInsecureHTTPAllowed: { allowsInsecure },
             sleeper: { _ in }        // no real waiting in tests
         )
@@ -61,7 +61,7 @@ struct LoginFlowTests {
         #expect(request.method == .post)
         #expect(request.url.path == "/index.php/login/v2")
         // The User-Agent becomes the app password's name in the user's settings.
-        #expect(request.headers["User-Agent"] == "Talk for Mac/1.0 (Mac)")
+        #expect(request.headers["User-Agent"] == "kvidr/1.0 (Mac)")
     }
 
     @Test("A login URL that isn't HTTPS is refused before the browser ever opens")

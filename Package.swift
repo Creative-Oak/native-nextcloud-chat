@@ -1,13 +1,13 @@
 // swift-tools-version: 6.1
 import PackageDescription
 
-// The macOS app target in TalkForMac.xcodeproj compiles Sources/TalkCore directly
+// The macOS app target in Kvidr.xcodeproj compiles Sources/TalkCore directly
 // (see docs/ARCHITECTURE.md § The one-module trick), so nothing in this repository
 // ever writes `import TalkCore`. This package exists so the whole non-UI application
 // can be built and tested from the command line — including on Linux CI, which is
 // what keeps the layering honest.
 let package = Package(
-    name: "TalkForMac",
+    name: "Kvidr",
     platforms: [.macOS("26.0")],
     products: [
         .library(name: "TalkCore", targets: ["TalkCore"])

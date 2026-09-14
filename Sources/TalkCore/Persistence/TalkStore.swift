@@ -284,7 +284,7 @@ extension ModelContainer {
     /// The app's on-disk store.
     static func talkContainer(inMemory: Bool = false) throws -> ModelContainer {
         let configuration = ModelConfiguration(
-            "TalkForMac",
+            "Kvidr",
             schema: Schema(CacheSchema.models),
             isStoredInMemoryOnly: inMemory
         )
