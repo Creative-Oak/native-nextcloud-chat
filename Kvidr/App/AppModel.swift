@@ -120,16 +120,27 @@ final class AppModel {
             Task { @MainActor in await self?.talkConfigurationChanged(hash: hash) }
         }
 
-        // Restore the previous selection if it still exists.
-        let remembered = dependencies.preferences.lastSelectedToken
-        if let remembered, list.index[remembered] != nil {
-            selectedToken = remembered
-        } else {
-            selectedToken = nil
-        }
+        restoreSelection(from: list)
 
         startConversationSync(session: session, list: list)
         await notifications.requestAuthorizationIfNeeded()
+    }
+
+    /// Restores the previously open conversation, if it still exists.
+    ///
+    /// Not a plain assignment: `selectedToken`'s `didSet` is what opens a conversation, and
+    /// it does nothing when the token has not changed. Rebuilding the session for a
+    /// capability change comes back here with the same token still selected and the chat
+    /// model already torn down, so the assignment would be silently inert and the
+    /// conversation the user was reading would simply not come back.
+    private func restoreSelection(from list: ConversationListModel) {
+        let remembered = dependencies.preferences.lastSelectedToken
+        let token = remembered.flatMap { list.index[$0] != nil ? $0 : nil }
+        if selectedToken == token {
+            openSelectedConversation()
+        } else {
+            selectedToken = token
+        }
     }
 
     private func teardownSession() async {
@@ -296,7 +307,6 @@ final class AppModel {
                 }
             }
         }
-        
     }
 
     private func observeNetwork() {

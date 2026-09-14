@@ -39,14 +39,17 @@ struct ConversationIndex: Sendable, Equatable {
         conversations.filter { !$0.isArchived }
     }
 
+    /// One pass, no intermediate arrays: this is read on every badge update and on every
+    /// sidebar render.
     var totalUnreadCount: Int {
-        visibleConversations
-            .filter { $0.notificationLevel != .never }
-            .reduce(0) { $0 + $1.unreadMessages }
+        conversations.reduce(0) { total, conversation in
+            guard !conversation.isArchived, conversation.notificationLevel != .never else { return total }
+            return total + conversation.unreadMessages
+        }
     }
 
     var hasUnreadMention: Bool {
-        visibleConversations.contains { $0.unreadMention && $0.unreadMessages > 0 }
+        conversations.contains { !$0.isArchived && $0.unreadMention && $0.unreadMessages > 0 }
     }
 
     /// The most recent `lastActivity`, which is what the next incremental fetch asks from —

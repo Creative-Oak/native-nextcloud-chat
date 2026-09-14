@@ -42,11 +42,6 @@ final class ConversationListModel {
         return ConversationIndex.sections(for: conversations)
     }
 
-    /// Whether to show section headings at all — one section doesn't need a label.
-    var showsSectionHeadings: Bool {
-        !isFiltering && sections.count > 1
-    }
-
     var totalUnreadCount: Int { index.totalUnreadCount }
     var isFiltering: Bool { !filterText.trimmingCharacters(in: .whitespaces).isEmpty }
 

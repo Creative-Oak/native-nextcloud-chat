@@ -110,7 +110,7 @@ struct ConversationListView: View {
 
     @ViewBuilder
     private func contextMenu(for conversation: Conversation) -> some View {
-        Button(conversation.isFavorite ? "Remove from Favourites" : "Add to Favourite") {
+        Button(conversation.isFavorite ? "Remove from Favourites" : "Add to Favourites") {
             model.toggleFavorite(conversation)
         }
 

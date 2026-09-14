@@ -54,7 +54,7 @@ final class AttachmentQueue {
               let png = bitmap.representation(using: .png, properties: [:])
         else { return }
 
-        let name = "Pasted image \(Self.timestampFormatter.string(from: Date())).png"
+        let name = "Pasted image \(Self.timestampFormatter.string(from: .now)).png"
         let url = URL.temporaryDirectory.appending(path: name)
         do {
             try png.write(to: url)
@@ -82,10 +82,15 @@ final class AttachmentQueue {
     // MARK: - The queue
 
     private func start() {
-        guard pump == nil else { return }
+        guard pump == nil, transfers.contains(where: { $0.state == .queued }) else { return }
         pump = Task { [weak self] in
             await self?.drain()
             self?.pump = nil
+            // A file enqueued between the drain's last look and the pump being cleared saw
+            // a live pump and did nothing, and would then sit as `.queued` with nothing
+            // left to run it. Asking again once the pump is gone closes that window; with
+            // nothing queued this returns immediately.
+            self?.start()
         }
     }
 
@@ -157,8 +162,12 @@ final class AttachmentQueue {
         )
     }
 
+    /// Fixed format, so fixed locale: left to the user's own, this same pattern writes
+    /// 2568 on a Buddhist calendar and Arabic-Indic digits in some locales — into a file
+    /// name, which is the one place a date should be plain and sortable.
     private static let timestampFormatter: DateFormatter = {
         let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "yyyy-MM-dd 'at' HH.mm.ss"
         return formatter
     }()
