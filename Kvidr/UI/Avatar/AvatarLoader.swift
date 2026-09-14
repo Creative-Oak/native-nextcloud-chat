@@ -55,8 +55,22 @@ final class AvatarLoader {
         return image
     }
 
+    /// How long a cached user avatar is trusted.
+    ///
+    /// A conversation avatar's key carries the server's version string, so a cached copy is
+    /// current by definition and is kept forever. A user avatar has no such version — the
+    /// key can only say *who*, never *which picture* — so on disk it would otherwise
+    /// outlive the profile picture it holds, and someone who changes their photo would keep
+    /// their old face here indefinitely. A day is long enough that avatars are effectively
+    /// free, and short enough that a new one turns up the same day.
+    private static let userAvatarMaximumAge: TimeInterval = 24 * 60 * 60
+
     private func fetch(_ subject: Subject, size: Int, dark: Bool, key: String) async -> NSImage? {
-        if let data = await diskCache.read(key: key), let image = NSImage(data: data) {
+        let maximumAge: TimeInterval? = switch subject {
+        case .user: Self.userAvatarMaximumAge
+        case .conversation: nil
+        }
+        if let data = await diskCache.read(key: key, maximumAge: maximumAge), let image = NSImage(data: data) {
             store(image, for: key)
             return image
         }
@@ -109,27 +123,30 @@ final class AvatarLoader {
 /// Disk half of the avatar cache. An actor so file I/O stays off the main thread; it only
 /// ever moves `Data`, which crosses actor boundaries freely.
 private actor AvatarDiskCache {
-    private let directory: URL?
+    private let directory: URL
 
     init() {
-        let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
-        directory = caches?.appendingPathComponent("app.kvidr.mac/Avatars", isDirectory: true)
-        if let directory {
-            try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        }
+        directory = URL.cachesDirectory.appending(path: "app.kvidr.mac/Avatars", directoryHint: .isDirectory)
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     }
 
-    func read(key: String) -> Data? {
-        guard let url = fileURL(key) else { return nil }
+    /// - Parameter maximumAge: how old the file may be, or `nil` when the key itself
+    ///   identifies the content and age therefore says nothing.
+    func read(key: String, maximumAge: TimeInterval?) -> Data? {
+        let url = fileURL(key)
+        if let maximumAge {
+            guard let modified = try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate,
+                  Date.now.timeIntervalSince(modified) < maximumAge
+            else { return nil }
+        }
         return try? Data(contentsOf: url)
     }
 
     func write(_ data: Data, key: String) {
-        guard let url = fileURL(key) else { return }
-        try? data.write(to: url, options: .atomic)
+        try? data.write(to: fileURL(key), options: .atomic)
     }
 
-    private func fileURL(_ key: String) -> URL? {
-        directory?.appendingPathComponent("\(key).img")
+    private func fileURL(_ key: String) -> URL {
+        directory.appending(path: "\(key).img")
     }
 }

@@ -344,6 +344,9 @@ final class ChatModel {
         sendReadMarker(marker)
     }
 
+    /// The highest marker this conversation has actually told the server about.
+    private var sentReadMarker = 0
+
     private func sendReadMarker(_ messageID: Int) {
         guard capabilities.canSetReadMarker else { return }
         // Coalesced: scrolling through a hundred messages sends one marker, not a hundred.
@@ -354,11 +357,21 @@ final class ChatModel {
         Task { [weak self] in
             guard let self else { return }
             defer { self.isSendingReadMarker = false }
-            let marker = self.pendingReadMarker
-            do throws(TalkError) {
-                try await self.session.chat.markRead(token: self.token, lastReadMessageID: marker)
-            } catch {
-                Log.chat.warning("Couldn’t update the read marker: \(error.userMessage)")
+            // Drain, rather than send once: markers raised while a request was in flight
+            // are the whole point of coalescing them, and the last one in a burst is the
+            // one that matters. Sending only the marker this call started with left the
+            // server behind by the rest of the burst until something else happened to ask
+            // again — and if nothing did, the conversation stayed unread everywhere else.
+            while self.pendingReadMarker > self.sentReadMarker {
+                let marker = self.pendingReadMarker
+                do throws(TalkError) {
+                    try await self.session.chat.markRead(token: self.token, lastReadMessageID: marker)
+                    self.sentReadMarker = marker
+                } catch {
+                    // Leave `pendingReadMarker` where it is: the next read event retries it.
+                    Log.chat.warning("Couldn’t update the read marker: \(error.userMessage)")
+                    return
+                }
             }
         }
     }
@@ -462,6 +475,7 @@ final class ChatModel {
     }
 
     private func restorePendingMessages(from cached: [Message]) {
+        var restoredAny = false
         for message in cached where message.deliveryState.isPending {
             // Anything still in flight when the app quit comes back as a failed send the
             // user can retry, rather than silently disappearing.
@@ -470,7 +484,8 @@ final class ChatModel {
                 restored.deliveryState = .failed(reason: "Not sent")
             }
             timeline.addPending(restored)
-            rebuildRows()
+            restoredAny = true
         }
+        if restoredAny { rebuildRows() }
     }
 }

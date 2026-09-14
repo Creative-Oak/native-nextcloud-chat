@@ -55,7 +55,7 @@ final class AttachmentQueue {
         else { return }
 
         let name = "Pasted image \(Self.timestampFormatter.string(from: Date())).png"
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent(name)
+        let url = URL.temporaryDirectory.appending(path: name)
         do {
             try png.write(to: url)
         } catch {

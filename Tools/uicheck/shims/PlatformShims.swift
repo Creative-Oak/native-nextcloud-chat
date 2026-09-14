@@ -56,3 +56,12 @@ actor TalkStore {
     func syncState(accountID: String) -> SyncCursor { SyncCursor() }
     func save(syncState: SyncCursor, accountID: String) {}
 }
+
+/// Darwin-only Foundation: swift-corelibs-foundation has no `URL.cachesDirectory`, so
+/// without this the app's correct use of it reads as a mistake here rather than compiling
+/// as it will on a Mac.
+#if !canImport(Darwin)
+extension URL {
+    static var cachesDirectory: URL { URL(fileURLWithPath: NSTemporaryDirectory()) }
+}
+#endif
