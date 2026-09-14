@@ -32,7 +32,15 @@ struct ConversationListView: View {
     var body: some View {
         List(selection: $selection) {
             ForEach(model.sections) { group in
-                if model.showsSectionHeadings {
+                // Favourites become the grid of faces at the top, the way Messages pins
+                // conversations. Talk's "favourite" already means exactly this, so it is
+                // a different presentation of an existing idea rather than a new one.
+                // While filtering, everything is one flat list of results.
+                if group.section == .favorites, !model.isFiltering {
+                    PinnedConversations(conversations: group.items, selection: $selection)
+                        .listRowInsets(EdgeInsets())
+                        .listRowSeparator(.hidden)
+                } else if model.showsSectionHeadings {
                     Section {
                         rows(group.items)
                     } header: {
@@ -125,6 +133,69 @@ struct ConversationListView: View {
 
         Button("Copy Link") { model.copyLink(to: conversation) }
         Button("Open in Nextcloud") { model.openInBrowser(conversation) }
+    }
+}
+
+/// The pinned favourites, as a grid of faces above the list.
+///
+/// Plain `Button`s rather than List rows: these aren't selectable rows, they're controls
+/// that set the selection — and a tap recogniser on an actual row would fight the List for
+/// the click, which is a mistake this file has made before.
+private struct PinnedConversations: View {
+    let conversations: [Conversation]
+    @Binding var selection: String?
+
+    private let columns = [GridItem(.adaptive(minimum: 76), spacing: 2)]
+
+    var body: some View {
+        LazyVGrid(columns: columns, spacing: 8) {
+            ForEach(conversations) { conversation in
+                Button {
+                    selection = conversation.token
+                } label: {
+                    VStack(spacing: 4) {
+                        AvatarView(conversation: conversation, size: 52)
+                            .overlay(alignment: .topTrailing) { badge(for: conversation) }
+                        Text(conversation.displayName)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 5)
+                    .contentShape(.rect)
+                    .background {
+                        if selection == conversation.token {
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .fill(Color.accentColor.opacity(0.18))
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+                .help(conversation.displayName)
+                .accessibilityLabel(label(for: conversation))
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 8)
+    }
+
+    @ViewBuilder
+    private func badge(for conversation: Conversation) -> some View {
+        if conversation.hasUnread {
+            Circle()
+                .fill(Color.accentColor)
+                .frame(width: 12, height: 12)
+                // A ring in the sidebar's own colour, so the dot reads as sitting on top
+                // of the avatar rather than punched out of it.
+                .overlay { Circle().stroke(Color(nsColor: .windowBackgroundColor), lineWidth: 2) }
+        }
+    }
+
+    private func label(for conversation: Conversation) -> String {
+        conversation.hasUnread
+            ? "\(conversation.displayName), \(conversation.unreadMessages) unread"
+            : conversation.displayName
     }
 }
 

@@ -14,6 +14,9 @@ struct ChatView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Owned by the window so ⌘⇧K and Return-from-the-sidebar can move focus here.
     @Binding var composerFocused: Bool
+    /// Both live on the window, and the header is the only thing that shows them.
+    var onNewConversation: () -> Void
+    var onShowDetails: () -> Void
 
     @State private var highlightedMessageID: Int?
     @State private var didInitialScroll = false
@@ -24,8 +27,11 @@ struct ChatView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ChatHeaderView(model: model)
-            Divider()
+            ChatHeaderView(
+                model: model,
+                onNewConversation: onNewConversation,
+                onShowDetails: onShowDetails
+            )
             transcript
                 .overlay(alignment: .top) {
                     if let error = model.lastError, error != .cancelled {
@@ -388,39 +394,71 @@ private struct InlineStatusBar: View {
     }
 }
 
-/// The conversation title bar: who you're talking to, and the state of the connection.
+/// The conversation header: who you're talking to, centred, and the two controls that
+/// belong to the window rather than to the transcript.
+///
+/// The person is the control. Tapping the avatar-and-name cluster opens the details,
+/// which is why there is no separate inspector button in the toolbar any more — the thing
+/// you want details *about* is the thing you click.
 private struct ChatHeaderView: View {
     @Bindable var model: ChatModel
+    var onNewConversation: () -> Void
+    var onShowDetails: () -> Void
 
     var body: some View {
-        HStack(spacing: 10) {
-            AvatarView(conversation: model.conversation, size: 28)
+        ZStack {
+            Button(action: onShowDetails) {
+                VStack(spacing: 4) {
+                    AvatarView(conversation: model.conversation, size: 44)
 
-            VStack(alignment: .leading, spacing: 0) {
-                Text(model.conversation.displayName)
-                    .font(.system(size: 13, weight: .semibold))
-                    .lineLimit(1)
-                if let subtitle {
-                    Text(subtitle)
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                    HStack(spacing: 3) {
+                        Text(model.conversation.displayName)
+                            .font(.system(size: 13, weight: .semibold))
+                            .lineLimit(1)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(.tertiary)
+                    }
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 3)
+                    .glass(.floating, cornerRadius: 11)
+
+                    if let subtitle {
+                        Text(subtitle)
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
                 }
             }
+            .buttonStyle(.plain)
+            .help("Conversation details")
 
-            Spacer()
+            HStack {
+                Button(action: onNewConversation) {
+                    Image(systemName: "square.and.pencil")
+                        .font(.system(size: 13))
+                        .frame(width: 16, height: 16)
+                }
+                .buttonStyle(.glass)
+                .buttonBorderShape(.circle)
+                .help("New Conversation (⌘N)")
 
-            if model.syncState == .offline {
-                Label("Offline", systemImage: "wifi.slash")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .labelStyle(.titleAndIcon)
-            } else if case .reconnecting = model.syncState {
-                ProgressView().controlSize(.small)
+                Spacer()
+
+                if model.syncState == .offline {
+                    Label("Offline", systemImage: "wifi.slash")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .labelStyle(.titleAndIcon)
+                } else if case .reconnecting = model.syncState {
+                    ProgressView().controlSize(.small)
+                }
             }
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 8)
+        .padding(.top, 6)
+        .padding(.bottom, 10)
         .background(.bar)
     }
 

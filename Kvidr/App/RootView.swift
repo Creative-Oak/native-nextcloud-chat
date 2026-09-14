@@ -97,7 +97,12 @@ struct RootView: View {
             }
         } detail: {
             if let chat = app.chat {
-                ChatView(model: chat, composerFocused: $composerFocused)
+                ChatView(
+                    model: chat,
+                    composerFocused: $composerFocused,
+                    onNewConversation: { isShowingNewConversation = true },
+                    onShowDetails: { withAnimation(.smooth) { isShowingInspector.toggle() } }
+                )
                     // A fresh view per conversation: no state bleeds between them.
                     .id(chat.token)
             } else {
@@ -173,18 +178,6 @@ struct RootView: View {
             .help("Go to Conversation (⌘K)")
         }
 
-        // `.primaryAction` pins it to the trailing edge of the window's toolbar, so the
-        // control that folds the inspector out sits in the corner the inspector comes
-        // from rather than floating in with the conversation's own controls.
-        ToolbarItem(placement: .primaryAction) {
-            Button {
-                withAnimation(.smooth) { isShowingInspector.toggle() }
-            } label: {
-                Label("Conversation Details", systemImage: "sidebar.trailing")
-            }
-            .help("Show conversation details")
-            .disabled(app.chat == nil)
-        }
     }
 }
 

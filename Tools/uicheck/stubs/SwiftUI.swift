@@ -949,6 +949,8 @@ extension View {
     public func toolbar<C: ToolbarContent>(@ToolbarContentBuilder content: () -> C) -> StubView { StubView() }
 
     public func scrollContentBackground(_ visibility: Visibility) -> StubView { StubView() }
+    public func listRowInsets(_ insets: EdgeInsets?) -> StubView { StubView() }
+    public func listRowSeparator(_ visibility: Visibility, edges: VerticalEdge.Set = .all) -> StubView { StubView() }
     public func scrollBounceBehavior(_ behavior: ScrollBounceBehavior, axes: Axis.Set = .vertical) -> StubView { StubView() }
     public func scrollTargetLayout() -> StubView { StubView() }
     public func defaultScrollAnchor(_ anchor: UnitPoint?) -> StubView { StubView() }
