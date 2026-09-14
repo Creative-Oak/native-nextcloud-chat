@@ -173,7 +173,10 @@ struct RootView: View {
             .help("Go to Conversation (⌘K)")
         }
 
-        ToolbarItem {
+        // `.primaryAction` pins it to the trailing edge of the window's toolbar, so the
+        // control that folds the inspector out sits in the corner the inspector comes
+        // from rather than floating in with the conversation's own controls.
+        ToolbarItem(placement: .primaryAction) {
             Button {
                 withAnimation(.smooth) { isShowingInspector.toggle() }
             } label: {

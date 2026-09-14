@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// The compose area: reply/edit context, the text field, and the send affordance.
 struct ComposerView: View {
@@ -43,15 +44,20 @@ struct ComposerView: View {
     private var editor: some View {
         HStack(alignment: .bottom, spacing: 8) {
             if model.attachments.canAttach {
-                Button(action: chooseFiles) {
-                    Image(systemName: "paperclip")
-                        .font(.system(size: 13))
+                Menu {
+                    Button("Photos…", systemImage: "photo") { choose(imagesOnly: true) }
+                    Button("Files…", systemImage: "folder") { choose(imagesOnly: false) }
+                        .keyboardShortcut("a", modifiers: [.command, .shift])
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 13, weight: .medium))
                         .frame(width: 16, height: 16)
                 }
+                .menuStyle(.button)
                 .buttonStyle(.glass)
                 .buttonBorderShape(.circle)
-                .help("Attach a file (⇧⌘A)")
-                .keyboardShortcut("a", modifiers: [.command, .shift])
+                .menuIndicator(.hidden)
+                .help("Add an attachment")
             }
 
             field
@@ -158,15 +164,19 @@ struct ComposerView: View {
         }
     }
 
-    /// ⇧⌘A and the paperclip. An open panel rather than a custom picker, because the
-    /// system one already knows about tags, recents, iCloud and everything else.
-    private func chooseFiles() {
+    /// An open panel rather than a custom picker, because the system one already knows
+    /// about tags, recents, iCloud and everything else. `imagesOnly` is the only thing
+    /// separating the two menu items — there is no second picker to maintain.
+    private func choose(imagesOnly: Bool) {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = true
         panel.canChooseDirectories = false
         panel.canChooseFiles = true
         panel.prompt = "Send"
-        panel.message = "Choose files to send to \(model.conversation.displayName)"
+        panel.message = imagesOnly
+            ? "Choose images to send to \(model.conversation.displayName)"
+            : "Choose files to send to \(model.conversation.displayName)"
+        if imagesOnly { panel.allowedContentTypes = [.image] }
 
         guard panel.runModal() == .OK else { return }
         model.attachments.enqueue(urls: panel.urls, replyTo: model.replyingTo?.messageID)

@@ -137,9 +137,9 @@ struct ConversationRow: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            AvatarView(conversation: conversation, size: 34)
+            AvatarView(conversation: conversation, size: 40)
 
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 4) {
                     if conversation.isFavorite {
                         Image(systemName: "star.fill")
@@ -147,24 +147,27 @@ struct ConversationRow: View {
                             .foregroundStyle(.tertiary)
                     }
                     Text(conversation.displayName)
-                        .font(.system(size: 13, weight: conversation.hasUnread ? .semibold : .regular))
+                        .font(.system(size: 14, weight: conversation.hasUnread ? .semibold : .medium))
                         .lineLimit(1)
                         .truncationMode(.tail)
 
                     Spacer(minLength: 4)
 
                     Text(timestamp)
-                        .font(.system(size: 10))
+                        .font(.system(size: 11))
                         .foregroundStyle(.tertiary)
                         .fixedSize()
                 }
 
-                HStack(spacing: 4) {
+                HStack(alignment: .top, spacing: 4) {
                     Text(preview)
-                        .font(.system(size: 11))
+                        .font(.system(size: 12))
                         .foregroundStyle(conversation.hasUnread ? .secondary : .tertiary)
-                        .lineLimit(1)
+                        // Two lines, like Messages: one line of preview is rarely enough
+                        // to tell two conversations apart at a glance.
+                        .lineLimit(2)
                         .truncationMode(.tail)
+                        .fixedSize(horizontal: false, vertical: true)
 
                     Spacer(minLength: 2)
 
@@ -184,7 +187,7 @@ struct ConversationRow: View {
                 }
             }
         }
-        .padding(.vertical, 3)
+        .padding(.vertical, 6)
         // Without this, only the drawn glyphs are hit-testable: the gaps the Spacers open
         // up between name, timestamp and preview swallow clicks, and the row reads as
         // having dead patches in it.

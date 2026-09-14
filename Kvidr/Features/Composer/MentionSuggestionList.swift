@@ -7,31 +7,35 @@ struct MentionSuggestionList: View {
     var onPick: (MentionSuggestion) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: 1) {
             ForEach(Array(suggestions.prefix(6).enumerated()), id: \.element.id) { index, suggestion in
                 row(suggestion, isHighlighted: index == highlighted)
                     .contentShape(.rect)
                     .onTapGesture { onPick(suggestion) }
             }
         }
-        .frame(width: 280, alignment: .leading)
-        .glass(.panel, cornerRadius: 10)
-        .shadow(color: .black.opacity(0.14), radius: 12, y: 4)
+        // Inset, so the highlight is a rounded pill inside the panel rather than a band
+        // running edge to edge across it.
+        .padding(5)
+        .frame(width: 300, alignment: .leading)
+        .glass(.panel, cornerRadius: 14)
+        .shadow(color: .black.opacity(0.18), radius: 14, y: 5)
         .accessibilityLabel("Mention suggestions")
     }
 
     private func row(_ suggestion: MentionSuggestion, isHighlighted: Bool) -> some View {
         HStack(spacing: 8) {
-            icon(for: suggestion)
-                .frame(width: 18)
+            avatar(for: suggestion)
 
-            VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 1) {
                 Text(suggestion.label)
+                    .font(.system(size: 13, weight: .medium))
                     .lineLimit(1)
                 if let detail = detail(for: suggestion) {
                     Text(detail)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+                        .font(.system(size: 11))
+                        .foregroundStyle(isHighlighted ? AnyShapeStyle(.white.opacity(0.75))
+                                                       : AnyShapeStyle(.secondary))
                         .lineLimit(1)
                 }
             }
@@ -39,27 +43,55 @@ struct MentionSuggestionList: View {
             Spacer(minLength: 0)
 
             if let status = suggestion.status, status.isOnline {
-                Circle().fill(.green).frame(width: 6, height: 6)
+                Circle()
+                    .fill(isHighlighted ? AnyShapeStyle(.white) : AnyShapeStyle(Color.green))
+                    .frame(width: 7, height: 7)
+                    .accessibilityLabel("Online")
             }
         }
-        .padding(.horizontal, 10)
+        .padding(.horizontal, 7)
         .padding(.vertical, 5)
-        .background(isHighlighted ? Color.accentColor.opacity(0.2) : .clear)
+        // A solid accent fill with white on top, the way a real menu highlights — the old
+        // 20% wash left the text at the same weight and read as a smudge.
+        .foregroundStyle(isHighlighted ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
+        .background {
+            if isHighlighted {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(Color.accentColor)
+            }
+        }
     }
 
+    /// People get their real avatar; the entries that aren't a person get a glyph in a
+    /// circle of the same size, so the column of icons stays a column.
     @ViewBuilder
-    private func icon(for suggestion: MentionSuggestion) -> some View {
+    private func avatar(for suggestion: MentionSuggestion) -> some View {
         switch suggestion.source {
-        case .calls:
-            Image(systemName: "megaphone").foregroundStyle(Color.accentColor)
-        case .groups:
-            Image(systemName: "person.2").foregroundStyle(.secondary)
-        case .guests:
-            Image(systemName: "person.crop.circle.dashed").foregroundStyle(.secondary)
-        case .federatedUsers:
-            Image(systemName: "globe").foregroundStyle(.secondary)
+        case .users, .federatedUsers:
+            ActorAvatarView(
+                actor: MessageActor(
+                    kind: suggestion.source == .users ? .users : .federatedUsers,
+                    id: suggestion.id,
+                    displayName: suggestion.label
+                ),
+                size: 24
+            )
         default:
-            Image(systemName: "person.crop.circle").foregroundStyle(.secondary)
+            ZStack {
+                Circle().fill(.quaternary)
+                Image(systemName: symbol(for: suggestion.source))
+                    .font(.system(size: 11))
+            }
+            .frame(width: 24, height: 24)
+        }
+    }
+
+    private func symbol(for source: MentionSuggestion.Source) -> String {
+        switch source {
+        case .calls: "megaphone"
+        case .groups: "person.2"
+        case .guests: "person.crop.circle.dashed"
+        default: "person.crop.circle"
         }
     }
 
