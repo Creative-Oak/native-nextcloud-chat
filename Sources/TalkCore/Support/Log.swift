@@ -58,11 +58,14 @@ struct LogCategory: Sendable {
     /// and marked private to the logging system even then.
     func sensitive(_ message: @autoclosure () -> String) {
         guard Log.isDeveloperModeEnabled else { return }
+        // Evaluated into a local first: os_log's interpolation takes its arguments
+        // escaping, which a non-escaping autoclosure parameter can't be passed to.
+        let text = message()
         #if canImport(os)
-        logger.debug("\(message(), privacy: .private)")
+        logger.debug("\(text, privacy: .private)")
         #else
         guard Log.isStderrLoggingEnabled else { return }
-        FileHandle.standardError.write(Data("[\(name)] \(message())\n".utf8))
+        FileHandle.standardError.write(Data("[\(name)] \(text)\n".utf8))
         #endif
     }
 
