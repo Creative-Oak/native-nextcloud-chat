@@ -65,8 +65,9 @@ struct ComposerTextView: NSViewRepresentable {
         textView.textContainer?.lineFragmentPadding = 0
         textView.string = text
 
-        context.coordinator.textView = textView
-        DispatchQueue.main.async { context.coordinator.updateHeight() }
+        let coordinator = context.coordinator
+        coordinator.textView = textView
+        Task { @MainActor in coordinator.updateHeight() }
         return scrollView
     }
 
@@ -82,16 +83,16 @@ struct ComposerTextView: NSViewRepresentable {
         textView.isSelectable = true
 
         if let requested = caretRequest {
-            let clamped = min(max(requested, 0), textView.string.count)
-            textView.setSelectedRange(NSRange(location: clamped, length: 0))
+            let location = textView.string.utf16Offset(forCharacterOffset: requested)
+            textView.setSelectedRange(NSRange(location: location, length: 0))
             // Clear the request outside the update pass.
-            DispatchQueue.main.async { caretRequest = nil }
+            Task { @MainActor in caretRequest = nil }
         }
 
         if isFocused, textView.window?.firstResponder !== textView {
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 _ = textView.window?.makeFirstResponder(textView)
-                textView.setSelectedRange(NSRange(location: textView.string.count, length: 0))
+                textView.setSelectedRange(NSRange(location: textView.string.utf16.count, length: 0))
             }
         }
     }
@@ -109,13 +110,13 @@ struct ComposerTextView: NSViewRepresentable {
         func textDidChange(_ notification: Notification) {
             guard let textView = notification.object as? NSTextView else { return }
             parent.text = textView.string
-            parent.caret = textView.selectedRange().location
+            parent.caret = textView.string.characterOffset(forUTF16Offset: textView.selectedRange().location)
             updateHeight()
         }
 
         func textViewDidChangeSelection(_ notification: Notification) {
             guard let textView = notification.object as? NSTextView else { return }
-            let location = textView.selectedRange().location
+            let location = textView.string.characterOffset(forUTF16Offset: textView.selectedRange().location)
             if parent.caret != location { parent.caret = location }
         }
 

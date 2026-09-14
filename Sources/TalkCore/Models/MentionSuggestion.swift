@@ -44,7 +44,8 @@ struct MentionSuggestion: Sendable, Hashable, Identifiable {
 enum MentionComposer {
     /// The `@…` the caret is currently inside, if any.
     struct Query: Sendable, Equatable {
-        /// UTF-16-ish offsets into the composer string, matching what AppKit's text view uses.
+        /// `Character` offsets into the composer string. `ComposerTextView` converts to and
+        /// from the UTF-16 offsets AppKit's text view uses.
         var start: Int
         var end: Int
         /// The text typed after the `@` — what to search for.
