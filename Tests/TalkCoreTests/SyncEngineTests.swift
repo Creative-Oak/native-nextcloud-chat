@@ -245,6 +245,57 @@ struct ActiveChatSyncEngineTests {
         for await _ in first {}
         await engine.stop()
     }
+
+    @Test("A cold start that cannot load history stops, rather than reporting itself live")
+    func coldStartFailureDoesNotGoLive() async throws {
+        let transport = StubTransport { _ in .status(401) }
+        let (chat, conversations) = try services(transport)
+        let engine = ActiveChatSyncEngine(chat: chat, conversations: conversations, sleeper: { _ in })
+
+        var events: [ChatSyncEvent] = []
+        for await event in await engine.activate(token: token, lastKnownMessageID: 0) {
+            events.append(event)
+        }
+
+        #expect(events.compactMap(\.state) == [.loadingHistory, .idle])
+        #expect(events.compactMap(\.error) == [.unauthorized])
+        // The credentials were rejected: saying "live" after that, and then polling with
+        // them anyway, is both untrue and a wasted request.
+        #expect(!events.contains { $0.state == .live })
+    }
+
+    @Test("The conversation you switched *to* keeps its stream when the old loop winds up")
+    func switchingKeepsTheNewStream() async throws {
+        let transport = StubTransport { _ in .status(304) }
+        let (chat, conversations) = try services(transport)
+        let engine = ActiveChatSyncEngine(chat: chat, conversations: conversations, sleeper: { _ in })
+
+        let first = await engine.activate(token: "first", lastKnownMessageID: 1)
+        let second = await engine.activate(token: "second", lastKnownMessageID: 1)
+        for await _ in first {}
+
+        // The cancelled loop is not stopped where it was cancelled: it is suspended in a
+        // poll and only winds up when that returns, by which time the *next* conversation
+        // owns the engine's continuation. Finishing that one on the way out closed the new
+        // conversation's stream and left it with no sync loop — so the assertion is that
+        // the second stream is still open a good while after the first one has ended.
+        let secondStreamEnded = await withTaskGroup(of: Bool.self) { group in
+            group.addTask {
+                for await _ in second {}
+                return true
+            }
+            group.addTask {
+                try? await Task.sleep(for: .milliseconds(400))
+                return false
+            }
+            let first = await group.next() ?? false
+            group.cancelAll()
+            return first
+        }
+
+        #expect(secondStreamEnded == false)
+        await engine.stop()
+    }
 }
 
 @Suite("Conversation sync engine", .timeLimit(.minutes(1)))

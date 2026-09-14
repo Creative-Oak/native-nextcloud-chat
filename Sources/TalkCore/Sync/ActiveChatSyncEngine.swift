@@ -59,7 +59,7 @@ actor ActiveChatSyncEngine {
         self.continuation = continuation
 
         task = Task { [weak self] in
-            await self?.run(token: token, lastKnownMessageID: lastKnownMessageID)
+            await self?.run(token: token, lastKnownMessageID: lastKnownMessageID, into: continuation)
         }
 
         return stream
@@ -87,24 +87,42 @@ actor ActiveChatSyncEngine {
 
     // MARK: - The loop
 
-    private func run(token: String, lastKnownMessageID: Int) async {
+    /// Writes to the continuation it was started with, never to `self.continuation`.
+    ///
+    /// The two are the same only until the next `activate`. A cancelled loop is not stopped
+    /// where it was cancelled — it is suspended in a 30-second poll, and resumes whenever
+    /// that returns, which is long after the next conversation has taken `self.continuation`
+    /// for its own. Finishing *that* one on the way out would have closed the new
+    /// conversation's stream and left it with no sync loop at all: exactly the bug switching
+    /// deterministically is meant to prevent.
+    private func run(
+        token: String,
+        lastKnownMessageID: Int,
+        into continuation: AsyncStream<ChatSyncEvent>.Continuation
+    ) async {
         var cursor = lastKnownMessageID
         var attempt = 0
         var lastCommonRead: Int?
 
         if cursor == 0 {
-            emit(.state(.loadingHistory))
+            continuation.yield(.state(.loadingHistory))
             do {
                 let batch = try await chat.history(token: token, limit: 100)
                 cursor = batch.messages.last?.messageID ?? batch.lastGivenID ?? 0
                 lastCommonRead = batch.lastCommonReadID
-                emit(.messages(batch))
+                continuation.yield(.messages(batch))
             } catch {
-                await handle(error: error, attempt: &attempt, token: token)
+                // Credentials rejected, or the conversation is gone: there is nothing to
+                // poll for, and announcing `.live` straight after a failure would be a lie.
+                guard await handle(error: error, attempt: &attempt, token: token, into: continuation) else {
+                    continuation.yield(.state(.idle))
+                    continuation.finish()
+                    return
+                }
             }
         }
 
-        emit(.state(.live))
+        continuation.yield(.state(.live))
 
         while !Task.isCancelled {
             do {
@@ -122,7 +140,7 @@ actor ActiveChatSyncEngine {
 
                 if attempt > 0 {
                     attempt = 0
-                    emit(.state(.live))
+                    continuation.yield(.state(.live))
                 }
 
                 // 304: the poll simply timed out with nothing new. Go straight round again.
@@ -130,21 +148,26 @@ actor ActiveChatSyncEngine {
 
                 cursor = batch.lastGivenID ?? batch.messages.last?.messageID ?? cursor
                 lastCommonRead = batch.lastCommonReadID ?? lastCommonRead
-                emit(.messages(batch))
+                continuation.yield(.messages(batch))
             } catch {
                 if Task.isCancelled { break }
-                let shouldContinue = await handle(error: error, attempt: &attempt, token: token)
+                let shouldContinue = await handle(error: error, attempt: &attempt, token: token, into: continuation)
                 if !shouldContinue { break }
             }
         }
 
-        emit(.state(.idle))
-        continuation?.finish()
+        continuation.yield(.state(.idle))
+        continuation.finish()
     }
 
     /// - Returns: whether the loop should keep going.
     @discardableResult
-    private func handle(error: TalkError, attempt: inout Int, token: String) async -> Bool {
+    private func handle(
+        error: TalkError,
+        attempt: inout Int,
+        token: String,
+        into continuation: AsyncStream<ChatSyncEvent>.Continuation
+    ) async -> Bool {
         switch error {
         case .cancelled:
             return false
@@ -152,12 +175,12 @@ actor ActiveChatSyncEngine {
         case .unauthorized:
             // Nothing will work until the user re-authenticates; stop rather than hammer.
             Log.sync.error("Chat sync stopped: credentials rejected")
-            emit(.failed(.unauthorized))
+            continuation.yield(.failed(.unauthorized))
             return false
 
         case .notFound:
             Log.sync.notice("Conversation \(token) is gone")
-            emit(.failed(.notFound))
+            continuation.yield(.failed(.notFound))
             return false
 
         case .sessionExpired:
@@ -168,12 +191,12 @@ actor ActiveChatSyncEngine {
             return true
 
         case .offline:
-            emit(.state(.offline))
+            continuation.yield(.state(.offline))
             attempt += 1
 
         default:
             attempt += 1
-            emit(.state(.reconnecting(attempt: attempt)))
+            continuation.yield(.state(.reconnecting(attempt: attempt)))
             Log.sync.warning("Chat poll failed (attempt \(attempt)): \(error.userMessage)")
         }
 
@@ -184,9 +207,5 @@ actor ActiveChatSyncEngine {
             return false
         }
         return !Task.isCancelled
-    }
-
-    private func emit(_ event: ChatSyncEvent) {
-        continuation?.yield(event)
     }
 }
