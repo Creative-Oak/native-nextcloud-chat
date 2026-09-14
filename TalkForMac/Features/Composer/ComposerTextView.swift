@@ -177,6 +177,11 @@ struct ComposerTextView: NSViewRepresentable {
         }
 
         /// Grows to fit, up to a ceiling, then scrolls.
+        ///
+        /// Explicitly main-actor: the delegate methods above get that inferred from
+        /// NSTextViewDelegate, but this one isn't a protocol requirement, so without it
+        /// the whole body reads and mutates AppKit state from a nonisolated context.
+        @MainActor
         func updateHeight() {
             guard let textView,
                   let container = textView.textContainer,
