@@ -35,7 +35,7 @@ final class PreviewLoader {
 
         let task = Task<NSImage?, Never> { [weak self] in
             guard let self else { return nil }
-            do {
+            do throws(TalkError) {
                 let data = try await self.session.attachments.preview(fileID: fileID, width: width, height: height)
                 guard let image = NSImage(data: data) else {
                     self.unavailable.insert(fileID)
@@ -45,8 +45,10 @@ final class PreviewLoader {
                 return image
             } catch {
                 // 404 here means "no preview for this kind of file", which is a normal
-                // answer, not a failure worth retrying.
-                self.unavailable.insert(fileID)
+                // answer and worth remembering. A timeout or a dropped connection is not:
+                // remembering those meant one bad moment cost every thumbnail of that file
+                // for the rest of the session, with nothing short of a relaunch to undo it.
+                if !error.isRetryable { self.unavailable.insert(fileID) }
                 return nil
             }
         }

@@ -118,11 +118,11 @@ struct EmojiPicker: View {
     }
 
     private var filteredCategories: [(String, [String])] {
-        let query = search.trimmingCharacters(in: .whitespaces).lowercased()
+        let query = search.trimmingCharacters(in: .whitespaces)
         guard !query.isEmpty else { return Self.categories }
         // Names aren't searchable without an emoji database; filter category names instead
         // and fall back to showing everything, which beats showing nothing.
-        let matches = Self.categories.filter { $0.0.lowercased().contains(query) }
+        let matches = Self.categories.filter { $0.0.localizedStandardContains(query) }
         return matches.isEmpty ? Self.categories : matches
     }
 }

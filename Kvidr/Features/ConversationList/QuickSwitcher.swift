@@ -18,7 +18,7 @@ struct QuickSwitcher: View {
         let trimmed = query.trimmingCharacters(in: .whitespaces)
         let pool = trimmed.isEmpty
             ? conversations
-            : conversations.filter { $0.displayName.localizedCaseInsensitiveContains(trimmed) }
+            : conversations.filter { $0.displayName.localizedStandardContains(trimmed) }
         return Array(pool.prefix(8))
     }
 

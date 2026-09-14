@@ -44,13 +44,19 @@ final class LinkPreviewLoader {
 
         let task = Task<LinkPreview?, Never> { [weak self] in
             guard let self else { return nil }
-            let preview = await Self.fetch(url)
-            if let preview {
+            switch await Self.fetch(url) {
+            case .preview(let preview):
                 self.store(preview, for: url)
-            } else {
+                return preview
+            case .nothingToShow:
                 self.unavailable.insert(url)
+                return nil
+            case .failed:
+                // Not remembered: asking again later is the whole difference between a
+                // page that genuinely has no card and one that happened to be asked while
+                // the network was down.
+                return nil
             }
-            return preview
         }
         inFlight[url] = task
         let preview = await task.value
@@ -65,9 +71,17 @@ final class LinkPreviewLoader {
         memory[url] = preview
     }
 
+    private enum Outcome {
+        case preview(LinkPreview)
+        /// The page answered, and has nothing worth a card. Worth remembering.
+        case nothingToShow
+        /// The fetch itself failed, which says nothing about the page.
+        case failed
+    }
+
     /// A title is the least a card needs. A page that gives none gets no card — better
     /// than a card that says only the host, which the link text already does.
-    private static func fetch(_ url: URL) async -> LinkPreview? {
+    private static func fetch(_ url: URL) async -> Outcome {
         let provider = LPMetadataProvider()
         provider.timeout = 10
         let metadata: LPLinkMetadata
@@ -75,20 +89,22 @@ final class LinkPreviewLoader {
             metadata = try await provider.startFetchingMetadata(for: url)
         } catch {
             Log.ui.warning("Link preview failed for \(url.host() ?? url.absoluteString): \(error.localizedDescription)")
-            return nil
+            return .failed
         }
         guard let title = metadata.title?.trimmingCharacters(in: .whitespacesAndNewlines), !title.isEmpty else {
             Log.ui.notice("Link preview for \(url.host() ?? url.absoluteString) came back without a title")
-            return nil
+            return .nothingToShow
         }
 
         let image = await loadImage(from: metadata.imageProvider)
         Log.ui.notice("Link preview for \(url.host() ?? url.absoluteString): “\(title)”, image \(image == nil ? "no" : "yes")")
-        return LinkPreview(
-            url: metadata.originalURL ?? url,
-            title: title,
-            host: (metadata.url ?? url).host() ?? url.absoluteString,
-            image: image
+        return .preview(
+            LinkPreview(
+                url: metadata.originalURL ?? url,
+                title: title,
+                host: (metadata.url ?? url).host() ?? url.absoluteString,
+                image: image
+            )
         )
     }
 

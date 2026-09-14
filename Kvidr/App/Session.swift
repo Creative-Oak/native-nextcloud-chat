@@ -99,11 +99,16 @@ final class AppDependencies {
             // A corrupt or unreadable cache must not stop the app from launching: fall back
             // to memory and refill from the server.
             Log.persistence.error("Couldn’t open the on-disk cache, continuing in memory: \(error.localizedDescription)")
-            // swiftlint:disable:next force_try
-            modelContainer = try! ModelContainer(
-                for: Schema(CacheSchema.models),
-                configurations: [ModelConfiguration(isStoredInMemoryOnly: true)]
-            )
+            do {
+                modelContainer = try ModelContainer(
+                    for: Schema(CacheSchema.models),
+                    configurations: [ModelConfiguration(isStoredInMemoryOnly: true)]
+                )
+            } catch {
+                // Nothing left to fall back to: a schema that cannot be opened in memory
+                // is a programming error in the schema itself, not a runtime condition.
+                fatalError("The cache schema could not be opened even in memory: \(error)")
+            }
         }
         store = TalkStore(modelContainer: modelContainer)
     }

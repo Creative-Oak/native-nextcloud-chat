@@ -65,6 +65,7 @@ struct TapbackBar: View {
             .buttonStyle(.plain)
             .glassCircle()
             .help("Another reaction")
+            .accessibilityLabel("Another Reaction")
             .popover(isPresented: $isShowingPicker, arrowEdge: .bottom) {
                 EmojiPicker { emoji in
                     isShowingPicker = false
@@ -262,6 +263,7 @@ private struct MenuReactionRows: View {
                 }
                 .buttonStyle(.plain)
                 .help("Another reaction")
+                .accessibilityLabel("Another Reaction")
             }
         }
         .padding(.horizontal, 8)

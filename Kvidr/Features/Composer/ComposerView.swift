@@ -62,6 +62,7 @@ struct ComposerView: View {
                 .menuIndicator(.hidden)
                 .glassCircle()
                 .help("Add an attachment")
+                .accessibilityLabel("Add an Attachment")
             }
 
             field
@@ -72,7 +73,7 @@ struct ComposerView: View {
             // in whatever had focus a moment ago.
             Button {
                 isFocused = true
-                DispatchQueue.main.async { NSApplication.shared.orderFrontCharacterPalette(nil) }
+                Task { @MainActor in NSApplication.shared.orderFrontCharacterPalette(nil) }
             } label: {
                 Image(systemName: "face.smiling")
                     .font(.system(size: 17, weight: .regular))
@@ -82,6 +83,7 @@ struct ComposerView: View {
             .buttonStyle(.plain)
             .glassCircle()
             .help("Emoji")
+            .accessibilityLabel("Emoji")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)

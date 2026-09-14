@@ -45,8 +45,12 @@ struct ChatSearchBar: View {
             HStack(spacing: 2) {
                 Button { model.stepSearch(by: -1) } label: { Image(systemName: "chevron.up") }
                     .keyboardShortcut("g", modifiers: [.command, .shift])
+                    .help("Previous match (⇧⌘G)")
+                    .accessibilityLabel("Previous Match")
                 Button { model.stepSearch(by: 1) } label: { Image(systemName: "chevron.down") }
                     .keyboardShortcut("g", modifiers: .command)
+                    .help("Next match (⌘G)")
+                    .accessibilityLabel("Next Match")
             }
             .buttonStyle(.plain)
             .disabled(model.searchMatches.isEmpty)
@@ -57,6 +61,7 @@ struct ChatSearchBar: View {
             }
             .buttonStyle(.plain)
             .help("Close (Escape)")
+            .accessibilityLabel("Close Find")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)

@@ -176,10 +176,14 @@ struct ConversationIndex: Sendable, Equatable {
         guard !query.isEmpty else { return visibleConversations }
 
         return conversations.filter { conversation in
-            if conversation.displayName.localizedCaseInsensitiveContains(query) { return true }
-            if conversation.name.localizedCaseInsensitiveContains(query) { return true }
-            if conversation.description.localizedCaseInsensitiveContains(query) { return true }
-            if let text = conversation.lastMessage?.text, text.localizedCaseInsensitiveContains(query) { return true }
+            // `localizedStandardContains` rather than a case-insensitive compare: it is what
+            // the Finder searches with, so it also ignores diacritics and width, and typing
+            // "jerome" finds Jérôme. (A letter that is its own, such as ø, is still its own —
+            // folding is of diacritics, not of the alphabet.)
+            if conversation.displayName.localizedStandardContains(query) { return true }
+            if conversation.name.localizedStandardContains(query) { return true }
+            if conversation.description.localizedStandardContains(query) { return true }
+            if let text = conversation.lastMessage?.text, text.localizedStandardContains(query) { return true }
             return false
         }
     }

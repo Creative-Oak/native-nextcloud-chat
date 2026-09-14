@@ -121,6 +121,18 @@ struct ConversationIndexTests {
         #expect(index.filtered(by: "nothing").isEmpty)
     }
 
+    @Test("Filtering ignores diacritics, the way the Finder's search field does")
+    func filteringIgnoresDiacritics() {
+        let index = ConversationIndex([
+            conversation("x", activity: 10, name: "Café Jérôme"),
+            conversation("y", activity: 9, name: "Ops")
+        ])
+
+        #expect(index.filtered(by: "café").map(\.token) == ["x"])
+        #expect(index.filtered(by: "cafe").map(\.token) == ["x"])
+        #expect(index.filtered(by: "JEROME").map(\.token) == ["x"])
+    }
+
     @Test("Optimistic local updates apply immediately and keep the order correct")
     func optimisticUpdate() {
         var index = ConversationIndex([conversation("a", activity: 30), conversation("b", activity: 20)])

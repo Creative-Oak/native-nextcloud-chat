@@ -362,6 +362,7 @@ struct ChatView: View {
             .glassCircle()
             .padding(16)
             .help("Scroll to the newest message")
+            .accessibilityLabel("Scroll to Newest Message")
             .transition(.opacity)
         }
     }

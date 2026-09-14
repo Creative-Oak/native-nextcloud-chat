@@ -230,7 +230,7 @@ struct RootView: View {
     /// window is resized. This is that resize: a point wider and straight back, before
     /// anything is drawn.
     private func relayoutToolbar() {
-        DispatchQueue.main.async {
+        Task { @MainActor in
             guard let window = NSApp.windows.first(where: { $0.frameAutosaveName == "KvidrMain" }) else { return }
             let frame = window.frame
             var nudged = frame
