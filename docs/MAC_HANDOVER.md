@@ -241,4 +241,5 @@ The things that most need your eye, because they are exactly what I could not se
   documented stable client API.
 - Polls and voice messages are *shown*, not yet answered or played. Pins and reminders are
   not implemented.
-- There is no `LICENSE` file — choosing one is yours to do. See the README.
+- Licensed MIT. The one piece not written here is `.agents/skills/swiftui-pro/`, which is
+  Paul Hudson's, also MIT, and is an agent rule set rather than part of the app.

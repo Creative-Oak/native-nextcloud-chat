@@ -124,7 +124,9 @@ only, never for a public host.
 
 ## Licence
 
-Not yet chosen — this repository has no `LICENSE` file, so by default all rights are
-reserved. If you intend to publish it, add one: Nextcloud's own clients are AGPL-3.0, which
-is the conventional choice for something that talks to a Nextcloud server, but nothing here
-forces it.
+**MIT** — see [`LICENSE`](LICENSE).
+
+One exception, vendored rather than written here: `.agents/skills/swiftui-pro/` is Paul
+Hudson's [SwiftUI Agent Skill](https://github.com/twostraws/SwiftUI-Agent-Skill), which is
+MIT and remains his copyright. It is an agent review rule set, not part of the app, and
+nothing in the shipping binary comes from it.
