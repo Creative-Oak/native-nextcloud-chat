@@ -97,19 +97,14 @@ struct RootView: View {
             }
         } detail: {
             if let chat = app.chat {
-                ChatView(
-                    model: chat,
-                    composerFocused: $composerFocused,
-                    onNewConversation: { isShowingNewConversation = true },
-                    onShowDetails: { withAnimation(.smooth) { isShowingInspector.toggle() } }
-                )
+                ChatView(model: chat, composerFocused: $composerFocused)
                     // A fresh view per conversation: no state bleeds between them.
                     .id(chat.token)
-                    // The detail column is what contributes the title item, so this has
-                    // to be removed here — on the split view it does nothing, and
+                    // The detail column contributes the title item, so it has to be
+                    // removed here — on the split view it does nothing, and
                     // NSWindow.titleVisibility does not reach it either because this is
-                    // a toolbar item, not the centred window title. The header two rows
-                    // down already says who this is.
+                    // a toolbar item, not the centred window title. The principal item
+                    // below says who this is, with their face next to it.
                     .toolbar(removing: .title)
             } else {
                 NoConversationSelected(hasConversations: !(app.conversationList?.index.isEmpty ?? true))
@@ -161,8 +156,44 @@ struct RootView: View {
         )
     }
 
+    /// The toolbar *is* the conversation header, the way it is in Messages.
+    ///
+    /// A separate header bar underneath meant two full-height rows: the toolbar, which
+    /// reserves its row across the whole window whether or not anything is in it, and the
+    /// header below it. Emptying the toolbar did not reclaim that space — only moving the
+    /// content up into it does.
     @ToolbarContentBuilder
     private var toolbar: some ToolbarContent {
+        ToolbarItem(placement: .navigation) {
+            Button {
+                isShowingNewConversation = true
+            } label: {
+                Label("New Conversation", systemImage: "square.and.pencil")
+            }
+            .help("New Conversation (⌘N)")
+        }
+
+        // Who you are talking to, centred, and the control that opens their details.
+        ToolbarItem(placement: .principal) {
+            if let chat = app.chat {
+                Button {
+                    withAnimation(.smooth) { isShowingInspector.toggle() }
+                } label: {
+                    HStack(spacing: 6) {
+                        AvatarView(conversation: chat.conversation, size: 20)
+                        Text(chat.conversation.displayName)
+                            .font(.system(size: 13, weight: .semibold))
+                            .lineLimit(1)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+                .buttonStyle(.plain)
+                .help("Conversation details")
+            }
+        }
+
         ToolbarItem(placement: .status) {
             if app.connection == .offline {
                 Label("Offline", systemImage: "wifi.slash")
@@ -171,8 +202,6 @@ struct RootView: View {
             }
         }
 
-        // A spacer separates the conversation's own controls from the window's, so the
-        // toolbar reads as two groups of glass rather than one undifferentiated row.
         ToolbarSpacer(.flexible)
 
         ToolbarItem {

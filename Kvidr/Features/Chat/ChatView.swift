@@ -14,9 +14,6 @@ struct ChatView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Owned by the window so ⌘⇧K and Return-from-the-sidebar can move focus here.
     @Binding var composerFocused: Bool
-    /// Both live on the window, and the header is the only thing that shows them.
-    var onNewConversation: () -> Void
-    var onShowDetails: () -> Void
 
     @State private var highlightedMessageID: Int?
     @State private var didInitialScroll = false
@@ -24,28 +21,14 @@ struct ChatView: View {
     @State private var viewingAttachment: RichObject?
     /// Suppresses per-row hover work while the transcript is moving.
     @State private var isScrolling = false
-    /// Measured, because the floating bars below have to clear the header and it
-    /// changes height with the subtitle.
-    @State private var headerHeight: CGFloat = 0
 
     var body: some View {
         VStack(spacing: 0) {
             transcript
-                // An inset, not a sibling in the stack. As a sibling the transcript was
-                // simply clipped at the header's edge; as an inset the messages scroll
-                // *under* it and the material actually has something to blur.
-                .safeAreaInset(edge: .top, spacing: 0) {
-                    ChatHeaderView(
-                        model: model,
-                        onNewConversation: onNewConversation,
-                        onShowDetails: onShowDetails
-                    )
-                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { headerHeight = $0 }
-                }
                 .overlay(alignment: .top) {
                     if let error = model.lastError, error != .cancelled {
                         InlineStatusBar(error: error, state: model.syncState)
-                            .padding(.top, headerHeight + 10)
+                            .padding(.top, 10)
                             .transition(.move(edge: .top).combined(with: .opacity))
                     } else if let messageID = model.unreachableMessageID {
                         UnreachableMessageBar(
@@ -55,11 +38,11 @@ struct ChatView: View {
                             },
                             onDismiss: { model.dismissUnreachableMessage() }
                         )
-                        .padding(.top, headerHeight + 10)
+                        .padding(.top, 10)
                         .transition(.move(edge: .top).combined(with: .opacity))
                     } else if model.isRevealing {
                         RevealingBar()
-                            .padding(.top, headerHeight + 10)
+                            .padding(.top, 10)
                             .transition(.opacity)
                     }
                 }
@@ -100,7 +83,7 @@ struct ChatView: View {
         .overlay(alignment: .top) {
             if model.isSearching {
                 ChatSearchBar(model: model)
-                    .padding(.top, headerHeight + 8)
+                    .padding(.top, 8)
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
@@ -400,99 +383,6 @@ private struct InlineStatusBar: View {
         case .reconnecting: "arrow.triangle.2.circlepath"
         default: "exclamationmark.circle"
         }
-    }
-}
-
-/// The conversation header: who you're talking to, centred, and the two controls that
-/// belong to the window rather than to the transcript.
-///
-/// The person is the control. Tapping the avatar-and-name cluster opens the details,
-/// which is why there is no separate inspector button in the toolbar any more — the thing
-/// you want details *about* is the thing you click.
-private struct ChatHeaderView: View {
-    @Bindable var model: ChatModel
-    var onNewConversation: () -> Void
-    var onShowDetails: () -> Void
-
-    var body: some View {
-        ZStack {
-            Button(action: onShowDetails) {
-                VStack(spacing: 3) {
-                    AvatarView(conversation: model.conversation, size: 32)
-
-                    HStack(spacing: 3) {
-                        Text(model.conversation.displayName)
-                            .font(.system(size: 12, weight: .semibold))
-                            .lineLimit(1)
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 8, weight: .bold))
-                            .foregroundStyle(.tertiary)
-                    }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 2)
-                    .glass(.floating, cornerRadius: 10)
-                }
-            }
-            .buttonStyle(.plain)
-            // The status line lived here and cost 14pt of a header that was already too
-            // tall; the inspector shows it, and that is one click away.
-            .help(subtitle.map { "\(model.conversation.displayName) — \($0)" } ?? "Conversation details")
-
-            HStack {
-                Button(action: onNewConversation) {
-                    Image(systemName: "square.and.pencil")
-                        .font(.system(size: 15, weight: .medium))
-                }
-                .buttonStyle(.glass)
-                .buttonBorderShape(.circle)
-                .frame(width: GlassMetrics.control, height: GlassMetrics.control)
-                .help("New Conversation (⌘N)")
-
-                Spacer()
-
-                if model.syncState == .offline {
-                    Label("Offline", systemImage: "wifi.slash")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .labelStyle(.titleAndIcon)
-                } else if case .reconnecting = model.syncState {
-                    ProgressView().controlSize(.small)
-                }
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.top, 4)
-        .padding(.bottom, 7)
-        // Masked, not a plain fill. A material with a hard bottom edge draws a line
-        // across the transcript, and a line across the transcript is exactly what reads
-        // as the messages being cut off. Fading it out is what makes the same blur read
-        // as content passing underneath — which is what Messages does.
-        .background {
-            Rectangle()
-                .fill(.ultraThinMaterial)
-                .mask {
-                    LinearGradient(
-                        stops: [
-                            .init(color: .black, location: 0),
-                            .init(color: .black, location: 0.62),
-                            .init(color: .clear, location: 1)
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                }
-        }
-    }
-
-    private var subtitle: String? {
-        let conversation = model.conversation
-        if let status = conversation.userStatus, let message = status.message, !message.isEmpty {
-            return [status.icon, message].compactMap { $0 }.joined(separator: " ")
-        }
-        if conversation.isNoteToSelf { return "Just for you" }
-        if !conversation.description.isEmpty { return conversation.description }
-        if conversation.hasCall { return "Call in progress" }
-        return nil
     }
 }
 
