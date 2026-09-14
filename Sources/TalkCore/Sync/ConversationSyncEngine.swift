@@ -50,7 +50,7 @@ actor ConversationSyncEngine {
         stop()
         let (stream, continuation) = AsyncStream<ConversationSyncEvent>.makeStream(bufferingPolicy: .bufferingNewest(8))
         self.continuation = continuation
-        task = Task { [weak self] in await self?.run() }
+        task = Task { [weak self] in await self?.run(into: continuation) }
         return stream
     }
 
@@ -87,7 +87,11 @@ actor ConversationSyncEngine {
 
     // MARK: - The loop
 
-    private func run() async {
+    /// Writes to the continuation it was started with, never to `self.continuation` — see
+    /// ``ActiveChatSyncEngine/run(token:lastKnownMessageID:into:)``. A loop cancelled while
+    /// it was asleep or mid-request winds up later, and by then `self.continuation` may
+    /// belong to a newer loop that this one would otherwise finish and clear.
+    private func run(into continuation: AsyncStream<ConversationSyncEvent>.Continuation) async {
         var attempt = 0
 
         while !Task.isCancelled {
@@ -110,16 +114,16 @@ actor ConversationSyncEngine {
                     forceFullRefresh = false
                 }
 
-                if attempt > 0 { continuation?.yield(.offline(false)) }
+                if attempt > 0 { continuation.yield(.offline(false)) }
                 attempt = 0
-                continuation?.yield(.conversations(result))
+                continuation.yield(.conversations(result))
             } catch {
                 if Task.isCancelled { break }
                 if error.requiresReauthentication {
-                    continuation?.yield(.failed(.unauthorized))
+                    continuation.yield(.failed(.unauthorized))
                     break
                 }
-                if error == .offline { continuation?.yield(.offline(true)) }
+                if error == .offline { continuation.yield(.offline(true)) }
                 attempt += 1
                 Log.sync.warning("Conversation refresh failed (attempt \(attempt)): \(error.userMessage)")
                 await sleep(backoff.delay(forAttempt: attempt, after: error))
@@ -132,8 +136,7 @@ actor ConversationSyncEngine {
         // Always terminate the stream. Without this, a consumer's `for await` never
         // returns after the loop stops (on a 401, say) and the task leaks for the life of
         // the process.
-        continuation?.finish()
-        continuation = nil
+        continuation.finish()
     }
 
     private var currentInterval: TimeInterval {
