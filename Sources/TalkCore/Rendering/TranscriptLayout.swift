@@ -119,30 +119,46 @@ enum ConversationPreview {
 /// Compact and relative, the way Mail and Messages do it: a time today, "Yesterday", a
 /// weekday within the last week, then a date.
 enum RelativeTimestamp {
-    static func sidebar(_ date: Date, now: Date = Date(), calendar: Calendar = .current) -> String {
+    // `locale` is injected for the same reason `now` and `calendar` are: the formatted
+    // branches below are locale-dependent (a Danish Mac renders 13.00 and "tirs.", a US
+    // one 1:00 PM and "Tue"), so a test that doesn't pin it asserts whatever the machine
+    // running it happens to be set to.
+    static func sidebar(
+        _ date: Date,
+        now: Date = Date(),
+        calendar: Calendar = .current,
+        locale: Locale = .current
+    ) -> String {
         guard date.timeIntervalSince1970 > 0 else { return "" }
         if calendar.isDate(date, inSameDayAs: now) {
-            return date.formatted(.dateTime.hour().minute())
+            return date.formatted(.dateTime.hour().minute().locale(locale))
         }
         if let yesterday = calendar.date(byAdding: .day, value: -1, to: now),
            calendar.isDate(date, inSameDayAs: yesterday) {
             return "Yesterday"
         }
         if let weekAgo = calendar.date(byAdding: .day, value: -6, to: now), date > weekAgo {
-            return date.formatted(.dateTime.weekday(.abbreviated))
+            return date.formatted(.dateTime.weekday(.abbreviated).locale(locale))
         }
-        return date.formatted(.dateTime.day().month(.defaultDigits))
+        return date.formatted(.dateTime.day().month(.defaultDigits).locale(locale))
     }
 
-    static func daySeparator(_ day: Date, now: Date = Date(), calendar: Calendar = .current) -> String {
+    static func daySeparator(
+        _ day: Date,
+        now: Date = Date(),
+        calendar: Calendar = .current,
+        locale: Locale = .current
+    ) -> String {
         if calendar.isDate(day, inSameDayAs: now) { return "Today" }
         if let yesterday = calendar.date(byAdding: .day, value: -1, to: now),
            calendar.isDate(day, inSameDayAs: yesterday) {
             return "Yesterday"
         }
         if let weekAgo = calendar.date(byAdding: .day, value: -6, to: now), day > weekAgo {
-            return day.formatted(.dateTime.weekday(.wide))
+            return day.formatted(.dateTime.weekday(.wide).locale(locale))
         }
-        return day.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated).year())
+        return day.formatted(
+            .dateTime.weekday(.abbreviated).day().month(.abbreviated).year().locale(locale)
+        )
     }
 }

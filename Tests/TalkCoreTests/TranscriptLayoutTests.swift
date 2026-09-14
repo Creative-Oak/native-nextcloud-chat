@@ -179,29 +179,52 @@ struct TranscriptLayoutTests {
 
     // MARK: - Timestamps
 
+    // Pinned, because the shapes asserted below are en_US ones. Unpinned, this passes on
+    // Linux CI and fails on a Danish Mac, which renders 13.00 rather than 1:00 PM.
+    private let enUS = Locale(identifier: "en_US")
+
     @Test("Sidebar timestamps are relative and compact")
     func sidebarTimestamps() {
         let calendar = Calendar(identifier: .gregorian)
         let now = noon
 
-        #expect(RelativeTimestamp.sidebar(now.addingTimeInterval(-3600), now: now, calendar: calendar).contains(":"))
-        #expect(RelativeTimestamp.sidebar(now.addingTimeInterval(-24 * 3600), now: now, calendar: calendar) == "Yesterday")
+        func sidebar(_ date: Date) -> String {
+            RelativeTimestamp.sidebar(date, now: now, calendar: calendar, locale: enUS)
+        }
 
-        let threeDaysAgo = RelativeTimestamp.sidebar(now.addingTimeInterval(-3 * 24 * 3600), now: now, calendar: calendar)
+        #expect(sidebar(now.addingTimeInterval(-3600)).contains(":"))
+        #expect(sidebar(now.addingTimeInterval(-24 * 3600)) == "Yesterday")
+
+        let threeDaysAgo = sidebar(now.addingTimeInterval(-3 * 24 * 3600))
         #expect(threeDaysAgo.count <= 4)          // an abbreviated weekday
 
-        let longAgo = RelativeTimestamp.sidebar(now.addingTimeInterval(-60 * 24 * 3600), now: now, calendar: calendar)
+        let longAgo = sidebar(now.addingTimeInterval(-60 * 24 * 3600))
         #expect(longAgo.contains("/") || longAgo.contains("."))
 
         // A conversation that has never had activity shows nothing rather than 1970.
-        #expect(RelativeTimestamp.sidebar(Date(timeIntervalSince1970: 0), now: now, calendar: calendar) == "")
+        #expect(sidebar(Date(timeIntervalSince1970: 0)) == "")
+    }
+
+    @Test("Sidebar timestamps follow the locale rather than hardcoding US conventions")
+    func sidebarTimestampsAreLocalised() {
+        let calendar = Calendar(identifier: .gregorian)
+        let anHourAgo = noon.addingTimeInterval(-3600)
+
+        let danish = RelativeTimestamp.sidebar(
+            anHourAgo, now: noon, calendar: calendar, locale: Locale(identifier: "da_DK")
+        )
+        // Danish writes the time with a full stop and on a 24-hour clock.
+        #expect(danish.contains("."))
+        #expect(!danish.contains("AM") && !danish.contains("PM"))
     }
 
     @Test("Day separators say Today and Yesterday")
     func daySeparatorLabels() {
         let calendar = Calendar(identifier: .gregorian)
-        #expect(RelativeTimestamp.daySeparator(noon, now: noon, calendar: calendar) == "Today")
-        #expect(RelativeTimestamp.daySeparator(noon.addingTimeInterval(-24 * 3600), now: noon, calendar: calendar) == "Yesterday")
+        #expect(RelativeTimestamp.daySeparator(noon, now: noon, calendar: calendar, locale: enUS) == "Today")
+        #expect(RelativeTimestamp.daySeparator(
+            noon.addingTimeInterval(-24 * 3600), now: noon, calendar: calendar, locale: enUS
+        ) == "Yesterday")
     }
 }
 
