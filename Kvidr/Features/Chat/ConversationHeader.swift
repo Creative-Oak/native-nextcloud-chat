@@ -10,7 +10,6 @@ import SwiftUI
 /// top safe area, and the transcript scrolls under it with the same edge fade.
 struct ConversationHeader: View {
     let conversation: Conversation
-    var action: () -> Void
 
     /// The bar's height, which is how far the header hangs below the toolbar. Anything
     /// else pinned to the top of the transcript starts below this.
@@ -22,27 +21,15 @@ struct ConversationHeader: View {
     static let avatarTopInset: CGFloat = 7
 
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: 3) {
-                Text(conversation.displayName)
-                    .font(.system(size: 13, weight: .semibold))
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.leading, 11)
-            .padding(.trailing, 8)
+        Text(conversation.displayName)
+            .font(.system(size: 13, weight: .semibold))
+            .lineLimit(1)
+            .truncationMode(.tail)
+            .padding(.horizontal, 11)
             .padding(.vertical, 3)
-            .contentShape(.capsule)
-        }
-        .buttonStyle(.plain)
-        .glass(.chip)
-        .frame(maxWidth: 340)
-        .frame(height: Self.depthBelowToolbar, alignment: .top)
-        .help("Conversation details")
-        .accessibilityLabel(conversation.displayName)
-        .accessibilityHint("Shows the conversation details")
+            .glass(.chip)
+            .frame(maxWidth: 340)
+            .frame(height: Self.depthBelowToolbar, alignment: .top)
+            .accessibilityLabel(conversation.displayName)
     }
 }

@@ -174,11 +174,27 @@ final class AppModel {
     }
 
     func signOut() async {
-        guard let session else { return }
-        let account = session.account
+        // The account comes from whichever place has it. A live session is the usual one,
+        // but the app password can stop working before a session ever exists: `start()`
+        // catches a failed `activate` and goes straight to `.needsReauthentication`, with
+        // `session` still nil. This used to `guard let session else { return }`, so on that
+        // path the "Sign In Again" button did nothing at all and the screen had no way out
+        // — not signed in, not able to sign in, not able to sign out. Any launch-time
+        // keychain failure reaches it, including the orphaned credentials you get by
+        // changing PRODUCT_BUNDLE_IDENTIFIER.
+        var account: Account?
+        if let session {
+            account = session.account
+        } else if case .needsReauthentication(let reauthenticating) = phase {
+            account = reauthenticating
+        }
+
         await teardownSession()
-        await dependencies.authentication.signOut(account: account)
-        await dependencies.store.deleteAccount(id: account.id)
+
+        if let account {
+            await dependencies.authentication.signOut(account: account)
+            await dependencies.store.deleteAccount(id: account.id)
+        }
 
         avatarLoader = nil
         previewLoader = nil

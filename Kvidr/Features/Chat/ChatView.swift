@@ -14,8 +14,6 @@ struct ChatView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Owned by the window so ⌘⇧K and Return-from-the-sidebar can move focus here.
     @Binding var composerFocused: Bool
-    /// Clicking the header — the face and name over the transcript — opens the details.
-    var onShowDetails: () -> Void
 
     @State private var highlightedMessageID: Int?
     @State private var didInitialScroll = false
@@ -135,7 +133,7 @@ struct ChatView: View {
             // toolbar comes up with the opaque, hairlined kind at launch and only
             // switches to the fade after the first scroll.
             .safeAreaBar(edge: .top, spacing: 0) {
-                ConversationHeader(conversation: model.conversation, action: onShowDetails)
+                ConversationHeader(conversation: model.conversation)
             }
             .scrollEdgeEffectStyle(.soft, for: .top)
             // Deliberately two Bools rather than two distances. A raw offset changes on
@@ -198,13 +196,11 @@ struct ChatView: View {
                 scrollToBottom(proxy, animated: true)
             }
             // The first rows arrive from the cache *after* the view appears, so the initial
-            // positioning has to wait for them rather than happening in onAppear.
-            .onChange(of: model.rows.isEmpty) { _, isEmpty in
-                if !isEmpty { positionInitially(proxy) }
-            }
-            .onAppear {
-                if !model.rows.isEmpty { positionInitially(proxy) }
-            }
+            // positioning has to wait for them rather than happening in onAppear. Counted
+            // rather than `isEmpty`: emptiness is a Bool, so it changes once and never
+            // again, and if that one attempt came too early there was nothing left to try.
+            .onChange(of: model.rows.count) { _, _ in positionInitially(proxy) }
+            .onAppear { positionInitially(proxy) }
             // The inspector (and anything else outside this view) asks for a message by
             // setting `highlightRequest`; the scrolling itself stays here.
             .onChange(of: model.highlightRequest) { _, requested in
@@ -281,17 +277,25 @@ struct ChatView: View {
 
     /// Opening a conversation lands on the unread marker if there is one, otherwise at the
     /// bottom — and without animating, so it reads as "already there" rather than as a scroll.
+    ///
+    /// The scroll is deferred by one turn on purpose. The update that publishes the first
+    /// rows has not laid them out yet, and `scrollTo` for an id the scroll view does not
+    /// hold is dropped without complaint — which left the transcript at the offset it had
+    /// while the content was empty, the top, with `didInitialScroll` already spent.
     private func positionInitially(_ proxy: ScrollViewProxy) {
-        guard !didInitialScroll else { return }
+        guard !didInitialScroll, !model.rows.isEmpty else { return }
         didInitialScroll = true
 
-        var transaction = Transaction()
-        transaction.disablesAnimations = true
-        withTransaction(transaction) {
-            if let unread = model.rows.first(where: \.isUnreadSeparator)?.id {
-                proxy.scrollTo(unread, anchor: .center)
-            } else {
-                proxy.scrollTo(Self.bottomAnchor, anchor: .bottom)
+        let unread = model.rows.first(where: \.isUnreadSeparator)?.id
+        Task { @MainActor in
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                if let unread {
+                    proxy.scrollTo(unread, anchor: .center)
+                } else {
+                    proxy.scrollTo(Self.bottomAnchor, anchor: .bottom)
+                }
             }
         }
     }
