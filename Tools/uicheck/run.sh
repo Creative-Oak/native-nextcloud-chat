@@ -23,7 +23,9 @@ SWIFTC=${SWIFTC:-swiftc}
 # Order matters: SwiftUI's stub imports Combine and AppKit.
 for module in Combine UniformTypeIdentifiers SwiftData AppKit LinkPresentation SwiftUI UserNotifications; do
     if [ -f "Tools/uicheck/stubs/$module.swift" ]; then
-        $SWIFTC -emit-module -module-name "$module" \
+        # -parse-as-library: each stub is a single file, and swiftc treats a lone file as
+        # top-level script code, where a global such as `NSApp` may not carry @MainActor.
+        $SWIFTC -emit-module -parse-as-library -module-name "$module" \
             -emit-module-path "$MODULES/$module.swiftmodule" \
             -swift-version 6 \
             -I "$MODULES" \
@@ -31,14 +33,16 @@ for module in Combine UniformTypeIdentifiers SwiftData AppKit LinkPresentation S
     fi
 done
 
-# The app, plus the core it compiles alongside in Xcode, copied into a scratch tree so one
-# construct can be rewritten: `#selector(...)` needs Objective-C interop, which does not
-# exist off Apple platforms. Nothing else about the sources is changed.
+# The app, plus the core it compiles alongside in Xcode, copied into a scratch tree so two
+# constructs can be rewritten: `#selector(...)` and `@objc` both need Objective-C interop,
+# which does not exist off Apple platforms. Nothing else about the sources is changed.
 SRC="$BUILD/src"
 mkdir -p "$SRC"
 while IFS= read -r file; do
     target="$SRC/$(echo "$file" | tr '/' '_')"
-    sed -E 's/#selector\(NS[A-Za-z]+\.([A-Za-z]+)\(_:\)\)/Selector("\1")/g' "$file" > "$target"
+    sed -E -e 's/#selector\(NS[A-Za-z]+\.([A-Za-z]+)\(_:\)\)/Selector("\1")/g' \
+           -e 's/#selector\(([A-Za-z_][A-Za-z0-9_]*)\)/Selector("\1")/g' \
+           -e 's/@objc //g' "$file" > "$target"
 done < <(find Sources/TalkCore Kvidr -name '*.swift' \
     ! -path '*/Persistence/*' ! -path '*/Security/KeychainStore.swift')
 

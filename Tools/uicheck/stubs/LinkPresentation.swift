@@ -2,7 +2,10 @@
 import AppKit
 import Foundation
 
-public final class LPLinkMetadata: NSObject {
+/// Sendable, as the audited SDK header has it: the metadata object is a value-like
+/// snapshot, which is what makes `try await provider.startFetchingMetadata(for:)` usable
+/// from the main actor — the way every caller uses it.
+public final class LPLinkMetadata: NSObject, @unchecked Sendable {
     public var title: String?
     public var originalURL: URL?
     public var url: URL?

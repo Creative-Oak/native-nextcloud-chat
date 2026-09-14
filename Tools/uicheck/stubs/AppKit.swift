@@ -1,5 +1,6 @@
 // A stand-in for AppKit: the types this app touches, with faithful names and labels.
 @_exported import Foundation
+import UniformTypeIdentifiers
 
 public typealias NSSize = CGSize
 public typealias NSPoint = CGPoint
@@ -27,13 +28,21 @@ public struct Selector: Equatable, Hashable, Sendable {
     public init(frame: NSRect) { super.init() }
     open var window: NSWindow? { nil }
     open var frame: NSRect = .zero
+    open var bounds: NSRect { .zero }
+    open var superview: NSView? { nil }
+    open var fittingSize: NSSize { .zero }
     open func viewDidMoveToWindow() {}
+    open func convert(_ point: NSPoint, from view: NSView?) -> NSPoint { point }
+    open func hitTest(_ point: NSPoint) -> NSView? { nil }
+    open func rightMouseDown(with event: NSEvent) {}
+    open func mouseDown(with event: NSEvent) {}
 }
 
 @MainActor open class NSWindow: NSResponder {
     public static var allowsAutomaticWindowTabbing: Bool = true
     open var firstResponder: NSResponder? { nil }
     open var frameAutosaveName: String = ""
+    open var frame: NSRect { .zero }
     open var isRestorable: Bool = true
     open var isVisible: Bool { true }
     open var tabbingMode: TabbingMode = .automatic
@@ -53,6 +62,7 @@ public struct Selector: Equatable, Hashable, Sendable {
 @MainActor public final class NSApplication {
     public static let shared = NSApplication()
     public var windows: [NSWindow] { [] }
+    public var currentEvent: NSEvent? { nil }
     public let dockTile = NSDockTile()
     public func activate(ignoringOtherApps: Bool) {}
     public func activate() {}
@@ -105,6 +115,8 @@ public struct NSColor: Sendable {
     public static let controlBackgroundColor = NSColor()
     public static let labelColor = NSColor()
     public static let secondaryLabelColor = NSColor()
+    public static let selectedContentBackgroundColor = NSColor()
+    public static let unemphasizedSelectedContentBackgroundColor = NSColor()
 }
 
 @MainActor public final class NSPasteboard {
@@ -122,7 +134,7 @@ public struct NSColor: Sendable {
     public func canReadObject(forClasses classes: [AnyClass], options: [AnyHashable: Any]?) -> Bool { false }
 }
 
-public final class NSItemProvider: NSObject {
+public final class NSItemProvider: NSObject, @unchecked Sendable {
     public func canLoadObject<T: AnyObject>(ofClass aClass: T.Type) -> Bool { false }
     public func loadObject<T: AnyObject>(ofClass aClass: T.Type, completionHandler: @escaping (T?, Error?) -> Void) {}
 }
@@ -142,7 +154,7 @@ public final class NSItemProvider: NSObject {
     open var prompt: String = ""
     open var url: URL? { nil }
     open var directoryURL: URL?
-    open var allowedContentTypes: [Any] = []
+    open var allowedContentTypes: [UTType] = []
     open func runModal() -> ModalResponse { .OK }
     public struct ModalResponse: Equatable, Sendable {
         public static let OK = ModalResponse()
@@ -225,8 +237,6 @@ public struct NSFont: Sendable {
 
 @MainActor public let NSApp = NSApplication.shared
 
-public struct NSPoint { public var x: CGFloat = 0, y: CGFloat = 0 }
-
 @MainActor open class NSEvent: NSObject {
     public enum EventType: Sendable { case leftMouseDown, rightMouseDown, mouseMoved }
     public struct ModifierFlags: OptionSet, Sendable {
@@ -238,25 +248,7 @@ public struct NSPoint { public var x: CGFloat = 0, y: CGFloat = 0 }
     open var modifierFlags: ModifierFlags { [] }
 }
 
-extension NSApplication {
-    public var currentEvent: NSEvent? { nil }
-}
 
-extension NSView {
-    open var bounds: NSRect { .zero }
-    open var superview: NSView? { nil }
-    open func convert(_ point: NSPoint, from view: NSView?) -> NSPoint { point }
-    open func hitTest(_ point: NSPoint) -> NSView? { nil }
-    open func rightMouseDown(with event: NSEvent) {}
-    open func mouseDown(with event: NSEvent) {}
-    open var fittingSize: NSSize { .zero }
-}
-
-@MainActor open class NSHostingView<Content: View>: NSView {
-    public init(rootView: Content) { super.init(frame: .zero) }
-}
-
-open class NSCoder: NSObject {}
 
 @MainActor open class NSMenuItem: NSObject {
     public init(title: String, action: Selector?, keyEquivalent: String) { super.init() }

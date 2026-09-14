@@ -331,6 +331,17 @@ public enum Edge: Sendable {
     }
 }
 
+public enum VerticalEdge: Sendable {
+    case top, bottom
+    public struct Set: OptionSet, Sendable {
+        public let rawValue: Int
+        public init(rawValue: Int) { self.rawValue = rawValue }
+        public static let top = Set(rawValue: 1)
+        public static let bottom = Set(rawValue: 2)
+        public static let all: Set = [.top, .bottom]
+    }
+}
+
 public enum Axis: Sendable {
     case horizontal, vertical
     public struct Set: OptionSet, Sendable {
@@ -364,6 +375,10 @@ public struct UnitPoint: Sendable, Hashable {
     public static let bottom = UnitPoint(x: 0.5, y: 1)
     public static let leading = UnitPoint(x: 0, y: 0.5)
     public static let trailing = UnitPoint(x: 1, y: 0.5)
+    public static let topLeading = UnitPoint(x: 0, y: 0)
+    public static let topTrailing = UnitPoint(x: 1, y: 0)
+    public static let bottomLeading = UnitPoint(x: 0, y: 1)
+    public static let bottomTrailing = UnitPoint(x: 1, y: 1)
 }
 
 public struct Animation: Sendable {
@@ -375,6 +390,10 @@ public struct Animation: Sendable {
     public static func smooth(duration: Double) -> Animation { Animation() }
     public static func linear(duration: Double) -> Animation { Animation() }
     public static func spring(response: Double = 0.5, dampingFraction: Double = 0.8) -> Animation { Animation() }
+    public static let snappy = Animation()
+    public static let bouncy = Animation()
+    public static func snappy(duration: Double, extraBounce: Double = 0) -> Animation { Animation() }
+    public static func bouncy(duration: Double, extraBounce: Double = 0) -> Animation { Animation() }
 }
 
 public struct Transaction {
@@ -400,6 +419,7 @@ public struct AnyTransition: Sendable {
     public static let identity = AnyTransition()
     public static let opacity = AnyTransition()
     public static let scale = AnyTransition()
+    public static func scale(scale: CGFloat, anchor: UnitPoint = .center) -> AnyTransition { AnyTransition() }
     public static let slide = AnyTransition()
     public static func move(edge: Edge) -> AnyTransition { AnyTransition() }
     public func combined(with other: AnyTransition) -> AnyTransition { self }
@@ -454,8 +474,12 @@ extension Shape where Self == Capsule {
 }
 
 extension Shape where Self == RoundedRectangle {
-    public static func rect(cornerRadius: CGFloat) -> RoundedRectangle { RoundedRectangle(cornerRadius: cornerRadius) }
-    public static func rect(cornerSize: CGSize) -> RoundedRectangle { RoundedRectangle(cornerSize: cornerSize) }
+    public static func rect(cornerRadius: CGFloat, style: RoundedCornerStyle = .continuous) -> RoundedRectangle {
+        RoundedRectangle(cornerRadius: cornerRadius, style: style)
+    }
+    public static func rect(cornerSize: CGSize, style: RoundedCornerStyle = .continuous) -> RoundedRectangle {
+        RoundedRectangle(cornerSize: cornerSize, style: style)
+    }
 }
 
 // MARK: - Liquid Glass
@@ -739,13 +763,13 @@ public struct GridItem: Sendable {
 
 @MainActor public struct Group<Content: View>: View {
     public init(@ViewBuilder content: () -> Content) {}
-    public init<Base: View, Result: View>(subviews view: Base, @ViewBuilder transform: @escaping (SubviewsCollection) -> Result) where Content == Result {}
+    public init<Base: View>(subviews view: Base, @ViewBuilder transform: @escaping (SubviewsCollection) -> Content) {}
     public var body: StubView { StubView() }
 }
 
 @MainActor public struct Subview: View, Identifiable {
     public struct ID: Hashable, Sendable {}
-    public var id: ID { ID() }
+    public nonisolated var id: ID { ID() }
     public var body: StubView { StubView() }
 }
 
@@ -799,6 +823,11 @@ public struct GeometryProxy: Sendable {
     public var size: CGSize { .zero }
     public var safeAreaInsets: EdgeInsets { EdgeInsets() }
     public subscript<T>(anchor: Anchor<T>) -> T { anchor.value }
+}
+
+@MainActor public struct GeometryReader<Content: View>: View {
+    public init(@ViewBuilder content: @escaping (GeometryProxy) -> Content) {}
+    public var body: StubView { StubView() }
 }
 
 public struct Anchor<Value>: Sendable where Value: Sendable {
@@ -1534,4 +1563,10 @@ extension AttributedString {
     public init(markdown: String, options: MarkdownParsingOptions) throws {
         self.init(markdown)
     }
+}
+
+/// Lives here rather than in the AppKit stub because it is generic over `View`, which only
+/// this module declares.
+@MainActor open class NSHostingView<Content: View>: NSView {
+    public init(rootView: Content) { super.init(frame: .zero) }
 }
