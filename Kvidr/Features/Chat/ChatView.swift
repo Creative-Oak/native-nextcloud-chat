@@ -468,7 +468,10 @@ private struct ChatHeaderView: View {
         .padding(.horizontal, 16)
         .padding(.top, 6)
         .padding(.bottom, 10)
-        .background(.bar)
+        // `.bar` is opaque enough that the messages passing underneath simply vanish,
+        // which reads as the transcript being cut off rather than as a floating header.
+        // ultraThin is the one that actually shows what it is blurring.
+        .background(.ultraThinMaterial)
     }
 
     private var subtitle: String? {

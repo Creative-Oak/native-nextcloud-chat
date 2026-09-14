@@ -15,28 +15,36 @@ struct InspectorView: View {
     @State private var settings: ConversationSettingsModel?
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 14) {
+        VStack(spacing: 0) {
+            VStack(spacing: 12) {
                 identity
                 actions
                 picker
+            }
+            .padding(.top, 18)
+            .padding(.bottom, 12)
 
+            // A grouped Form rather than cards drawn by hand. The rounded sections,
+            // their insets, their dividers and the way they respond to the theme are all
+            // AppKit's — which is the only way this ends up looking like the rest of the
+            // system rather than like an approximation of it.
+            Form {
                 switch model.tab {
                 case .details: DetailsTab(model: model)
                 case .people: PeopleTab(model: model)
                 case .files: FilesTab(model: model, onOpenMessage: onOpenMessage)
                 }
             }
-            .padding(.vertical, 18)
+            .formStyle(.grouped)
+            .scrollContentBackground(.hidden)
         }
-        .scrollContentBackground(.hidden)
         .overlay {
             if model.isLoading && model.participants.isEmpty && model.sharedItems.isEmpty {
                 ProgressView().controlSize(.small)
             }
         }
         .frame(minWidth: 240, idealWidth: 300, maxWidth: 380)
-        .background(.regularMaterial)
+        .background(Color(nsColor: .windowBackgroundColor))
         .task(id: model.conversation.token) { await model.loadIfNeeded() }
         .sheet(item: $settings) { model in
             ConversationSettingsSheet(model: model)
@@ -134,60 +142,55 @@ private struct InspectorAction: View {
 private struct DetailsTab: View {
     @Bindable var model: InspectorModel
 
+    /// A property rather than a `let` at the top of `body`, so `body` can be a plain run
+    /// of Sections for the Form to lay out.
+    private var conversation: Conversation { model.conversation }
+
     var body: some View {
-        let conversation = model.conversation
-
-        VStack(alignment: .leading, spacing: 14) {
-            if !conversation.description.isEmpty {
-                InspectorCard("Description") {
-                    Text(conversation.description)
-                        .font(.callout)
-                        .textSelection(.enabled)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-
-            InspectorCard("Conversation") {
-                InspectorRow(label: "Type", value: typeDescription)
-                if conversation.hasPassword {
-                    Divider()
-                    InspectorRow(label: "Password", value: "Required", symbol: "lock")
-                }
-                if conversation.isReadOnly {
-                    Divider()
-                    InspectorRow(label: "Posting", value: "Read-only", symbol: "pencil.slash")
-                }
-                if conversation.messageExpiration > 0 {
-                    Divider()
-                    InspectorRow(label: "Messages expire", value: expiration)
-                }
-                Divider()
-                InspectorRow(label: "Last activity", value: conversation.lastActivity.formatted(date: .abbreviated, time: .shortened))
-            }
-
-            if model.capabilities.supportsNotificationLevels {
-                InspectorCard("Notifications") {
-                    Text(conversation.notificationLevel.title)
-                        .font(.callout)
-                    Text("Change this by right-clicking the conversation in the sidebar.")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-
-            InspectorCard {
-                Button {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(conversation.token, forType: .string)
-                } label: {
-                    Label("Copy Conversation Token", systemImage: "doc.on.doc")
-                }
-                .buttonStyle(.link)
-                .font(.callout)
+        if !conversation.description.isEmpty {
+            Section("Description") {
+                Text(conversation.description)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .padding(.horizontal, 16)
+
+        Section("Conversation") {
+            LabeledContent("Type", value: typeDescription)
+            if conversation.hasPassword {
+                LabeledContent("Password", value: "Required")
+            }
+            if conversation.isReadOnly {
+                LabeledContent("Posting", value: "Read-only")
+            }
+            if conversation.messageExpiration > 0 {
+                LabeledContent("Messages expire", value: expiration)
+            }
+            LabeledContent(
+                "Last activity",
+                value: conversation.lastActivity.formatted(date: .abbreviated, time: .shortened)
+            )
+        }
+
+        if model.capabilities.supportsNotificationLevels {
+            Section("Notifications") {
+                LabeledContent("Level", value: conversation.notificationLevel.title)
+                Text("Change this by right-clicking the conversation in the sidebar.")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+
+        Section {
+            Button {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(conversation.token, forType: .string)
+            } label: {
+                Label("Copy Conversation Token", systemImage: "doc.on.doc")
+            }
+            .buttonStyle(.link)
+        }
     }
 
     private var typeDescription: String {
@@ -215,19 +218,15 @@ private struct PeopleTab: View {
     @Bindable var model: InspectorModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            if model.canManageParticipants {
-                inviteField
-                    .padding(.horizontal, 16)
-            }
+        if model.canManageParticipants {
+            Section { inviteField }
+        }
 
+        Section("Participants") {
             if model.participants.isEmpty && !model.isLoading {
                 Text("No participants to show.")
-                    .font(.callout)
                     .foregroundStyle(.secondary)
-                    .padding(.horizontal, 16)
             }
-
             ForEach(model.participants) { participant in
                 ParticipantRow(participant: participant, canRemove: canRemove(participant)) {
                     Task { await model.remove(participant) }
@@ -346,7 +345,6 @@ private struct ParticipantRow: View {
                 .help("Remove from conversation")
             }
         }
-        .padding(.horizontal, 16)
         .padding(.vertical, 3)
         .contentShape(.rect)
         .onHover { isHovering = $0 }
@@ -378,23 +376,20 @@ private struct FilesTab: View {
     var onOpenMessage: (Int) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            if model.populatedItemTypes.isEmpty && !model.isLoading {
+        if model.populatedItemTypes.isEmpty && !model.isLoading {
+            Section {
                 Text("Nothing has been shared here yet.")
-                    .font(.callout)
                     .foregroundStyle(.secondary)
-                    .padding(.horizontal, 16)
             }
+        }
 
-            ForEach(model.populatedItemTypes) { type in
-                InspectorCard(type.title) {
-                    ForEach(model.items(for: type)) { message in
-                        SharedItemRow(message: message) { onOpenMessage(message.messageID) }
-                    }
+        ForEach(model.populatedItemTypes) { type in
+            Section(type.title) {
+                ForEach(model.items(for: type)) { message in
+                    SharedItemRow(message: message) { onOpenMessage(message.messageID) }
                 }
             }
         }
-        .padding(.horizontal, 16)
     }
 }
 
@@ -446,63 +441,6 @@ private struct SharedItemRow: View {
         case .talkPoll: return "chart.bar"
         case .geoLocation: return "mappin.and.ellipse"
         default: return "doc"
-        }
-    }
-}
-
-// MARK: - Small pieces
-
-/// A grouped card. The heading sits outside it, the content inside — which is what turns
-/// a run of label-and-value pairs into something with edges.
-private struct InspectorCard<Content: View>: View {
-    let title: String
-    @ViewBuilder var content: Content
-
-    init(_ title: String = "", @ViewBuilder content: () -> Content) {
-        self.title = title
-        self.content = content()
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            if !title.isEmpty {
-                Text(title.uppercased())
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.tertiary)
-                    .padding(.leading, 12)
-            }
-            VStack(alignment: .leading, spacing: 5) {
-                content
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 9)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            // Opacity on `primary` rather than a fixed grey, so it inverts with the theme
-            // and stays legible on top of the panel's material.
-            .background(Color.primary.opacity(0.05), in: .rect(cornerRadius: 10, style: .continuous))
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
-private struct InspectorRow: View {
-    let label: String
-    let value: String
-    var symbol: String?
-
-    var body: some View {
-        HStack(spacing: 6) {
-            if let symbol {
-                Image(systemName: symbol).font(.caption).foregroundStyle(.secondary)
-            }
-            Text(label)
-                .font(.callout)
-                .foregroundStyle(.secondary)
-            Spacer(minLength: 8)
-            Text(value)
-                .font(.callout)
-                .multilineTextAlignment(.trailing)
-                .textSelection(.enabled)
         }
     }
 }
