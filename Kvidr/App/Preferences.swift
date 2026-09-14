@@ -19,10 +19,61 @@ private enum Key {
 ///
 /// `UserDefaults` only — no credentials, no message content, nothing that would be a
 /// problem in a backup or a screen share.
+///
+/// The properties are **stored**, and write through to `UserDefaults` as they change.
+/// That is not incidental: `@Observable` tracks stored properties and nothing else, so
+/// while these were computed accessors over `defaults` the class announced no changes at
+/// all. A view reading a preference registered no dependency on it, and changing one in
+/// Settings left the rest of the app on the old value — the notification toggles below it
+/// stayed enabled, the "Return sends" explanation contradicted the picker above it, and
+/// the composer went on treating Return the way it had a moment ago.
 @MainActor
 @Observable
 final class Preferences {
-    private let defaults: UserDefaults
+    @ObservationIgnored private let defaults: UserDefaults
+
+    var showsNotifications: Bool {
+        didSet { defaults.set(showsNotifications, forKey: Key.showNotifications) }
+    }
+
+    var playsNotificationSound: Bool {
+        didSet { defaults.set(playsNotificationSound, forKey: Key.notificationSound) }
+    }
+
+    /// When off, notifications say who and where but not what — for shared screens.
+    var showsNotificationPreviews: Bool {
+        didSet { defaults.set(showsNotificationPreviews, forKey: Key.notificationPreviews) }
+    }
+
+    var showsDockBadge: Bool {
+        didSet { defaults.set(showsDockBadge, forKey: Key.dockBadge) }
+    }
+
+    /// Return sends, Shift-Return inserts a newline. Inverted when this is off.
+    var sendsOnReturn: Bool {
+        didSet { defaults.set(sendsOnReturn, forKey: Key.sendOnReturn) }
+    }
+
+    /// Developer escape hatch for plain-HTTP servers on localhost and private networks.
+    /// Never allows insecure connections to a public host.
+    var allowsInsecureLocalServers: Bool {
+        didSet { defaults.set(allowsInsecureLocalServers, forKey: Key.allowInsecureLocalServers) }
+    }
+
+    var isDeveloperModeEnabled: Bool {
+        didSet {
+            defaults.set(isDeveloperModeEnabled, forKey: Key.developerMode)
+            Log.isDeveloperModeEnabled = isDeveloperModeEnabled
+        }
+    }
+
+    /// Restores the sidebar selection across launches.
+    var lastSelectedToken: String? {
+        didSet { defaults.set(lastSelectedToken, forKey: Key.lastSelectedToken) }
+    }
+
+    /// Read directly from `UserDefaults` by code that can't reach the main actor.
+    nonisolated static let allowInsecureLocalServersKey = Key.allowInsecureLocalServers
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -35,56 +86,14 @@ final class Preferences {
             Key.allowInsecureLocalServers: false,
             Key.developerMode: false
         ])
-    }
 
-    /// Read directly from `UserDefaults` by code that can't reach the main actor.
-    nonisolated static let allowInsecureLocalServersKey = Key.allowInsecureLocalServers
-
-    var showsNotifications: Bool {
-        get { defaults.bool(forKey: Key.showNotifications) }
-        set { defaults.set(newValue, forKey: Key.showNotifications) }
-    }
-
-    var playsNotificationSound: Bool {
-        get { defaults.bool(forKey: Key.notificationSound) }
-        set { defaults.set(newValue, forKey: Key.notificationSound) }
-    }
-
-    /// When off, notifications say who and where but not what — for shared screens.
-    var showsNotificationPreviews: Bool {
-        get { defaults.bool(forKey: Key.notificationPreviews) }
-        set { defaults.set(newValue, forKey: Key.notificationPreviews) }
-    }
-
-    var showsDockBadge: Bool {
-        get { defaults.bool(forKey: Key.dockBadge) }
-        set { defaults.set(newValue, forKey: Key.dockBadge) }
-    }
-
-    /// Return sends, Shift-Return inserts a newline. Inverted when this is off.
-    var sendsOnReturn: Bool {
-        get { defaults.bool(forKey: Key.sendOnReturn) }
-        set { defaults.set(newValue, forKey: Key.sendOnReturn) }
-    }
-
-    /// Developer escape hatch for plain-HTTP servers on localhost and private networks.
-    /// Never allows insecure connections to a public host.
-    var allowsInsecureLocalServers: Bool {
-        get { defaults.bool(forKey: Key.allowInsecureLocalServers) }
-        set { defaults.set(newValue, forKey: Key.allowInsecureLocalServers) }
-    }
-
-    var isDeveloperModeEnabled: Bool {
-        get { defaults.bool(forKey: Key.developerMode) }
-        set {
-            defaults.set(newValue, forKey: Key.developerMode)
-            Log.isDeveloperModeEnabled = newValue
-        }
-    }
-
-    /// Restores the sidebar selection across launches.
-    var lastSelectedToken: String? {
-        get { defaults.string(forKey: Key.lastSelectedToken) }
-        set { defaults.set(newValue, forKey: Key.lastSelectedToken) }
+        showsNotifications = defaults.bool(forKey: Key.showNotifications)
+        playsNotificationSound = defaults.bool(forKey: Key.notificationSound)
+        showsNotificationPreviews = defaults.bool(forKey: Key.notificationPreviews)
+        showsDockBadge = defaults.bool(forKey: Key.dockBadge)
+        sendsOnReturn = defaults.bool(forKey: Key.sendOnReturn)
+        allowsInsecureLocalServers = defaults.bool(forKey: Key.allowInsecureLocalServers)
+        isDeveloperModeEnabled = defaults.bool(forKey: Key.developerMode)
+        lastSelectedToken = defaults.string(forKey: Key.lastSelectedToken)
     }
 }

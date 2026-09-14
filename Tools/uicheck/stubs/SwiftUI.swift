@@ -953,6 +953,18 @@ public struct ScrollEdgeEffectStyle: Sendable {
     public var body: StubView { StubView() }
 }
 
+@MainActor public struct Tab<Value: Hashable, Content: View, TabLabel: View>: View {
+    public init(_ title: String, systemImage: String, @ViewBuilder content: () -> Content)
+        where Value == Never, TabLabel == DefaultTabLabel {}
+    public init(_ title: String, systemImage: String, value: Value, @ViewBuilder content: () -> Content)
+        where TabLabel == DefaultTabLabel {}
+    public var body: StubView { StubView() }
+}
+
+public struct DefaultTabLabel: View {
+    public var body: StubView { StubView() }
+}
+
 @MainActor public struct ContentUnavailableView<Label: View, Description: View, Actions: View>: View {
     public init(_ title: String, systemImage: String) where Label == Text, Description == EmptyView, Actions == EmptyView {}
     public init(_ title: String, systemImage: String, description: Text) where Label == Text, Description == Text, Actions == EmptyView {}
