@@ -19,6 +19,8 @@ struct ChatView: View {
     @State private var didInitialScroll = false
     @State private var highlightClearTask: Task<Void, Never>?
     @State private var viewingAttachment: RichObject?
+    /// Suppresses per-row hover work while the transcript is moving.
+    @State private var isScrolling = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -49,8 +51,12 @@ struct ChatView: View {
                 .animation(.smooth(duration: 0.25), value: model.lastError)
                 .animation(.smooth(duration: 0.25), value: model.unreachableMessageID)
                 .animation(.smooth(duration: 0.25), value: model.isRevealing)
-            Divider()
-            ComposerView(model: model, isFocused: $composerFocused)
+                // An inset rather than another row in the stack: the composer floats over
+                // the transcript the way Messages' does, and the scroll view still knows
+                // not to hide the newest message behind it.
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    ComposerView(model: model, isFocused: $composerFocused)
+                }
         }
         .background(Color(nsColor: .textBackgroundColor))
         .navigationTitle(model.conversation.displayName)
@@ -109,23 +115,39 @@ struct ChatView: View {
             }
             .defaultScrollAnchor(.bottom)
             .scrollContentBackground(.hidden)
-            .onScrollGeometryChange(for: ScrollPositionMetrics.self) { geometry in
-                ScrollPositionMetrics(
-                    distanceFromBottom: max(0, geometry.contentSize.height - geometry.contentOffset.y - geometry.containerSize.height),
-                    distanceFromTop: geometry.contentOffset.y
+            // Deliberately two Bools rather than two distances. A raw offset changes on
+            // every frame of a scroll, so an Equatable built from offsets is never equal
+            // to its predecessor and this action runs every frame — which is both the
+            // "tried to update multiple times per frame" warning and a good part of the
+            // jank. Thresholds only change when they are actually crossed.
+            .onScrollGeometryChange(for: ScrollEdges.self) { geometry in
+                let fromBottom = geometry.contentSize.height
+                    - geometry.contentOffset.y
+                    - geometry.containerSize.height
+                return ScrollEdges(
+                    // 40pt of slack: "at the bottom" should survive a stray trackpad nudge.
+                    isAtBottom: fromBottom < 40,
+                    // Start fetching before the user reaches the top, so history is
+                    // usually already there by the time they arrive.
+                    isNearTop: geometry.contentOffset.y < 240
                 )
-            } action: { _, metrics in
-                // 40pt of slack: "at the bottom" should survive a stray trackpad nudge.
-                let atBottom = metrics.distanceFromBottom < 40
-                if model.isScrolledToLatest != atBottom { model.isScrolledToLatest = atBottom }
-
-                // Start fetching before the user reaches the top, so history is usually
-                // already there by the time they arrive.
-                guard didInitialScroll, metrics.distanceFromTop < 240,
+            } action: { _, edges in
+                if model.isScrolledToLatest != edges.isAtBottom {
+                    model.isScrolledToLatest = edges.isAtBottom
+                }
+                guard didInitialScroll, edges.isNearTop,
                       model.canLoadOlder, !model.isLoadingOlder
                 else { return }
                 Task { await loadOlderKeepingPosition(proxy) }
             }
+            // Rows sliding under a stationary pointer fire onHover continuously, which
+            // flickers the action strip and re-lays out every row it touches. Nothing
+            // hovers while the transcript is moving.
+            .onScrollPhaseChange { _, phase in
+                let scrolling = phase != .idle
+                if isScrolling != scrolling { isScrolling = scrolling }
+            }
+            .environment(\.isTranscriptScrolling, isScrolling)
             .onChange(of: model.rows.last?.id) { _, _ in
                 guard model.isScrolledToLatest else { return }
                 scrollToBottom(proxy, animated: didInitialScroll)
@@ -279,9 +301,21 @@ struct ChatView: View {
     private static let bottomAnchor = "chat-bottom-anchor"
 }
 
-private struct ScrollPositionMetrics: Equatable {
-    var distanceFromBottom: CGFloat
-    var distanceFromTop: CGFloat
+private struct ScrollEdges: Equatable {
+    var isAtBottom: Bool
+    var isNearTop: Bool
+}
+
+private struct IsTranscriptScrollingKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    /// True while the transcript is being scrolled. Rows use it to stand down.
+    var isTranscriptScrolling: Bool {
+        get { self[IsTranscriptScrollingKey.self] }
+        set { self[IsTranscriptScrollingKey.self] = newValue }
+    }
 }
 
 /// "Today", "Yesterday", or the date — the way Messages does it.

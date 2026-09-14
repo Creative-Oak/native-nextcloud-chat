@@ -26,6 +26,7 @@ struct MessageRow: View {
     @State private var isShowingReactionDetail = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.talkSession) private var session
+    @Environment(\.isTranscriptScrolling) private var isScrolling
 
     var body: some View {
         if message.isSystem {
@@ -36,21 +37,26 @@ struct MessageRow: View {
     }
 
     private var messageBody: some View {
-        HStack(alignment: .top, spacing: 8) {
-            // The gutter keeps grouped messages aligned with the first one's text.
-            Group {
-                if group.showsAvatar {
-                    ActorAvatarView(actor: message.actor, size: 28)
-                } else {
-                    Color.clear.frame(width: 28, height: 1)
+        HStack(alignment: .bottom, spacing: 8) {
+            if isFromMe {
+                // Your own messages hug the right edge; no avatar, you know who you are.
+                Spacer(minLength: 48)
+            } else {
+                // The gutter keeps grouped messages aligned with the first one's text.
+                Group {
+                    if group.showsAvatar {
+                        ActorAvatarView(actor: message.actor, size: 28)
+                    } else {
+                        Color.clear.frame(width: 28, height: 1)
+                    }
                 }
             }
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: isFromMe ? .trailing : .leading, spacing: 2) {
                 if group.showsHeader { header }
                 if let parent = message.parent { QuotedMessageView(parent: parent, onTap: { onShowParent(parent.messageID) }) }
 
-                content_
+                bubble
 
                 if !message.reactions.isEmpty {
                     ReactionStrip(
@@ -71,15 +77,26 @@ struct MessageRow: View {
 
                 if message.deliveryState.isPending { deliveryStatus }
             }
+            // A bubble that runs the full width of a wide window is a wall of text, not a
+            // message. Past this the line length stops being comfortable to read anyway.
+            .frame(maxWidth: 520, alignment: isFromMe ? .trailing : .leading)
 
-            Spacer(minLength: 8)
+            if !isFromMe { Spacer(minLength: 48) }
         }
         .padding(.horizontal, 16)
         .padding(.top, group.showsHeader ? 8 : 1)
         .padding(.bottom, 1)
         .contentShape(.rect)
-        .onHover { isHovering = $0 }
-        .overlay(alignment: .topTrailing) { hoverActions }
+        .onHover { hovering in
+            // Ignored mid-scroll: rows moving under a still pointer would otherwise
+            // flicker the action strip the whole way down.
+            guard !isScrolling else { return }
+            isHovering = hovering
+        }
+        .onChange(of: isScrolling) { _, scrolling in
+            if scrolling { isHovering = false }
+        }
+        .overlay(alignment: isFromMe ? .topLeading : .topTrailing) { hoverActions }
         .contextMenu { MessageContextMenu(
             message: message,
             content: content,
@@ -119,6 +136,33 @@ struct MessageRow: View {
         return parts.joined(separator: ", ")
     }
 
+    /// The message in a bubble: accent-tinted when it's yours, a quiet fill when it isn't.
+    /// A deleted message gets no bubble — there is nothing to contain.
+    @ViewBuilder
+    private var bubble: some View {
+        if message.isDeleted || message.kind == .commentDeleted {
+            content_
+        } else {
+            content_
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(bubbleFill, in: .rect(cornerRadius: 16, style: .continuous))
+                .foregroundStyle(isFromMe ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
+        }
+    }
+
+    private var bubbleFill: AnyShapeStyle {
+        isFromMe
+            ? AnyShapeStyle(Color.accentColor)
+            // Opacity on `primary` rather than a fixed grey, so it inverts with the theme.
+            : AnyShapeStyle(Color.primary.opacity(0.09))
+    }
+
+    /// Secondary marks inside a bubble can't use `.tertiary` — it disappears on accent.
+    private var bubbleSecondary: AnyShapeStyle {
+        isFromMe ? AnyShapeStyle(Color.white.opacity(0.7)) : AnyShapeStyle(.tertiary)
+    }
+
     @ViewBuilder
     private var content_: some View {
         if message.isDeleted || message.kind == .commentDeleted {
@@ -128,19 +172,19 @@ struct MessageRow: View {
                 .italic()
         } else {
             HStack(alignment: .bottom, spacing: 6) {
-                MessageContentView(content: content, isFromMe: false)
+                MessageContentView(content: content, isFromMe: isFromMe)
                     .font(.body)
                     .opacity(message.deliveryState.isPending ? 0.6 : 1)
                 if message.lastEdit != nil {
                     Text("edited")
                         .font(.caption2)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(bubbleSecondary)
                         .help(editedHelp)
                 }
                 if message.isSilent && capabilities.showsSilentState {
                     Image(systemName: "bell.slash")
                         .font(.caption2)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(bubbleSecondary)
                         .help("Sent without a notification")
                 }
             }
@@ -149,10 +193,12 @@ struct MessageRow: View {
 
     private var header: some View {
         HStack(spacing: 6) {
-            Text(message.actor.resolvedDisplayName)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(isFromMe ? Color.accentColor : .primary)
-            if message.actor.isBot {
+            if !isFromMe {
+                Text(message.actor.resolvedDisplayName)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.primary)
+            }
+            if !isFromMe, message.actor.isBot {
                 Text("BOT")
                     .font(.system(size: 9, weight: .bold))
                     .padding(.horizontal, 3)
@@ -160,7 +206,7 @@ struct MessageRow: View {
                     .background(.quaternary, in: .rect(cornerRadius: 3))
                     .foregroundStyle(.secondary)
             }
-            if let server = message.actor.federationServer {
+            if !isFromMe, let server = message.actor.federationServer {
                 Text(server)
                     .font(.system(size: 10))
                     .foregroundStyle(.tertiary)
@@ -213,7 +259,7 @@ struct MessageRow: View {
                 canDelete: canDelete,
                 onReply: onReply, onEdit: onEdit, onDelete: onDelete, onReact: onReact
             )
-            .padding(.trailing, 16)
+            .padding(isFromMe ? .leading : .trailing, 16)
             .transition(reduceMotion ? .identity : .opacity)
         }
     }

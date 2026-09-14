@@ -185,6 +185,10 @@ struct ConversationRow: View {
             }
         }
         .padding(.vertical, 3)
+        // Without this, only the drawn glyphs are hit-testable: the gaps the Spacers open
+        // up between name, timestamp and preview swallow clicks, and the row reads as
+        // having dead patches in it.
+        .contentShape(.rect)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityLabel)
     }

@@ -35,7 +35,8 @@ struct ComposerView: View {
                 unavailableNotice
             }
         }
-        .background(.bar)
+        // No bar. The composer is floating chrome now: the transcript slides under it and
+        // shows through the glass, which is what the material is for.
         .overlay(alignment: .bottomLeading) { mentionSuggestions }
     }
 
@@ -53,6 +54,16 @@ struct ComposerView: View {
                 .keyboardShortcut("a", modifiers: [.command, .shift])
             }
 
+            field
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+    }
+
+    /// Text, character count and send, all inside one glass capsule — the field is a
+    /// single control rather than a row of parts spread across the window.
+    private var field: some View {
+        HStack(alignment: .bottom, spacing: 6) {
             ComposerTextView(
                 text: $model.draftText,
                 isFocused: $isFocused,
@@ -99,8 +110,10 @@ struct ComposerView: View {
                 .help(sendHelp)
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.leading, 12)
+        .padding(.trailing, 6)
+        .padding(.vertical, 5)
+        .glass(.field, cornerRadius: 18)
     }
 
     private var unavailableNotice: some View {
@@ -115,6 +128,9 @@ struct ComposerView: View {
         .foregroundStyle(.secondary)
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
+        .glass(.panel, cornerRadius: 14)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
     }
 
     private var placeholder: String {
@@ -205,6 +221,9 @@ private struct ComposerContextBar: View {
             .keyboardShortcut(.escape, modifiers: [])
             .help("Cancel (Escape)")
         }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .glass(.panel, cornerRadius: 12)
         .padding(.horizontal, 12)
         .padding(.top, 6)
     }

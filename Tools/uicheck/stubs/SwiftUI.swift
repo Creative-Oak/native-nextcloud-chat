@@ -695,6 +695,10 @@ public struct GridItem: Sendable {
     public func scrollTo<ID: Hashable>(_ id: ID, anchor: UnitPoint? = nil) {}
 }
 
+public enum ScrollPhase: Equatable, Sendable {
+    case idle, tracking, interacting, decelerating, animating
+}
+
 public struct ScrollGeometry: Equatable, Sendable {
     public var contentOffset: CGPoint = .zero
     public var contentSize: CGSize = .zero
@@ -950,6 +954,7 @@ extension View {
     public func defaultScrollAnchor(_ anchor: UnitPoint?) -> StubView { StubView() }
     public func scrollEdgeEffectStyle(_ style: ScrollEdgeEffectStyle?, for edges: Edge.Set) -> StubView { StubView() }
     public func onScrollGeometryChange<T: Equatable>(for type: T.Type, of transform: @escaping (ScrollGeometry) -> T, action: @escaping (T, T) -> Void) -> StubView { StubView() }
+    public func onScrollPhaseChange(_ action: @escaping (ScrollPhase, ScrollPhase) -> Void) -> StubView { StubView() }
 
     public func dropDestination<T>(for payloadType: T.Type, action: @escaping ([T], CGPoint) -> Bool, isTargeted: @escaping (Bool) -> Void) -> StubView { StubView() }
     public func draggable<T>(_ payload: @autoclosure @escaping () -> T) -> StubView { StubView() }

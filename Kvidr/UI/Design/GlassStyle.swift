@@ -26,6 +26,9 @@ enum GlassRole {
     case chip
     /// A chip the current user is part of — tinted with the accent colour.
     case selectedChip
+    /// The message field. Floating chrome, so it earns glass — but not the *interactive*
+    /// variant: a pointer highlight fights with a text cursor sitting in the same control.
+    case field
 }
 
 extension View {
@@ -41,6 +44,8 @@ extension View {
             glassEffect(.regular.interactive(), in: .capsule)
         case .selectedChip:
             glassEffect(.regular.tint(.accentColor).interactive(), in: .capsule)
+        case .field:
+            glassEffect(.regular, in: .rect(cornerRadius: cornerRadius ?? 18))
         }
     }
 
