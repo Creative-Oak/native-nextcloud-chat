@@ -136,7 +136,7 @@ target is compiled by CI on a macOS runner. Anything not yet green on CI is mark
   which is what catches a wrong argument label, a missing member or an isolation mistake
   before Xcode does. What that cannot check is the parts with no stand-in: how Liquid Glass
   actually renders, SwiftData's macros, the Keychain, and anything that is a runtime
-  behaviour rather than a type. See docs/FIRST_BUILD.md.
+  behaviour rather than a type. See docs/MAC_HANDOVER.md.
 - **Not yet run against a real server.** Every request shape is verified against the
   documentation and against fixtures, but no live Nextcloud has answered one of them.
 

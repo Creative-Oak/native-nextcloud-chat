@@ -100,8 +100,9 @@ This was written without a macOS SDK, so Xcode has never built it. The app *is* 
 here — `Tools/uicheck` stands in modules named SwiftUI, AppKit and SwiftData and runs the
 real sources through the Swift 6 type checker against them, and it runs in CI — but SwiftData's
 macros, the Keychain and how Liquid Glass actually renders can only be seen on a Mac.
-[`docs/FIRST_BUILD.md`](docs/FIRST_BUILD.md) explains what to expect and what is worth
-checking once it runs.
+[`docs/MAC_HANDOVER.md`](docs/MAC_HANDOVER.md) is the handover: what has been verified and
+how, how to build and sign it, what to do when something goes wrong, and what is worth
+your judgement once it runs.
 
 ## Documentation
 
@@ -109,7 +110,7 @@ checking once it runs.
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — layers, concurrency, data flow
 - [`docs/NEXTCLOUD_API.md`](docs/NEXTCLOUD_API.md) — every endpoint and capability relied on, verified against the official docs
 - [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) — the plan, and what is done
-- [`docs/FIRST_BUILD.md`](docs/FIRST_BUILD.md) — getting through the first compile
+- [`docs/MAC_HANDOVER.md`](docs/MAC_HANDOVER.md) — **start here on a Mac**: building, signing, signing in, and what to send back when something breaks
 
 ## Development against your own server
 

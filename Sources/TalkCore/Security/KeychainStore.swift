@@ -5,15 +5,18 @@ import Security
 
 /// App passwords in the macOS Keychain, as generic passwords.
 ///
-/// - The account id is the keychain `account`, the bundle id is the `service`.
+/// - The account id is the keychain `account`, the bundle id is the `service` — taken from
+///   the running bundle so that changing `PRODUCT_BUNDLE_IDENTIFIER` doesn't quietly
+///   orphan the stored credentials. The literal is only the fallback for a context with no
+///   bundle, such as a Linux test run.
 /// - `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` keeps the secret on this Mac:
 ///   it is a per-device credential and has no business syncing anywhere.
 /// - Nothing else in the app is allowed to read or write these items.
 struct KeychainStore: CredentialStore {
     let service: String
 
-    init(service: String = "dk.creativeoak.TalkForMac") {
-        self.service = service
+    init(service: String? = nil) {
+        self.service = service ?? Bundle.main.bundleIdentifier ?? "dk.creativeoak.TalkForMac"
     }
 
     func credentials(for accountID: String) throws -> Credentials? {
