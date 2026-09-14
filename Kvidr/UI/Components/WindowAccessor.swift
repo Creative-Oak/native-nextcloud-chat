@@ -25,6 +25,12 @@ struct WindowConfigurator: NSViewRepresentable {
         window.setFrameAutosaveName(autosaveName)
         // Nothing in this app benefits from tabs, and they complicate ⌘W.
         window.tabbingMode = .disallowed
+        // The conversation header already says who you are talking to, in the middle of
+        // the window where Messages puts it. Leaving the title in the title bar as well
+        // says it twice and costs a whole row of height. `window.title` is untouched, so
+        // Mission Control and the Window menu still know what this window is —
+        // SwiftUI's `.toolbar(removing: .title)` does not reach this and has no effect.
+        window.titleVisibility = .hidden
     }
 }
 

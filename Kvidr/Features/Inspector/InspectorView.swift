@@ -36,6 +36,8 @@ struct InspectorView: View {
                 }
             }
             .formStyle(.grouped)
+            // The Form paints an opaque background of its own, which sat on top of
+            // the recessed tint below and left the whole panel flat white.
             .scrollContentBackground(.hidden)
         }
         .overlay {
@@ -44,7 +46,16 @@ struct InspectorView: View {
             }
         }
         .frame(minWidth: 240, idealWidth: 300, maxWidth: 380)
-        .background(Color(nsColor: .windowBackgroundColor))
+        // A grouped form only reads as grouped when it sits on something recessed —
+        // white rows on a white panel are just text. windowBackgroundColor comes out
+        // white here, so the tint is explicit: the page colour with a few percent of
+        // `primary` over it, which darkens in light mode and lifts in dark.
+        .background {
+            ZStack {
+                Color(nsColor: .textBackgroundColor)
+                Color.primary.opacity(0.045)
+            }
+        }
         .task(id: model.conversation.token) { await model.loadIfNeeded() }
         .sheet(item: $settings) { model in
             ConversationSettingsSheet(model: model)

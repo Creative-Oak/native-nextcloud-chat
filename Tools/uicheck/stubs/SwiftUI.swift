@@ -695,6 +695,26 @@ public struct GridItem: Sendable {
     public func scrollTo<ID: Hashable>(_ id: ID, anchor: UnitPoint? = nil) {}
 }
 
+public struct ToolbarDefaultItemKind: Sendable {
+    public static let title = ToolbarDefaultItemKind()
+    public static let sidebarToggle = ToolbarDefaultItemKind()
+}
+
+public struct Gradient: Sendable {
+    public struct Stop: Sendable {
+        public init(color: Color, location: CGFloat) {}
+    }
+    public init(colors: [Color]) {}
+    public init(stops: [Stop]) {}
+}
+
+public struct LinearGradient: ShapeStyle, View {
+    public init(gradient: Gradient, startPoint: UnitPoint, endPoint: UnitPoint) {}
+    public init(colors: [Color], startPoint: UnitPoint, endPoint: UnitPoint) {}
+    public init(stops: [Gradient.Stop], startPoint: UnitPoint, endPoint: UnitPoint) {}
+    public var body: StubView { StubView() }
+}
+
 public enum ScrollPhase: Equatable, Sendable {
     case idle, tracking, interacting, decelerating, animating
 }
@@ -954,6 +974,7 @@ extension View {
     public func toolbar<C: ToolbarContent>(@ToolbarContentBuilder content: () -> C) -> StubView { StubView() }
 
     public func scrollContentBackground(_ visibility: Visibility) -> StubView { StubView() }
+    public func toolbar(removing kind: ToolbarDefaultItemKind?) -> StubView { StubView() }
     public func listRowInsets(_ insets: EdgeInsets?) -> StubView { StubView() }
     public func listRowSeparator(_ visibility: Visibility, edges: VerticalEdge.Set = .all) -> StubView { StubView() }
     public func scrollBounceBehavior(_ behavior: ScrollBounceBehavior, axes: Axis.Set = .vertical) -> StubView { StubView() }

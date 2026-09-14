@@ -417,31 +417,26 @@ private struct ChatHeaderView: View {
     var body: some View {
         ZStack {
             Button(action: onShowDetails) {
-                VStack(spacing: 4) {
-                    AvatarView(conversation: model.conversation, size: 44)
+                VStack(spacing: 3) {
+                    AvatarView(conversation: model.conversation, size: 32)
 
                     HStack(spacing: 3) {
                         Text(model.conversation.displayName)
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(.system(size: 12, weight: .semibold))
                             .lineLimit(1)
                         Image(systemName: "chevron.right")
-                            .font(.system(size: 9, weight: .bold))
+                            .font(.system(size: 8, weight: .bold))
                             .foregroundStyle(.tertiary)
                     }
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 3)
-                    .glass(.floating, cornerRadius: 11)
-
-                    if let subtitle {
-                        Text(subtitle)
-                            .font(.system(size: 10))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 2)
+                    .glass(.floating, cornerRadius: 10)
                 }
             }
             .buttonStyle(.plain)
-            .help("Conversation details")
+            // The status line lived here and cost 14pt of a header that was already too
+            // tall; the inspector shows it, and that is one click away.
+            .help(subtitle.map { "\(model.conversation.displayName) — \($0)" } ?? "Conversation details")
 
             HStack {
                 Button(action: onNewConversation) {
@@ -466,12 +461,27 @@ private struct ChatHeaderView: View {
             }
         }
         .padding(.horizontal, 16)
-        .padding(.top, 6)
-        .padding(.bottom, 10)
-        // `.bar` is opaque enough that the messages passing underneath simply vanish,
-        // which reads as the transcript being cut off rather than as a floating header.
-        // ultraThin is the one that actually shows what it is blurring.
-        .background(.ultraThinMaterial)
+        .padding(.top, 4)
+        .padding(.bottom, 7)
+        // Masked, not a plain fill. A material with a hard bottom edge draws a line
+        // across the transcript, and a line across the transcript is exactly what reads
+        // as the messages being cut off. Fading it out is what makes the same blur read
+        // as content passing underneath — which is what Messages does.
+        .background {
+            Rectangle()
+                .fill(.ultraThinMaterial)
+                .mask {
+                    LinearGradient(
+                        stops: [
+                            .init(color: .black, location: 0),
+                            .init(color: .black, location: 0.62),
+                            .init(color: .clear, location: 1)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                }
+        }
     }
 
     private var subtitle: String? {

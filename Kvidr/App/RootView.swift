@@ -105,6 +105,12 @@ struct RootView: View {
                 )
                     // A fresh view per conversation: no state bleeds between them.
                     .id(chat.token)
+                    // The detail column is what contributes the title item, so this has
+                    // to be removed here — on the split view it does nothing, and
+                    // NSWindow.titleVisibility does not reach it either because this is
+                    // a toolbar item, not the centred window title. The header two rows
+                    // down already says who this is.
+                    .toolbar(removing: .title)
             } else {
                 NoConversationSelected(hasConversations: !(app.conversationList?.index.isEmpty ?? true))
             }
