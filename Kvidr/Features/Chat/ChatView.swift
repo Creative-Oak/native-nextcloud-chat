@@ -24,19 +24,28 @@ struct ChatView: View {
     @State private var viewingAttachment: RichObject?
     /// Suppresses per-row hover work while the transcript is moving.
     @State private var isScrolling = false
+    /// Measured, because the floating bars below have to clear the header and it
+    /// changes height with the subtitle.
+    @State private var headerHeight: CGFloat = 0
 
     var body: some View {
         VStack(spacing: 0) {
-            ChatHeaderView(
-                model: model,
-                onNewConversation: onNewConversation,
-                onShowDetails: onShowDetails
-            )
             transcript
+                // An inset, not a sibling in the stack. As a sibling the transcript was
+                // simply clipped at the header's edge; as an inset the messages scroll
+                // *under* it and the material actually has something to blur.
+                .safeAreaInset(edge: .top, spacing: 0) {
+                    ChatHeaderView(
+                        model: model,
+                        onNewConversation: onNewConversation,
+                        onShowDetails: onShowDetails
+                    )
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { headerHeight = $0 }
+                }
                 .overlay(alignment: .top) {
                     if let error = model.lastError, error != .cancelled {
                         InlineStatusBar(error: error, state: model.syncState)
-                            .padding(.top, 10)
+                            .padding(.top, headerHeight + 10)
                             .transition(.move(edge: .top).combined(with: .opacity))
                     } else if let messageID = model.unreachableMessageID {
                         UnreachableMessageBar(
@@ -46,11 +55,11 @@ struct ChatView: View {
                             },
                             onDismiss: { model.dismissUnreachableMessage() }
                         )
-                        .padding(.top, 10)
+                        .padding(.top, headerHeight + 10)
                         .transition(.move(edge: .top).combined(with: .opacity))
                     } else if model.isRevealing {
                         RevealingBar()
-                            .padding(.top, 10)
+                            .padding(.top, headerHeight + 10)
                             .transition(.opacity)
                     }
                 }
@@ -91,7 +100,7 @@ struct ChatView: View {
         .overlay(alignment: .top) {
             if model.isSearching {
                 ChatSearchBar(model: model)
-                    .padding(.top, 52)
+                    .padding(.top, headerHeight + 8)
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
@@ -437,11 +446,11 @@ private struct ChatHeaderView: View {
             HStack {
                 Button(action: onNewConversation) {
                     Image(systemName: "square.and.pencil")
-                        .font(.system(size: 13))
-                        .frame(width: 16, height: 16)
+                        .font(.system(size: 15, weight: .medium))
                 }
                 .buttonStyle(.glass)
                 .buttonBorderShape(.circle)
+                .frame(width: GlassMetrics.control, height: GlassMetrics.control)
                 .help("New Conversation (⌘N)")
 
                 Spacer()

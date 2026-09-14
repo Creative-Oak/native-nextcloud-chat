@@ -55,6 +55,15 @@ extension View {
     }
 }
 
+/// Sizes for the app's glass chrome.
+enum GlassMetrics {
+    /// Circular chrome buttons — the composer's plus, the header's compose. 32 is the
+    /// composer field's height (a 22pt line of text plus 5pt of padding above and below),
+    /// so the buttons and the field read as one band rather than as a field with small
+    /// satellites orbiting it.
+    static let control: CGFloat = 32
+}
+
 /// Spacing constants for glass containers.
 ///
 /// The container's spacing decides how close two glass shapes have to be before they merge.

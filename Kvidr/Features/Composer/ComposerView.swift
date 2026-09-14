@@ -50,13 +50,13 @@ struct ComposerView: View {
                         .keyboardShortcut("a", modifiers: [.command, .shift])
                 } label: {
                     Image(systemName: "plus")
-                        .font(.system(size: 13, weight: .medium))
-                        .frame(width: 16, height: 16)
+                        .font(.system(size: 15, weight: .medium))
                 }
                 .menuStyle(.button)
                 .buttonStyle(.glass)
                 .buttonBorderShape(.circle)
                 .menuIndicator(.hidden)
+                .frame(width: GlassMetrics.control, height: GlassMetrics.control)
                 .help("Add an attachment")
             }
 
