@@ -19,6 +19,11 @@ struct MessageContentView: View {
                 MessageBlockView(block: block, isFromMe: isFromMe)
             }
         }
+        // Link colour comes from the tint, not from a foregroundColor attribute — SwiftUI
+        // renders `.link` runs in the tint and ignores the attribute. Setting it here is
+        // also the only thing that reaches links inside parsed markdown and rich objects,
+        // which never pass through the `.link` branch below at all.
+        .tint(isFromMe ? Color.white : Color.accentColor)
     }
 }
 
@@ -105,12 +110,17 @@ enum MessageAttributedString {
         case .mention(let mention):
             var text = AttributedString(mention.displayLabel)
             text.font = .body.weight(.medium)
-            if mention.isCurrentUser {
+            if isFromMe {
+                // Nothing accent-coloured survives inside an accent bubble — including a
+                // mention of yourself, which would otherwise be accent on accent.
+                text.foregroundColor = .white
+                if mention.isCurrentUser { text.backgroundColor = Color.white.opacity(0.22) }
+            } else if mention.isCurrentUser {
                 // The one piece of colour in an otherwise calm transcript.
                 text.foregroundColor = .accentColor
                 text.backgroundColor = Color.accentColor.opacity(0.15)
             } else {
-                text.foregroundColor = isFromMe ? .white.opacity(0.9) : .accentColor
+                text.foregroundColor = .accentColor
             }
             return text
 

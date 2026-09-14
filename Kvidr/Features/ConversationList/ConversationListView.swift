@@ -69,10 +69,16 @@ struct ConversationListView: View {
                 .tag(conversation.token)
                 // Double-clicking a conversation opens it and puts the caret in the
                 // message field — the thing you were almost certainly about to do.
-                .onTapGesture(count: 2) {
+                //
+                // Simultaneous, not `onTapGesture(count: 2)`: an exclusive double-tap
+                // consumes the single click the List needs to move its selection, so a
+                // plain click stops opening anything and every row demands a double.
+                // This way the List keeps its own click handling — and its drag-select,
+                // ⌘-click and arrow keys with it — and the double-tap is additional.
+                .simultaneousGesture(TapGesture(count: 2).onEnded {
                     selection = conversation.token
                     composerFocused = true
-                }
+                })
                 .contextMenu { contextMenu(for: conversation) }
         }
     }
