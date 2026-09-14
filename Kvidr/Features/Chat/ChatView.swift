@@ -149,8 +149,13 @@ struct ChatView: View {
             }
             .environment(\.isTranscriptScrolling, isScrolling)
             .onChange(of: model.rows.last?.id) { _, _ in
-                guard model.isScrolledToLatest else { return }
-                scrollToBottom(proxy, animated: didInitialScroll)
+                // `didInitialScroll` gates this as well as the initial positioning: when
+                // the first rows arrive both this and the isEmpty handler below fire in
+                // the same frame, and both scroll. Two scrollTo calls in one frame is
+                // the "onChange action tried to update multiple times per frame"
+                // warning. The first frame belongs to positionInitially.
+                guard didInitialScroll, model.isScrolledToLatest else { return }
+                scrollToBottom(proxy, animated: true)
             }
             // The first rows arrive from the cache *after* the view appears, so the initial
             // positioning has to wait for them rather than happening in onAppear.

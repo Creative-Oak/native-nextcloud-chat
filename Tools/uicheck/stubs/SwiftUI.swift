@@ -695,21 +695,6 @@ public struct GridItem: Sendable {
     public func scrollTo<ID: Hashable>(_ id: ID, anchor: UnitPoint? = nil) {}
 }
 
-public protocol Gesture {}
-
-public struct TapGesture: Gesture {
-    public init(count: Int = 1) {}
-    // Narrowed to TapGesture and returning Self rather than modelling _EndedGesture: the
-    // app only ever builds a tap, and this file is the surface the app uses.
-    public func onEnded(_ action: @escaping () -> Void) -> TapGesture { self }
-}
-
-public struct GestureMask: OptionSet, Sendable {
-    public let rawValue: Int
-    public init(rawValue: Int) { self.rawValue = rawValue }
-    public static let all = GestureMask(rawValue: 1)
-}
-
 public enum ScrollPhase: Equatable, Sendable {
     case idle, tracking, interacting, decelerating, animating
 }
@@ -928,7 +913,6 @@ extension View {
     public func onDisappear(perform action: (() -> Void)? = nil) -> StubView { StubView() }
     public func onHover(perform action: @escaping (Bool) -> Void) -> StubView { StubView() }
     public func onTapGesture(count: Int = 1, perform action: @escaping () -> Void) -> StubView { StubView() }
-    public func simultaneousGesture<G: Gesture>(_ gesture: G, including mask: GestureMask = .all) -> StubView { StubView() }
     public func onSubmit(_ action: @escaping () -> Void) -> StubView { StubView() }
     public func onExitCommand(perform action: @escaping () -> Void) -> StubView { StubView() }
     public func onChange<V: Equatable>(of value: V, initial: Bool = false, _ action: @escaping (V, V) -> Void) -> StubView { StubView() }
