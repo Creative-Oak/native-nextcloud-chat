@@ -3,42 +3,47 @@ import SwiftUI
 
 /// The third column: who's here, what's been shared, and what this conversation is.
 ///
-/// Shaped like a contact card rather than a settings pane: who this is, large, then the
-/// handful of things you can do about it as round buttons, then the tabs. Everything below
-/// sits in grouped cards, so the panel reads as a stack of objects instead of a wall of
-/// label-and-value pairs.
+/// Shaped like Messages' contact card rather than a settings pane: who this is, large,
+/// then the handful of things you can do about it as round buttons, then the tabs, then
+/// the information as a stack of rounded cards with a label over each value. Close and
+/// Edit live in the toolbar band above the card, where Messages puts them — see
+/// `RootView.detailToolbar`.
 struct InspectorView: View {
     @Bindable var model: InspectorModel
     var onOpenMessage: (Int) -> Void
+    /// Opens the in-conversation search — the transcript's, not the app-wide sheet.
+    var onSearch: () -> Void
 
     @Environment(\.talkSession) private var session
-    @State private var settings: ConversationSettingsModel?
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        VStack(spacing: 0) {
-            VStack(spacing: 12) {
+        ScrollView {
+            VStack(spacing: 18) {
                 identity
                 actions
-                picker
-            }
-            .padding(.top, 18)
-            .padding(.bottom, 12)
+                InspectorTabBar(selection: $model.tab, tabs: model.availableTabs)
 
-            // A grouped Form rather than cards drawn by hand. The rounded sections,
-            // their insets, their dividers and the way they respond to the theme are all
-            // AppKit's — which is the only way this ends up looking like the rest of the
-            // system rather than like an approximation of it.
-            Form {
-                switch model.tab {
-                case .details: DetailsTab(model: model)
-                case .people: PeopleTab(model: model)
-                case .files: FilesTab(model: model, onOpenMessage: onOpenMessage)
+                VStack(spacing: 14) {
+                    switch model.tab {
+                    case .details: DetailsTab(model: model)
+                    case .people: PeopleTab(model: model)
+                    case .files: FilesTab(model: model, onOpenMessage: onOpenMessage)
+                    }
                 }
+                .padding(.horizontal, 14)
+                .padding(.bottom, 16)
             }
-            .formStyle(.grouped)
-            // The Form paints an opaque background of its own, which sat on top of
-            // the recessed tint below and left the whole panel flat white.
-            .scrollContentBackground(.hidden)
+            .padding(.top, 12)
+        }
+        // The seam between transcript and panel, the full height of the window. A
+        // `Divider` beside the panel stopped at the toolbar band and left its top end
+        // showing as a stray dot.
+        .overlay(alignment: .leading) {
+            Rectangle()
+                .fill(Color(nsColor: .separatorColor))
+                .frame(width: 1)
+                .ignoresSafeArea()
         }
         .overlay {
             if model.isLoading && model.participants.isEmpty && model.sharedItems.isEmpty {
@@ -46,33 +51,39 @@ struct InspectorView: View {
             }
         }
         .frame(minWidth: 240, idealWidth: 300, maxWidth: 380)
-        // A grouped form only reads as grouped when it sits on something recessed —
-        // white rows on a white panel are just text. windowBackgroundColor comes out
-        // white here, so the tint is explicit: the page colour with a few percent of
-        // `primary` over it, which darkens in light mode and lifts in dark.
+        // Cards only read as cards when they sit on something recessed — white rows on
+        // a white panel are just text. windowBackgroundColor comes out white here, so
+        // the tint is explicit: the page colour with a few percent of `primary` over it
+        // in light mode; in dark the page colour as it is, and the cards lift instead.
+        // A wash of the accent behind the face, fading out by the tabs, is what keeps
+        // the top of the panel from being a flat grey field.
         .background {
             ZStack {
                 Color(nsColor: .textBackgroundColor)
-                Color.primary.opacity(0.045)
+                if colorScheme == .light { Color.primary.opacity(0.045) }
+                LinearGradient(
+                    colors: [Color.accentColor.opacity(colorScheme == .dark ? 0.16 : 0.10), .clear],
+                    startPoint: .top,
+                    endPoint: UnitPoint(x: 0.5, y: 0.32)
+                )
             }
+            .ignoresSafeArea()
         }
         .task(id: model.conversation.token) { await model.loadIfNeeded() }
-        .sheet(item: $settings) { model in
-            ConversationSettingsSheet(model: model)
-        }
     }
 
     /// The card's face: big avatar, the name at title weight, status underneath.
     private var identity: some View {
         VStack(spacing: 8) {
-            AvatarView(conversation: model.conversation, size: 80)
+            AvatarView(conversation: model.conversation, size: 72)
+                .padding(.bottom, 2)
             Text(model.conversation.displayName)
-                .font(.system(size: 20, weight: .bold))
+                .font(.system(size: 24, weight: .bold))
                 .multilineTextAlignment(.center)
                 .textSelection(.enabled)
             if let subtitle {
                 Text(subtitle)
-                    .font(.callout)
+                    .font(.system(size: 13))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
             }
@@ -84,19 +95,15 @@ struct InspectorView: View {
     /// Only things this app can actually do. No placeholder buttons.
     private var actions: some View {
         HStack(spacing: 16) {
+            InspectorAction(symbol: "magnifyingglass", label: "Search in Conversation", action: onSearch)
             InspectorAction(symbol: "link", label: "Copy Link") {
                 guard let url = webURL else { return }
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(url.absoluteString, forType: .string)
             }
-            InspectorAction(symbol: "arrow.up.forward.app", label: "Open in Nextcloud") {
+            InspectorAction(symbol: "safari", label: "Open in Nextcloud") {
                 guard let url = webURL else { return }
                 NSWorkspace.shared.open(url)
-            }
-            if let session, model.conversation.isModerator || model.conversation.canLeaveConversation {
-                InspectorAction(symbol: "gearshape", label: "Conversation Settings…") {
-                    settings = ConversationSettingsModel(session: session, conversation: model.conversation)
-                }
             }
         }
     }
@@ -113,22 +120,10 @@ struct InspectorView: View {
         if conversation.isNoteToSelf { return "Only you can see this" }
         return nil
     }
-
-    /// Words, not icons. Three glyphs in a segmented control is a guessing game, and there
-    /// is room for the labels.
-    private var picker: some View {
-        Picker("", selection: $model.tab) {
-            ForEach(model.availableTabs) { tab in
-                Text(tab.title).tag(tab)
-            }
-        }
-        .pickerStyle(.segmented)
-        .labelsHidden()
-        .padding(.horizontal, 16)
-    }
 }
 
-/// One of the round buttons under the name.
+/// One of the round glass buttons under the name — the same control as the composer's
+/// plus and the transcript's scroll-to-bottom, so the three read as one family.
 private struct InspectorAction: View {
     let symbol: String
     let label: String
@@ -139,12 +134,127 @@ private struct InspectorAction: View {
             Image(systemName: symbol)
                 .font(.system(size: 15, weight: .medium))
                 .foregroundStyle(.primary)
-                .frame(width: 40, height: 40)
-                .background(.quaternary, in: .circle)
+                .frame(width: GlassMetrics.control, height: GlassMetrics.control)
+                .contentShape(.circle)
         }
         .buttonStyle(.plain)
+        .glassCircle()
         .help(label)
         .accessibilityLabel(label)
+    }
+}
+
+/// The tabs, as Messages draws them: words in a row, the current one on a grey pill that
+/// slides across when the selection changes. Three glyphs in a segmented control would be
+/// a guessing game, and there is room for the labels.
+private struct InspectorTabBar: View {
+    @Binding var selection: InspectorModel.Tab
+    let tabs: [InspectorModel.Tab]
+
+    @Namespace private var pill
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(tabs) { tab in
+                Button {
+                    withAnimation(.smooth(duration: 0.2)) { selection = tab }
+                } label: {
+                    Text(tab.title)
+                        .font(.system(size: 13, weight: selection == tab ? .semibold : .regular))
+                        .foregroundStyle(selection == tab ? .primary : .secondary)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 5)
+                        .background {
+                            if selection == tab {
+                                Capsule()
+                                    .fill(.quaternary)
+                                    .matchedGeometryEffect(id: "selected", in: pill)
+                            }
+                        }
+                        .contentShape(.capsule)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 14)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Section")
+    }
+}
+
+// MARK: - Cards
+
+/// A rounded card of rows with a hairline between each, the way Messages' info panel
+/// stacks its information. A caption above names the group when one is needed.
+private struct InspectorCard<Content: View>: View {
+    var title: String?
+    @ViewBuilder var content: Content
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if let title {
+                Text(title)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .padding(.leading, 14)
+            }
+            VStack(spacing: 0) {
+                Group(subviews: content) { rows in
+                    ForEach(rows) { row in
+                        row
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 9)
+                        if row.id != rows.last?.id {
+                            Divider().padding(.leading, 14)
+                        }
+                    }
+                }
+            }
+            .background {
+                // White on the light panel; on the dark one, a lift over the page colour.
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(colorScheme == .dark ? AnyShapeStyle(Color.primary.opacity(0.07)) : AnyShapeStyle(Color(nsColor: .textBackgroundColor)))
+            }
+        }
+    }
+}
+
+/// A small grey label over its value.
+private struct InspectorRow: View {
+    let label: String
+    let value: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.system(size: 13))
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
+/// A row that does something: accent-coloured words, as in Messages.
+private struct InspectorActionRow: View {
+    let title: String
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 13))
+                .foregroundStyle(Color.accentColor)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -154,53 +264,51 @@ private struct DetailsTab: View {
     @Bindable var model: InspectorModel
 
     /// A property rather than a `let` at the top of `body`, so `body` can be a plain run
-    /// of Sections for the Form to lay out.
+    /// of cards for the stack to lay out.
     private var conversation: Conversation { model.conversation }
 
     var body: some View {
         if !conversation.description.isEmpty {
-            Section("Description") {
+            InspectorCard {
                 Text(conversation.description)
+                    .font(.system(size: 13))
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
 
-        Section("Conversation") {
-            LabeledContent("Type", value: typeDescription)
+        InspectorCard(title: "Conversation") {
+            InspectorRow(label: "Type", value: typeDescription)
             if conversation.hasPassword {
-                LabeledContent("Password", value: "Required")
+                InspectorRow(label: "Password", value: "Required")
             }
             if conversation.isReadOnly {
-                LabeledContent("Posting", value: "Read-only")
+                InspectorRow(label: "Posting", value: "Read-only")
             }
             if conversation.messageExpiration > 0 {
-                LabeledContent("Messages expire", value: expiration)
+                InspectorRow(label: "Messages expire", value: expiration)
             }
-            LabeledContent(
-                "Last activity",
+            InspectorRow(
+                label: "Last activity",
                 value: conversation.lastActivity.formatted(date: .abbreviated, time: .shortened)
             )
         }
 
         if model.capabilities.supportsNotificationLevels {
-            Section("Notifications") {
-                LabeledContent("Level", value: conversation.notificationLevel.title)
+            InspectorCard(title: "Notifications") {
+                InspectorRow(label: "Level", value: conversation.notificationLevel.title)
                 Text("Change this by right-clicking the conversation in the sidebar.")
-                    .font(.caption)
+                    .font(.system(size: 11))
                     .foregroundStyle(.tertiary)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
 
-        Section {
-            Button {
+        InspectorCard {
+            InspectorActionRow(title: "Copy Conversation Token") {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(conversation.token, forType: .string)
-            } label: {
-                Label("Copy Conversation Token", systemImage: "doc.on.doc")
             }
-            .buttonStyle(.link)
         }
     }
 
@@ -230,12 +338,18 @@ private struct PeopleTab: View {
 
     var body: some View {
         if model.canManageParticipants {
-            Section { inviteField }
+            InspectorCard {
+                inviteField
+                ForEach(model.inviteResults) { entry in
+                    inviteResult(entry)
+                }
+            }
         }
 
-        Section("Participants") {
+        InspectorCard(title: "Participants") {
             if model.participants.isEmpty && !model.isLoading {
                 Text("No participants to show.")
+                    .font(.system(size: 13))
                     .foregroundStyle(.secondary)
             }
             ForEach(model.participants) { participant in
@@ -252,49 +366,40 @@ private struct PeopleTab: View {
     }
 
     private var inviteField: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 6) {
-                Image(systemName: "person.badge.plus")
-                    .foregroundStyle(.secondary)
-                TextField("Add someone", text: $model.inviteSearch)
-                    .textFieldStyle(.plain)
-                if model.isInviting { ProgressView().controlSize(.small) }
-            }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 6)
-            .glass(.floating, cornerRadius: 8)
+        HStack(spacing: 8) {
+            Image(systemName: "person.badge.plus")
+                .foregroundStyle(.secondary)
+            TextField("Add someone", text: $model.inviteSearch)
+                .textFieldStyle(.plain)
+                .font(.system(size: 13))
+            if model.isInviting { ProgressView().controlSize(.small) }
+        }
+    }
 
-            if !model.inviteResults.isEmpty {
+    private func inviteResult(_ entry: DirectoryEntry) -> some View {
+        Button {
+            Task { await model.invite(entry) }
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: entry.source.symbolName)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 16)
                 VStack(alignment: .leading, spacing: 0) {
-                    ForEach(model.inviteResults) { entry in
-                        Button {
-                            Task { await model.invite(entry) }
-                        } label: {
-                            HStack(spacing: 8) {
-                                Image(systemName: entry.source.symbolName)
-                                    .foregroundStyle(.secondary)
-                                    .frame(width: 16)
-                                VStack(alignment: .leading, spacing: 0) {
-                                    Text(entry.label).lineLimit(1)
-                                    if let subline = entry.subline, !subline.isEmpty {
-                                        Text(subline)
-                                            .font(.caption2)
-                                            .foregroundStyle(.secondary)
-                                            .lineLimit(1)
-                                    }
-                                }
-                                Spacer(minLength: 0)
-                            }
-                            .contentShape(.rect)
-                            .padding(.vertical, 4)
-                            .padding(.horizontal, 6)
-                        }
-                        .buttonStyle(.plain)
+                    Text(entry.label)
+                        .font(.system(size: 13))
+                        .lineLimit(1)
+                    if let subline = entry.subline, !subline.isEmpty {
+                        Text(subline)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
                     }
                 }
-                .glass(.panel, cornerRadius: 8)
+                Spacer(minLength: 0)
             }
+            .contentShape(.rect)
         }
+        .buttonStyle(.plain)
     }
 }
 
@@ -320,6 +425,7 @@ private struct ParticipantRow: View {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: 4) {
                     Text(participant.displayName)
+                        .font(.system(size: 13))
                         .lineLimit(1)
                     if participant.isModerator {
                         Text(participant.participantType == .owner ? "Owner" : "Moderator")
@@ -356,7 +462,6 @@ private struct ParticipantRow: View {
                 .help("Remove from conversation")
             }
         }
-        .padding(.vertical, 3)
         .contentShape(.rect)
         .onHover { isHovering = $0 }
         .contextMenu {
@@ -388,14 +493,15 @@ private struct FilesTab: View {
 
     var body: some View {
         if model.populatedItemTypes.isEmpty && !model.isLoading {
-            Section {
+            InspectorCard {
                 Text("Nothing has been shared here yet.")
+                    .font(.system(size: 13))
                     .foregroundStyle(.secondary)
             }
         }
 
         ForEach(model.populatedItemTypes) { type in
-            Section(type.title) {
+            InspectorCard(title: type.title) {
                 ForEach(model.items(for: type)) { message in
                     SharedItemRow(message: message) { onOpenMessage(message.messageID) }
                 }
@@ -420,6 +526,7 @@ private struct SharedItemRow: View {
                     .frame(width: 18)
                 VStack(alignment: .leading, spacing: 0) {
                     Text(object?.name ?? "Attachment")
+                        .font(.system(size: 13))
                         .lineLimit(1)
                         .truncationMode(.middle)
                     Text(message.timestamp.formatted(date: .abbreviated, time: .omitted))

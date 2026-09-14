@@ -1,142 +1,16 @@
 import AppKit
 import SwiftUI
 
-/// The action strip that appears on hover.
-///
-/// Hidden until the pointer is over the message: the transcript stays clean, and the
-/// actions are exactly where you expect when you want them.
-struct MessageHoverActions: View {
-    let message: Message
-    let capabilities: TalkCapabilities
-    let canEdit: Bool
-    let canDelete: Bool
-
-    var onReply: (Message) -> Void
-    var onEdit: (Message) -> Void
-    var onDelete: (Message) -> Void
-    var onReact: (String, Message) -> Void
-
-    @State private var isShowingEmojiPicker = false
-    @Namespace private var glassNamespace
-
-    var body: some View {
-        GlassEffectContainer(spacing: GlassSpacing.distinct) {
-            actions
-        }
-    }
-
-    private var actions: some View {
-        HStack(spacing: 2) {
-            if capabilities.supportsReactions {
-                ForEach(ChatModel.quickReactions.prefix(3), id: \.self) { emoji in
-                    Button { onReact(emoji, message) } label: {
-                        Text(emoji).font(.system(size: 13))
-                    }
-                    .buttonStyle(.borderless)
-                    .help("React with \(emoji)")
-                }
-
-                Button { isShowingEmojiPicker = true } label: {
-                    Image(systemName: "face.smiling")
-                }
-                .buttonStyle(.borderless)
-                .help("Add Reaction")
-                .popover(isPresented: $isShowingEmojiPicker, arrowEdge: .bottom) {
-                    EmojiPicker { emoji in
-                        onReact(emoji, message)
-                        isShowingEmojiPicker = false
-                    }
-                }
-            }
-
-            if message.isReplyable && capabilities.supportsReplies {
-                Button { onReply(message) } label: {
-                    Image(systemName: "arrowshape.turn.up.left")
-                }
-                .buttonStyle(.borderless)
-                .help("Reply")
-            }
-
-            Menu {
-                MessageContextMenu(
-                    message: message, content: nil, capabilities: capabilities,
-                    canEdit: canEdit, canDelete: canDelete,
-                    onReply: onReply, onEdit: onEdit, onDelete: onDelete, onReact: onReact
-                )
-            } label: {
-                Image(systemName: "ellipsis")
-            }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .frame(width: 20)
-            .help("More")
-        }
-        .font(.system(size: 12))
-        .padding(.horizontal, 6)
-        .padding(.vertical, 4)
-        .glass(.floating, cornerRadius: 9)
-        .glassEffectID("message-actions", in: glassNamespace)
-    }
-}
-
-/// Right-click, and the contents of the "More" menu. One definition, two places, so they
-/// can never drift apart.
-struct MessageContextMenu: View {
-    let message: Message
-    /// Supplied when the caller already parsed the message, so Copy copies what is on screen.
-    let content: MessageContent?
-    let capabilities: TalkCapabilities
-    let canEdit: Bool
-    let canDelete: Bool
-
-    var onReply: (Message) -> Void
-    var onEdit: (Message) -> Void
-    var onDelete: (Message) -> Void
-    var onReact: (String, Message) -> Void
-
-    var body: some View {
-        if message.isReplyable && capabilities.supportsReplies {
-            Button("Reply") { onReply(message) }
-        }
-
-        if capabilities.supportsReactions {
-            Menu("React") {
-                ForEach(ChatModel.quickReactions, id: \.self) { emoji in
-                    Button(emoji) { onReact(emoji, message) }
-                }
-            }
-        }
-
-        Button("Copy Text") {
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(copyableText, forType: .string)
-        }
-
-        if canEdit {
-            Button("Edit…") { onEdit(message) }
-        }
-
-        Divider()
-
-        if canDelete {
-            Button("Delete", role: .destructive) { onDelete(message) }
-        }
-    }
-
-    private var copyableText: String {
-        if let content { return content.preview }
-        return MessageContentParser(currentUserID: "", markdownEnabled: false).parse(message).preview
-    }
-}
-
-/// Reactions under a message.
-struct ReactionStrip: View {
+/// Reactions on a message, the way Messages shows tapbacks: a badge hanging off the
+/// bubble's top corner — the far corner from the sender — with a little thought-bubble
+/// tail into it. Yours is filled with the accent colour, everyone else's is grey. A
+/// reaction more than one person made carries its count.
+struct ReactionBadges: View {
     let reactions: [String: Int]
     let mine: Set<String>
+    let isFromMe: Bool
     let isEnabled: Bool
     var onToggle: (String) -> Void
-
-    @Namespace private var namespace
 
     var body: some View {
         // Most-used first, then alphabetically, so the order is stable as counts change.
@@ -144,33 +18,53 @@ struct ReactionStrip: View {
             $0.value == $1.value ? $0.key < $1.key : $0.value > $1.value
         }
 
-        // A container with generous spacing: neighbouring pills merge into one glass shape,
-        // and a new reaction flows out of the pill beside it instead of popping into place.
-        GlassEffectContainer(spacing: GlassSpacing.merging) {
-            HStack(spacing: 4) {
-                ForEach(ordered, id: \.key) { emoji, count in
-                    Button { onToggle(emoji) } label: {
-                        HStack(spacing: 3) {
-                            Text(emoji).font(.system(size: 11))
-                            if count > 1 {
-                                Text("\(count)")
-                                    .font(.system(size: 10, weight: .medium))
-                                    .monospacedDigit()
-                            }
-                        }
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 3)
-                        .foregroundStyle(mine.contains(emoji) ? Color.white : Color.primary)
-                    }
-                    .buttonStyle(.plain)
-                    .glass(mine.contains(emoji) ? .selectedChip : .chip)
-                    .glassEffectID(emoji, in: namespace)
-                    .disabled(!isEnabled)
-                    .help(mine.contains(emoji) ? "Remove your reaction" : "React with \(emoji)")
-                }
+        HStack(spacing: -8) {
+            ForEach(Array(ordered.enumerated()), id: \.element.key) { index, entry in
+                badge(emoji: entry.key, count: entry.value)
+                    .zIndex(Double(ordered.count - index))
             }
         }
+        // The tail: two dots trailing down from the badge's outer side, past the
+        // bubble's corner rather than over its text — as Messages draws them.
+        .overlay(alignment: isFromMe ? .bottomLeading : .bottomTrailing) {
+            let color = fill(for: ordered.last?.key ?? "")
+            ZStack(alignment: isFromMe ? .topTrailing : .topLeading) {
+                Circle().fill(color).frame(width: 9, height: 9)
+                Circle().fill(color).frame(width: 4, height: 4)
+                    .offset(x: isFromMe ? -6 : 6, y: 9)
+            }
+            .offset(x: isFromMe ? -2 : 2, y: 6)
+        }
         .animation(.smooth(duration: 0.25), value: ordered.map(\.key))
+    }
+
+    private func badge(emoji: String, count: Int) -> some View {
+        Button { onToggle(emoji) } label: {
+            HStack(spacing: 3) {
+                Text(emoji).font(.system(size: 14))
+                if count > 1 {
+                    Text("\(count)")
+                        .font(.system(size: 11, weight: .semibold))
+                        .monospacedDigit()
+                        .foregroundStyle(mine.contains(emoji) ? Color.white : Color.primary)
+                }
+            }
+            .padding(.horizontal, count > 1 ? 9 : 7)
+            .frame(height: 28)
+            .background(fill(for: emoji), in: .capsule)
+            // A hairline in the page colour, so overlapping badges and the bubble
+            // underneath read as separate objects.
+            .overlay { Capsule().strokeBorder(Color(nsColor: .textBackgroundColor), lineWidth: 1.5) }
+            .contentShape(.capsule)
+        }
+        .buttonStyle(.plain)
+        .disabled(!isEnabled)
+        .help(mine.contains(emoji) ? "Remove your reaction" : "React with \(emoji)")
+        .accessibilityLabel("\(emoji), \(count)")
+    }
+
+    private func fill(for emoji: String) -> Color {
+        mine.contains(emoji) ? Color.accentColor : Color.primary.opacity(0.12)
     }
 }
 
@@ -183,7 +77,7 @@ struct EmojiPicker: View {
     var onPick: (String) -> Void
     @State private var search = ""
 
-    private static let categories: [(String, [String])] = [
+    static let categories: [(String, [String])] = [
         ("Frequent", ["👍", "❤️", "😂", "🎉", "🙏", "👀", "🔥", "✅"]),
         ("Smileys", ["😀", "😃", "😄", "😁", "😅", "😊", "🙂", "😉", "😍", "🤩", "😘", "😎", "🤔", "🤨",
                      "😐", "😴", "😢", "😭", "😡", "🥳", "🤯", "😱", "🤗", "🙃"]),

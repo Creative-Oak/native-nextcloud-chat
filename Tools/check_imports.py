@@ -15,6 +15,7 @@ APP_RULES = {
     "AppKit": re.compile(r"\bNS[A-Z]\w+"),
     "Combine": re.compile(r"\.onReceive\("),
     "UserNotifications": re.compile(r"\bUN[A-Z]\w+"),
+    "LinkPresentation": re.compile(r"\bLP[A-Z]\w+"),
     "SwiftData": re.compile(r"\b(ModelContainer|ModelContext|FetchDescriptor|PersistentModel|ModelConfiguration)\b"),
     "SwiftUI": re.compile(r"\b(View|Color|Text|VStack|HStack|Binding|Environment)\b"),
 }

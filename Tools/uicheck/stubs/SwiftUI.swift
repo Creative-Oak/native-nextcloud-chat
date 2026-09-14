@@ -356,7 +356,15 @@ public struct Alignment: Sendable {
 public enum HorizontalAlignment: Sendable { case leading, center, trailing }
 public enum VerticalAlignment: Sendable { case top, center, bottom, firstTextBaseline, lastTextBaseline }
 public enum TextAlignment: Sendable { case leading, center, trailing }
-public enum UnitPoint: Sendable { case center, top, bottom, leading, trailing }
+public struct UnitPoint: Sendable, Hashable {
+    public var x: CGFloat, y: CGFloat
+    public init(x: CGFloat, y: CGFloat) { self.x = x; self.y = y }
+    public static let center = UnitPoint(x: 0.5, y: 0.5)
+    public static let top = UnitPoint(x: 0.5, y: 0)
+    public static let bottom = UnitPoint(x: 0.5, y: 1)
+    public static let leading = UnitPoint(x: 0, y: 0.5)
+    public static let trailing = UnitPoint(x: 1, y: 0.5)
+}
 
 public struct Animation: Sendable {
     public static let `default` = Animation()
@@ -376,6 +384,11 @@ public struct Transaction {
 }
 
 @MainActor public func withAnimation<Result>(_ animation: Animation? = .default, _ body: () throws -> Result) rethrows -> Result {
+    try body()
+}
+
+public enum AnimationCompletionCriteria: Sendable { case logicallyComplete, removed }
+@MainActor public func withAnimation<Result>(_ animation: Animation? = .default, completionCriteria: AnimationCompletionCriteria = .logicallyComplete, _ body: () throws -> Result, completion: @escaping () -> Void) rethrows -> Result {
     try body()
 }
 
@@ -492,6 +505,54 @@ public struct GlassEffectTransition: Sendable {
     public func monospacedDigit() -> Text { self }
     public func strikethrough(_ isActive: Bool = true) -> Text { self }
     public func underline(_ isActive: Bool = true) -> Text { self }
+    public func customAttribute<T: TextAttribute>(_ value: T) -> Text { self }
+    public static func + (lhs: Text, rhs: Text) -> Text { lhs }
+
+    public struct Layout: Sequence {
+        public struct Line: Sequence {
+            public func makeIterator() -> IndexingIterator<[Run]> { [Run]().makeIterator() }
+        }
+        public struct Run {
+            public var typographicBounds: TypographicBounds { TypographicBounds() }
+            public subscript<T: TextAttribute>(_ type: T.Type) -> T? { nil }
+        }
+        public struct TypographicBounds {
+            public var rect: CGRect = .zero
+            public var ascent: CGFloat = 0
+            public var descent: CGFloat = 0
+            public var leading: CGFloat = 0
+        }
+        public func makeIterator() -> IndexingIterator<[Line]> { [Line]().makeIterator() }
+    }
+}
+
+public protocol TextAttribute {}
+
+public protocol TextRenderer {
+    func draw(layout: Text.Layout, in context: inout GraphicsContext)
+}
+
+public struct GraphicsContext {
+    public enum Shading {
+        case color(Color)
+    }
+    public mutating func stroke(_ path: Path, with shading: Shading, lineWidth: CGFloat = 1) {}
+    public mutating func draw(_ run: Text.Layout.Run) {}
+}
+
+public struct Path {
+    public init() {}
+    public mutating func move(to point: CGPoint) {}
+    public mutating func addLine(to point: CGPoint) {}
+}
+
+public enum CoordinateSpace: Sendable {
+    case local, global
+}
+
+public enum HoverPhase: Sendable {
+    case active(CGPoint)
+    case ended
 }
 
 @MainActor public struct Image: View {
@@ -678,7 +739,22 @@ public struct GridItem: Sendable {
 
 @MainActor public struct Group<Content: View>: View {
     public init(@ViewBuilder content: () -> Content) {}
+    public init<Base: View, Result: View>(subviews view: Base, @ViewBuilder transform: @escaping (SubviewsCollection) -> Result) where Content == Result {}
     public var body: StubView { StubView() }
+}
+
+@MainActor public struct Subview: View, Identifiable {
+    public struct ID: Hashable, Sendable {}
+    public var id: ID { ID() }
+    public var body: StubView { StubView() }
+}
+
+public struct SubviewsCollection: RandomAccessCollection {
+    public var startIndex: Int { 0 }
+    public var endIndex: Int { 0 }
+    public subscript(position: Int) -> Subview { Subview() }
+    public func index(after i: Int) -> Int { i + 1 }
+    public func index(before i: Int) -> Int { i - 1 }
 }
 
 @MainActor public struct ScrollView<Content: View>: View {
@@ -722,6 +798,20 @@ public enum ScrollPhase: Equatable, Sendable {
 public struct GeometryProxy: Sendable {
     public var size: CGSize { .zero }
     public var safeAreaInsets: EdgeInsets { EdgeInsets() }
+    public subscript<T>(anchor: Anchor<T>) -> T { anchor.value }
+}
+
+public struct Anchor<Value>: Sendable where Value: Sendable {
+    let value: Value
+    public struct Source: Sendable {
+        public static var bounds: Anchor<CGRect>.Source { Anchor<CGRect>.Source() }
+    }
+}
+
+public protocol PreferenceKey {
+    associatedtype Value
+    static var defaultValue: Value { get }
+    static func reduce(value: inout Value, nextValue: () -> Value)
 }
 
 public struct ScrollGeometry: Equatable, Sendable {
@@ -748,6 +838,14 @@ public struct ScrollBounceBehavior: Sendable {
     public static let automatic = ScrollBounceBehavior()
     public static let always = ScrollBounceBehavior()
     public static let basedOnSize = ScrollBounceBehavior()
+}
+
+public struct SafeAreaRegions: OptionSet, Sendable {
+    public let rawValue: Int
+    public init(rawValue: Int) { self.rawValue = rawValue }
+    public static let container = SafeAreaRegions(rawValue: 1)
+    public static let keyboard = SafeAreaRegions(rawValue: 2)
+    public static let all: SafeAreaRegions = [.container, .keyboard]
 }
 
 public struct ScrollEdgeEffectStyle: Sendable {
@@ -873,6 +971,7 @@ extension View {
     public func symbolRenderingMode(_ mode: SymbolRenderingMode) -> StubView { StubView() }
     public func imageScale(_ scale: ImageScale) -> StubView { StubView() }
     public func lineLimit(_ number: Int?) -> StubView { StubView() }
+    public func lineLimit(_ limit: Int, reservesSpace: Bool) -> StubView { StubView() }
     public func lineLimit(_ limit: ClosedRange<Int>) -> StubView { StubView() }
     public func lineSpacing(_ value: CGFloat) -> StubView { StubView() }
     public func truncationMode(_ mode: TextTruncationMode) -> StubView { StubView() }
@@ -891,6 +990,10 @@ extension View {
     public func background<V: View>(alignment: Alignment = .center, @ViewBuilder content: () -> V) -> StubView { StubView() }
     public func overlay(_ style: some ShapeStyle) -> StubView { StubView() }
     public func overlay<V: View>(alignment: Alignment = .center, @ViewBuilder content: () -> V) -> StubView { StubView() }
+    public func anchorPreference<A, K: PreferenceKey>(key: K.Type, value: Anchor<A>.Source, transform: @escaping (Anchor<A>) -> K.Value) -> StubView { StubView() }
+    public func overlayPreferenceValue<K: PreferenceKey, V: View>(_ key: K.Type, @ViewBuilder _ transform: @escaping (K.Value) -> V) -> StubView { StubView() }
+    public func onLongPressGesture(minimumDuration: Double = 0.5, maximumDistance: CGFloat = 10, perform action: @escaping () -> Void) -> StubView { StubView() }
+    public func scaleEffect(_ scale: CGFloat, anchor: UnitPoint = .center) -> StubView { StubView() }
     public func clipShape(_ shape: some Shape) -> StubView { StubView() }
     public func clipped() -> StubView { StubView() }
     public func cornerRadius(_ radius: CGFloat) -> StubView { StubView() }
@@ -902,6 +1005,9 @@ extension View {
     public func blur(radius: CGFloat) -> StubView { StubView() }
     public func ignoresSafeArea() -> StubView { StubView() }
     public func safeAreaInset<V: View>(edge: Edge, alignment: Alignment = .center, spacing: CGFloat? = nil, @ViewBuilder content: () -> V) -> StubView { StubView() }
+    public func ignoresSafeArea(_ regions: SafeAreaRegions, edges: Edge.Set = .all) -> StubView { StubView() }
+    public func safeAreaBar<V: View>(edge: Edge, alignment: Alignment = .center, spacing: CGFloat? = nil, @ViewBuilder content: () -> V) -> StubView { StubView() }
+    public func matchedGeometryEffect(id: some Hashable, in namespace: Namespace.ID) -> StubView { StubView() }
 
     public func glassEffect(_ glass: Glass = .regular, in shape: some Shape = DefaultGlassEffectShape()) -> StubView { StubView() }
     public func glassEffectID(_ id: (some Hashable & Sendable)?, in namespace: Namespace.ID) -> StubView { StubView() }
@@ -926,6 +1032,8 @@ extension View {
     public func allowsHitTesting(_ enabled: Bool) -> StubView { StubView() }
     public func contentShape(_ shape: some Shape) -> StubView { StubView() }
     public func help(_ text: String) -> StubView { StubView() }
+    public func textRenderer<T: TextRenderer>(_ renderer: T) -> StubView { StubView() }
+    public func onContinuousHover(coordinateSpace: CoordinateSpace = .local, perform action: @escaping (HoverPhase) -> Void) -> StubView { StubView() }
     public func tag<V: Hashable>(_ tag: V) -> StubView { StubView() }
     public func id<ID: Hashable>(_ id: ID) -> StubView { StubView() }
     public func transition(_ transition: AnyTransition) -> StubView { StubView() }
@@ -975,6 +1083,7 @@ extension View {
 
     public func scrollContentBackground(_ visibility: Visibility) -> StubView { StubView() }
     public func toolbar(removing kind: ToolbarDefaultItemKind?) -> StubView { StubView() }
+    public func toolbarBackgroundVisibility(_ visibility: Visibility, for bars: ToolbarPlacement...) -> StubView { StubView() }
     public func listRowInsets(_ insets: EdgeInsets?) -> StubView { StubView() }
     public func listRowSeparator(_ visibility: Visibility, edges: VerticalEdge.Set = .all) -> StubView { StubView() }
     public func scrollBounceBehavior(_ behavior: ScrollBounceBehavior, axes: Axis.Set = .vertical) -> StubView { StubView() }
@@ -999,6 +1108,10 @@ extension View {
 public enum ContentMode: Sendable { case fit, fill }
 public enum TextTruncationMode: Sendable { case head, tail, middle }
 public enum Visibility: Sendable { case automatic, visible, hidden }
+public struct ToolbarPlacement: Sendable {
+    public static let automatic = ToolbarPlacement()
+    public static let windowToolbar = ToolbarPlacement()
+}
 public enum ImageScale: Sendable { case small, medium, large }
 public struct PopoverAttachmentAnchor: Sendable { public static let rect = PopoverAttachmentAnchor() }
 public struct AccessibilityChildBehavior: Sendable {

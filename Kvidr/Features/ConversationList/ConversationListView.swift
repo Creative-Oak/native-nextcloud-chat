@@ -32,22 +32,28 @@ struct ConversationListView: View {
     var body: some View {
         List(selection: $selection) {
             ForEach(model.sections) { group in
+                switch group.section {
                 // Favourites become the grid of faces at the top, the way Messages pins
                 // conversations. Talk's "favourite" already means exactly this, so it is
                 // a different presentation of an existing idea rather than a new one.
                 // While filtering, everything is one flat list of results.
-                if group.section == .favorites, !model.isFiltering {
+                case .favorites where !model.isFiltering:
                     PinnedConversations(conversations: group.items, selection: $selection)
                         .listRowInsets(EdgeInsets())
                         .listRowSeparator(.hidden)
-                } else if model.showsSectionHeadings {
+
+                // The only heading. Messages has none, and "Conversations" over the
+                // conversations said nothing; archived ones are the one group that
+                // needs to be told apart from the rest.
+                case .archived where !model.isFiltering:
                     Section {
                         rows(group.items)
                     } header: {
-                        Label(group.section.title, systemImage: group.section.symbolName)
+                        Text(group.section.title)
                             .font(.caption)
                     }
-                } else {
+
+                default:
                     rows(group.items)
                 }
             }
@@ -79,7 +85,7 @@ struct ConversationListView: View {
             // does not help, because the simultaneity is with other SwiftUI gestures,
             // not with the List's own handling. Selection is the List's job; Return from
             // the sidebar (below) is what moves focus on to the composer.
-            ConversationRow(conversation: conversation)
+            ConversationRow(conversation: conversation, isSelected: selection == conversation.token)
                 .tag(conversation.token)
                 .contextMenu { contextMenu(for: conversation) }
         }
@@ -145,50 +151,74 @@ private struct PinnedConversations: View {
     let conversations: [Conversation]
     @Binding var selection: String?
 
-    private let columns = [GridItem(.adaptive(minimum: 76), spacing: 2)]
+    /// Three across at the sidebar's ideal width, as in Messages.
+    private let columns = [GridItem(.adaptive(minimum: 72), spacing: 2)]
 
     var body: some View {
-        LazyVGrid(columns: columns, spacing: 8) {
+        LazyVGrid(columns: columns, spacing: 2) {
             ForEach(conversations) { conversation in
+                let isSelected = selection == conversation.token
                 Button {
                     selection = conversation.token
                 } label: {
-                    VStack(spacing: 4) {
-                        AvatarView(conversation: conversation, size: 52)
-                            .overlay(alignment: .topTrailing) { badge(for: conversation) }
-                        Text(conversation.displayName)
-                            .font(.system(size: 11))
-                            .foregroundStyle(.secondary)
+                    VStack(spacing: 6) {
+                        AvatarView(conversation: conversation, size: 62)
+                            .overlay(alignment: .topTrailing) { badge(for: conversation, selected: isSelected) }
+                        Text(Self.title(for: conversation))
+                            .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
+                            .foregroundStyle(isSelected ? .white : .primary)
                             .lineLimit(1)
+                            .padding(.horizontal, 4)
                     }
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 5)
+                    .padding(.vertical, 8)
                     .contentShape(.rect)
+                    // The selected face sits on a solid block of the same blue a selected
+                    // sidebar row gets — one selection look, not two. That is the
+                    // system's selection colour, which is a shade deeper than the accent.
                     .background {
-                        if selection == conversation.token {
-                            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .fill(Color.accentColor.opacity(0.18))
+                        if isSelected {
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .fill(Color(nsColor: .selectedContentBackgroundColor))
                         }
                     }
                 }
                 .buttonStyle(.plain)
                 .help(conversation.displayName)
                 .accessibilityLabel(label(for: conversation))
+                .accessibilityAddTraits(isSelected ? .isSelected : [])
             }
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 8)
+        // Out past the list's own content inset, so the faces sit a little nearer the
+        // sidebar's edge than the rows' avatars do and the selected block lands level
+        // with a selected row's highlight — which is how Messages sets its grid.
+        .padding(.horizontal, -10)
+        .padding(.vertical, 6)
+    }
+
+    /// A person's first name, a group's whole name. The cells are narrow, and
+    /// "Heine Volder R…" says less than "Heine" does.
+    private static func title(for conversation: Conversation) -> String {
+        guard conversation.isOneToOne,
+              let first = conversation.displayName.split(separator: " ", omittingEmptySubsequences: true).first
+        else { return conversation.displayName }
+        return String(first)
     }
 
     @ViewBuilder
-    private func badge(for conversation: Conversation) -> some View {
+    private func badge(for conversation: Conversation, selected: Bool) -> some View {
         if conversation.hasUnread {
             Circle()
-                .fill(Color.accentColor)
+                .fill(selected ? Color.white : Color.accentColor)
                 .frame(width: 12, height: 12)
-                // A ring in the sidebar's own colour, so the dot reads as sitting on top
-                // of the avatar rather than punched out of it.
-                .overlay { Circle().stroke(Color(nsColor: .windowBackgroundColor), lineWidth: 2) }
+                // A ring in the colour behind it, so the dot reads as sitting on top of
+                // the avatar rather than punched out of it.
+                .overlay {
+                    Circle().stroke(
+                        selected ? Color(nsColor: .selectedContentBackgroundColor) : Color(nsColor: .windowBackgroundColor),
+                        lineWidth: 2
+                    )
+                }
         }
     }
 
@@ -199,89 +229,100 @@ private struct PinnedConversations: View {
     }
 }
 
-/// One row: avatar, name, one-line preview, timestamp, unread state.
+/// One row: unread dot in the gutter, avatar, name, timestamp, two lines of preview.
 ///
-/// Unread is a small dot and a bolder name, not a shouty pill — the sidebar should read as
-/// calm at a glance and still make unread obvious.
+/// Laid out the way Messages lays its rows out, so the sidebar reads as calm at a glance
+/// and still makes unread obvious: the dot sits in the gutter before the avatar, the name
+/// gets a shade heavier, and nothing else changes.
 struct ConversationRow: View {
     let conversation: Conversation
+    var isSelected = false
+
+    /// The gutter the unread dot lives in, plus the avatar and the gap after it — the
+    /// separator between rows starts where the text does, as it does in Messages.
+    private static let gutter: CGFloat = 8
+    private static let avatar: CGFloat = 40
+    private static let textInset: CGFloat = gutter + 5 + avatar + 10
 
     var body: some View {
-        HStack(spacing: 10) {
-            AvatarView(conversation: conversation, size: 40)
+        HStack(spacing: 5) {
+            Circle()
+                .fill(conversation.hasUnread ? Color.accentColor : .clear)
+                .frame(width: Self.gutter, height: Self.gutter)
+                .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 4) {
-                    if conversation.isFavorite {
-                        Image(systemName: "star.fill")
-                            .font(.system(size: 8))
-                            .foregroundStyle(.tertiary)
+            HStack(spacing: 10) {
+                AvatarView(conversation: conversation, size: Self.avatar)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Text(conversation.displayName)
+                            .font(.system(size: 15, weight: .semibold))
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+
+                        Spacer(minLength: 4)
+
+                        Text(timestamp)
+                            .font(.system(size: 12))
+                            .foregroundStyle(isSelected ? .primary : .secondary)
+                            .fixedSize()
                     }
-                    Text(conversation.displayName)
-                        .font(.system(size: 14, weight: conversation.hasUnread ? .semibold : .medium))
-                        .lineLimit(1)
-                        .truncationMode(.tail)
 
-                    Spacer(minLength: 4)
+                    HStack(alignment: .top, spacing: 6) {
+                        Text(preview)
+                            .font(.system(size: 13))
+                            .foregroundStyle(isSelected ? .primary : .secondary)
+                            // Two lines, always: Messages keeps every row the same
+                            // height, and a list whose rows are all different heights
+                            // reads as a jumble.
+                            .lineLimit(2, reservesSpace: true)
+                            .truncationMode(.tail)
+                            .fixedSize(horizontal: false, vertical: true)
 
-                    Text(timestamp)
-                        .font(.system(size: 11))
-                        .foregroundStyle(.tertiary)
-                        .fixedSize()
-                }
+                        Spacer(minLength: 2)
 
-                HStack(alignment: .top, spacing: 4) {
-                    Text(preview)
-                        .font(.system(size: 12))
-                        .foregroundStyle(conversation.hasUnread ? .secondary : .tertiary)
-                        // Two lines, like Messages: one line of preview is rarely enough
-                        // to tell two conversations apart at a glance.
-                        .lineLimit(2)
-                        .truncationMode(.tail)
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    Spacer(minLength: 2)
-
-                    if conversation.unreadMention {
-                        Image(systemName: "at.circle.fill")
-                            .font(.system(size: 11))
-                            .foregroundStyle(Color.accentColor)
-                            .help("You were mentioned")
-                    } else if conversation.hasUnread {
-                        unreadIndicator
-                    }
-                    if conversation.notificationLevel == .never {
-                        Image(systemName: "bell.slash.fill")
-                            .font(.system(size: 9))
-                            .foregroundStyle(.tertiary)
+                        if conversation.unreadMention {
+                            Image(systemName: "at.circle.fill")
+                                .font(.system(size: 12))
+                                .foregroundStyle(isSelected ? .white : Color.accentColor)
+                                .help("You were mentioned")
+                        } else if conversation.unreadMessages > 1 {
+                            unreadCount
+                        }
+                        if conversation.notificationLevel == .never {
+                            Image(systemName: "bell.slash.fill")
+                                .font(.system(size: 10))
+                                .foregroundStyle(.tertiary)
+                        }
                     }
                 }
             }
         }
-        .padding(.vertical, 6)
+        .padding(.vertical, 7)
         // Without this, only the drawn glyphs are hit-testable: the gaps the Spacers open
         // up between name, timestamp and preview swallow clicks, and the row reads as
         // having dead patches in it.
         .contentShape(.rect)
+        // The sidebar list draws no separators of its own. This one starts under the
+        // text, not the avatar, and stands down while the row is highlighted.
+        .overlay(alignment: .bottom) {
+            if !isSelected {
+                Divider().padding(.leading, Self.textInset)
+            }
+        }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityLabel)
     }
 
-    @ViewBuilder
-    private var unreadIndicator: some View {
-        if conversation.unreadMessages > 1 {
-            Text("\(min(conversation.unreadMessages, 99))")
-                .font(.system(size: 9, weight: .semibold))
-                .monospacedDigit()
-                .foregroundStyle(.white)
-                .padding(.horizontal, 4)
-                .padding(.vertical, 1)
-                .background(Color.accentColor, in: .capsule)
-        } else {
-            Circle()
-                .fill(Color.accentColor)
-                .frame(width: 7, height: 7)
-        }
+    private var unreadCount: some View {
+        Text("\(min(conversation.unreadMessages, 99))")
+            .font(.system(size: 10, weight: .semibold))
+            .monospacedDigit()
+            .foregroundStyle(isSelected ? Color.accentColor : .white)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 1)
+            .background(isSelected ? Color.white : Color.accentColor, in: .capsule)
     }
 
     private var preview: String { ConversationPreview.text(for: conversation) }

@@ -14,6 +14,8 @@ struct ChatView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Owned by the window so ⌘⇧K and Return-from-the-sidebar can move focus here.
     @Binding var composerFocused: Bool
+    /// Clicking the header — the face and name over the transcript — opens the details.
+    var onShowDetails: () -> Void
 
     @State private var highlightedMessageID: Int?
     @State private var didInitialScroll = false
@@ -21,6 +23,9 @@ struct ChatView: View {
     @State private var viewingAttachment: RichObject?
     /// Suppresses per-row hover work while the transcript is moving.
     @State private var isScrolling = false
+    /// The message whose reactions are floating above it, if any.
+    @State private var tapbackMessageID: Int?
+    @State private var tapbackBarSize: CGSize = .zero
 
     var body: some View {
         VStack(spacing: 0) {
@@ -28,7 +33,7 @@ struct ChatView: View {
                 .overlay(alignment: .top) {
                     if let error = model.lastError, error != .cancelled {
                         InlineStatusBar(error: error, state: model.syncState)
-                            .padding(.top, 10)
+                            .padding(.top, ConversationHeader.depthBelowToolbar + 10)
                             .transition(.move(edge: .top).combined(with: .opacity))
                     } else if let messageID = model.unreachableMessageID {
                         UnreachableMessageBar(
@@ -38,11 +43,11 @@ struct ChatView: View {
                             },
                             onDismiss: { model.dismissUnreachableMessage() }
                         )
-                        .padding(.top, 10)
+                        .padding(.top, ConversationHeader.depthBelowToolbar + 10)
                         .transition(.move(edge: .top).combined(with: .opacity))
                     } else if model.isRevealing {
                         RevealingBar()
-                            .padding(.top, 10)
+                            .padding(.top, ConversationHeader.depthBelowToolbar + 10)
                             .transition(.opacity)
                     }
                 }
@@ -57,6 +62,17 @@ struct ChatView: View {
                 }
         }
         .background(Color(nsColor: .textBackgroundColor))
+        // Their face, up in the toolbar band, over the name capsule that hangs below
+        // it. Drawn here rather than as a toolbar item so it is centred on the
+        // transcript — a toolbar item centres on the whole column, panel included. The
+        // band takes the clicks; the capsule under it is the control.
+        .overlay(alignment: .top) {
+            AvatarView(conversation: model.conversation, size: ConversationHeader.avatarSize)
+                .padding(.top, ConversationHeader.avatarTopInset)
+                .ignoresSafeArea(.container, edges: .top)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        }
         .navigationTitle(model.conversation.displayName)
         // Drop anywhere in the conversation, not just on the composer — that is where
         // people aim, and aiming at a 30pt field with a file in hand is a chore.
@@ -83,7 +99,7 @@ struct ChatView: View {
         .overlay(alignment: .top) {
             if model.isSearching {
                 ChatSearchBar(model: model)
-                    .padding(.top, 8)
+                    .padding(.top, ConversationHeader.depthBelowToolbar + 8)
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
@@ -113,21 +129,33 @@ struct ChatView: View {
             }
             .defaultScrollAnchor(.bottom)
             .scrollContentBackground(.hidden)
+            // The name capsule hangs just below the toolbar. As a bar rather than an
+            // overlay, the scroll edge fade extends down behind it and the newest
+            // message never lands underneath it. Soft, explicitly: left to itself the
+            // toolbar comes up with the opaque, hairlined kind at launch and only
+            // switches to the fade after the first scroll.
+            .safeAreaBar(edge: .top, spacing: 0) {
+                ConversationHeader(conversation: model.conversation, action: onShowDetails)
+            }
+            .scrollEdgeEffectStyle(.soft, for: .top)
             // Deliberately two Bools rather than two distances. A raw offset changes on
             // every frame of a scroll, so an Equatable built from offsets is never equal
             // to its predecessor and this action runs every frame — which is both the
             // "tried to update multiple times per frame" warning and a good part of the
             // jank. Thresholds only change when they are actually crossed.
             .onScrollGeometryChange(for: ScrollEdges.self) { geometry in
-                let fromBottom = geometry.contentSize.height
-                    - geometry.contentOffset.y
-                    - geometry.containerSize.height
+                // Measured from the visible rect, which knows about the insets. The
+                // transcript runs under the toolbar, the header and the composer, and a
+                // sum of offset and container size counts the top inset as distance
+                // still to scroll — so the view believed it was never quite at the
+                // bottom, and the scroll-to-bottom button never went away.
+                let fromBottom = geometry.contentSize.height - geometry.visibleRect.maxY
                 return ScrollEdges(
                     // 40pt of slack: "at the bottom" should survive a stray trackpad nudge.
                     isAtBottom: fromBottom < 40,
                     // Start fetching before the user reaches the top, so history is
                     // usually already there by the time they arrive.
-                    isNearTop: geometry.contentOffset.y < 240
+                    isNearTop: geometry.visibleRect.minY < 240
                 )
             } action: { _, edges in
                 if model.isScrolledToLatest != edges.isAtBottom {
@@ -138,12 +166,26 @@ struct ChatView: View {
                 else { return }
                 Task { await loadOlderKeepingPosition(proxy) }
             }
+            // The transcript changes width when the inspector slides in or out and the
+            // window is resized. The rows re-wrap and the content grows or shrinks, but
+            // the scroll position is kept from the top, so a transcript that was at the
+            // bottom drifts off it a little more with every frame of the slide. Re-pinned
+            // on each width change while it was at the bottom — instantly, since the
+            // slide itself is the animation.
+            .onScrollGeometryChange(for: CGFloat.self) { geometry in
+                geometry.containerSize.width
+            } action: { _, _ in
+                guard didInitialScroll, model.isScrolledToLatest else { return }
+                scrollToBottom(proxy, animated: false)
+            }
             // Rows sliding under a stationary pointer fire onHover continuously, which
             // flickers the action strip and re-lays out every row it touches. Nothing
             // hovers while the transcript is moving.
             .onScrollPhaseChange { _, phase in
                 let scrolling = phase != .idle
                 if isScrolling != scrolling { isScrolling = scrolling }
+                // Scrolling away is as good as clicking elsewhere.
+                if scrolling, tapbackMessageID != nil { dismissTapback() }
             }
             .environment(\.isTranscriptScrolling, isScrolling)
             .onChange(of: model.rows.last?.id) { _, _ in
@@ -187,7 +229,54 @@ struct ChatView: View {
                 }
             }
             .overlay(alignment: .bottomTrailing) { scrollToBottomButton(proxy) }
+            .overlayPreferenceValue(TapbackAnchorKey.self) { anchors in
+                tapbackOverlay(anchors)
+            }
         }
+    }
+
+    /// The floating reactions over the message that was pressed, with the rest of the
+    /// transcript dimmed a shade behind them. A click anywhere else puts them away.
+    @ViewBuilder
+    private func tapbackOverlay(_ anchors: [Int: TapbackAnchor]) -> some View {
+        if let id = tapbackMessageID,
+           let anchor = anchors[id],
+           let row = model.rows.first(where: { $0.message?.messageID == id }),
+           let message = row.message {
+            GeometryReader { geometry in
+                let bubble = geometry[anchor.bounds]
+                let size = geometry.size
+                // Above the bubble, aligned to its outer edge — unless that would run
+                // off the top, in which case below it.
+                let x = anchor.isFromMe
+                    ? min(max(bubble.maxX - tapbackBarSize.width, 8), size.width - tapbackBarSize.width - 8)
+                    : min(max(bubble.minX, 8), size.width - tapbackBarSize.width - 8)
+                let above = bubble.minY - tapbackBarSize.height - 6
+                let y = above >= 8 ? above : bubble.maxY + 6
+
+                ZStack(alignment: .topLeading) {
+                    Color.primary.opacity(0.06)
+                        .contentShape(.rect)
+                        .onTapGesture { dismissTapback() }
+
+                    TapbackBar(
+                        message: message,
+                        onReact: { model.toggleReaction($0, on: message) },
+                        onDone: { dismissTapback() }
+                    )
+                    .fixedSize()
+                    .onGeometryChange(for: CGSize.self) { $0.size } action: { tapbackBarSize = $0 }
+                    .offset(x: x, y: y)
+                    .transition(.scale(scale: 0.6, anchor: anchor.isFromMe ? .bottomTrailing : .bottomLeading).combined(with: .opacity))
+                }
+                .transition(.opacity)
+            }
+            .ignoresSafeArea()
+        }
+    }
+
+    private func dismissTapback() {
+        withAnimation(reduceMotion ? nil : .snappy(duration: 0.2)) { tapbackMessageID = nil }
     }
 
     /// Opening a conversation lands on the unread marker if there is one, otherwise at the
@@ -227,7 +316,11 @@ struct ChatView: View {
                 onReact: { emoji, message in model.toggleReaction(emoji, on: message) },
                 onRetry: { model.retry($0) },
                 onDiscard: { model.discard($0) },
-                onShowParent: { highlightedMessageID = $0 }
+                onShowParent: { highlightedMessageID = $0 },
+                isTapbackTarget: tapbackMessageID == message.messageID,
+                onShowTapback: { pressed in
+                    withAnimation(reduceMotion ? nil : .snappy(duration: 0.25)) { tapbackMessageID = pressed.messageID }
+                }
             )
             .background(highlightedMessageID == message.messageID ? Color.accentColor.opacity(0.12) : .clear)
         }
@@ -297,7 +390,11 @@ struct ChatView: View {
         if animated && !reduceMotion {
             withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(Self.bottomAnchor, anchor: .bottom) }
         } else {
-            proxy.scrollTo(Self.bottomAnchor, anchor: .bottom)
+            // Explicitly without animation: called from inside another animation's
+            // frames, it would otherwise inherit that animation and lag behind it.
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) { proxy.scrollTo(Self.bottomAnchor, anchor: .bottom) }
         }
     }
 

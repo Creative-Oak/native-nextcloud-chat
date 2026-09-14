@@ -50,17 +50,38 @@ struct ComposerView: View {
                         .keyboardShortcut("a", modifiers: [.command, .shift])
                 } label: {
                     Image(systemName: "plus")
-                        .font(.system(size: 15, weight: .medium))
+                        .font(.system(size: 17, weight: .medium))
+                        .frame(width: GlassMetrics.control, height: GlassMetrics.control)
+                        .contentShape(.circle)
                 }
                 .menuStyle(.button)
-                .buttonStyle(.glass)
-                .buttonBorderShape(.circle)
+                // The glass drawn by hand, as the other round controls draw theirs.
+                // `.buttonStyle(.glass)` on a menu never painted the circle at all, so
+                // the plus sat there as a bare glyph beside a fielded text box.
+                .buttonStyle(.plain)
                 .menuIndicator(.hidden)
-                .frame(width: GlassMetrics.control, height: GlassMetrics.control)
+                .glassCircle()
                 .help("Add an attachment")
             }
 
             field
+
+            // The system emoji palette, which inserts straight into the field — the
+            // same thing Messages' smiley opens. The focus is moved first, and the
+            // palette asked for on the next turn, so it lands in this field rather than
+            // in whatever had focus a moment ago.
+            Button {
+                isFocused = true
+                DispatchQueue.main.async { NSApplication.shared.orderFrontCharacterPalette(nil) }
+            } label: {
+                Image(systemName: "face.smiling")
+                    .font(.system(size: 17, weight: .regular))
+                    .frame(width: GlassMetrics.control, height: GlassMetrics.control)
+                    .contentShape(.circle)
+            }
+            .buttonStyle(.plain)
+            .glassCircle()
+            .help("Emoji")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -119,7 +140,9 @@ struct ComposerView: View {
         .padding(.leading, 12)
         .padding(.trailing, 6)
         .padding(.vertical, 5)
-        .glass(.field, cornerRadius: 18)
+        // Never shorter than the round buttons beside it: the three read as one band.
+        .frame(minHeight: GlassMetrics.control)
+        .glass(.field, cornerRadius: GlassMetrics.control / 2)
     }
 
     private var unavailableNotice: some View {

@@ -27,6 +27,7 @@ public struct Selector: Equatable, Hashable, Sendable {
     public init(frame: NSRect) { super.init() }
     open var window: NSWindow? { nil }
     open var frame: NSRect = .zero
+    open func viewDidMoveToWindow() {}
 }
 
 @MainActor open class NSWindow: NSResponder {
@@ -37,7 +38,12 @@ public struct Selector: Equatable, Hashable, Sendable {
     open var isVisible: Bool { true }
     open var tabbingMode: TabbingMode = .automatic
     public enum TabbingMode: Sendable { case automatic, preferred, disallowed }
+    open var titleVisibility: TitleVisibility = .visible
+    public enum TitleVisibility: Sendable { case visible, hidden }
+    open var titlebarSeparatorStyle: TitlebarSeparatorStyle = .automatic
+    public enum TitlebarSeparatorStyle: Sendable { case automatic, none, line, shadow }
     @discardableResult open func setFrameAutosaveName(_ name: String) -> Bool { true }
+    open func setFrame(_ frameRect: NSRect, display flag: Bool) {}
     open func makeFirstResponder(_ responder: NSResponder?) -> Bool { true }
     open func makeKeyAndOrderFront(_ sender: Any?) {}
     public static let didBecomeKeyNotification = Notification.Name("NSWindowDidBecomeKey")
@@ -50,6 +56,7 @@ public struct Selector: Equatable, Hashable, Sendable {
     public let dockTile = NSDockTile()
     public func activate(ignoringOtherApps: Bool) {}
     public func activate() {}
+    public func orderFrontCharacterPalette(_ sender: Any?) {}
     public static let didBecomeActiveNotification = Notification.Name("NSApplicationDidBecomeActive")
     public static let didResignActiveNotification = Notification.Name("NSApplicationDidResignActive")
     public enum TerminateReply: Sendable { case terminateNow, terminateCancel, terminateLater }
@@ -77,6 +84,7 @@ extension NSApplicationDelegate {
 }
 
 @MainActor open class NSImage: NSObject {
+    public init?(systemSymbolName: String, accessibilityDescription: String?) { super.init() }
     public init?(data: Data) { super.init() }
     public init(size: NSSize) { super.init() }
     open var size: NSSize = .zero
@@ -112,6 +120,11 @@ public struct NSColor: Sendable {
     public func string(forType type: PasteboardType) -> String? { nil }
     public func data(forType type: PasteboardType) -> Data? { nil }
     public func canReadObject(forClasses classes: [AnyClass], options: [AnyHashable: Any]?) -> Bool { false }
+}
+
+public final class NSItemProvider: NSObject {
+    public func canLoadObject<T: AnyObject>(ofClass aClass: T.Type) -> Bool { false }
+    public func loadObject<T: AnyObject>(ofClass aClass: T.Type, completionHandler: @escaping (T?, Error?) -> Void) {}
 }
 
 @MainActor public final class NSWorkspace {
@@ -208,4 +221,57 @@ public struct NSFont: Sendable {
     public static func systemFont(ofSize size: CGFloat) -> NSFont { NSFont() }
     public static func monospacedSystemFont(ofSize size: CGFloat, weight: Weight) -> NSFont { NSFont() }
     public struct Weight: Sendable { public static let regular = Weight(); public static let medium = Weight() }
+}
+
+@MainActor public let NSApp = NSApplication.shared
+
+public struct NSPoint { public var x: CGFloat = 0, y: CGFloat = 0 }
+
+@MainActor open class NSEvent: NSObject {
+    public enum EventType: Sendable { case leftMouseDown, rightMouseDown, mouseMoved }
+    public struct ModifierFlags: OptionSet, Sendable {
+        public let rawValue: UInt
+        public init(rawValue: UInt) { self.rawValue = rawValue }
+        public static let control = ModifierFlags(rawValue: 1 << 18)
+    }
+    open var type: EventType { .leftMouseDown }
+    open var modifierFlags: ModifierFlags { [] }
+}
+
+extension NSApplication {
+    public var currentEvent: NSEvent? { nil }
+}
+
+extension NSView {
+    open var bounds: NSRect { .zero }
+    open var superview: NSView? { nil }
+    open func convert(_ point: NSPoint, from view: NSView?) -> NSPoint { point }
+    open func hitTest(_ point: NSPoint) -> NSView? { nil }
+    open func rightMouseDown(with event: NSEvent) {}
+    open func mouseDown(with event: NSEvent) {}
+    open var fittingSize: NSSize { .zero }
+}
+
+@MainActor open class NSHostingView<Content: View>: NSView {
+    public init(rootView: Content) { super.init(frame: .zero) }
+}
+
+open class NSCoder: NSObject {}
+
+@MainActor open class NSMenuItem: NSObject {
+    public init(title: String, action: Selector?, keyEquivalent: String) { super.init() }
+    public override init() { super.init() }
+    public required init(coder: NSCoder) { super.init() }
+    open var target: AnyObject?
+    open var image: NSImage?
+    open var view: NSView?
+    public static func separator() -> NSMenuItem { NSMenuItem() }
+}
+
+@MainActor open class NSMenu: NSObject {
+    public override init() { super.init() }
+    open var autoenablesItems = true
+    open func addItem(_ item: NSMenuItem) {}
+    open func cancelTracking() {}
+    public static func popUpContextMenu(_ menu: NSMenu, with event: NSEvent, for view: NSView) {}
 }

@@ -21,8 +21,10 @@ struct MessageRow: View {
     var onRetry: (Message) -> Void
     var onDiscard: (Message) -> Void
     var onShowParent: (Int) -> Void
+    /// True while this message's reactions float above it — see `TapbackBar`.
+    var isTapbackTarget = false
+    var onShowTapback: (Message) -> Void
 
-    @State private var isHovering = false
     @State private var isShowingReactionDetail = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.talkSession) private var session
@@ -57,22 +59,29 @@ struct MessageRow: View {
                 if let parent = message.parent { QuotedMessageView(parent: parent, onTap: { onShowParent(parent.messageID) }) }
 
                 bubble
+                    // The reactions hang off the bubble's top corner, the far one from
+                    // the sender, reaching a little above and beyond it. The room above
+                    // is made here, so they never sit on the message before.
+                    .padding(.top, message.reactions.isEmpty ? 0 : 14)
+                    .overlay(alignment: isFromMe ? .topLeading : .topTrailing) {
+                        if !message.reactions.isEmpty {
+                            ReactionBadges(
+                                reactions: message.reactions,
+                                mine: message.myReactions,
+                                isFromMe: isFromMe,
+                                isEnabled: capabilities.supportsReactions,
+                                onToggle: { onReact($0, message) }
+                            )
+                            .offset(x: isFromMe ? -10 : 10, y: 0)
+                            .popover(isPresented: $isShowingReactionDetail, arrowEdge: .bottom) {
+                                if let session { ReactionDetailPopover(message: message, session: session) }
+                            }
+                        }
+                    }
 
-                if !message.reactions.isEmpty {
-                    ReactionStrip(
-                        reactions: message.reactions,
-                        mine: message.myReactions,
-                        isEnabled: capabilities.supportsReactions,
-                        onToggle: { onReact($0, message) }
-                    )
-                    .padding(.top, 2)
-                    // Right-click a reaction to see who it was.
-                    .contextMenu {
-                        Button("Show Who Reacted") { isShowingReactionDetail = true }
-                    }
-                    .popover(isPresented: $isShowingReactionDetail, arrowEdge: .bottom) {
-                        if let session { ReactionDetailPopover(message: message, session: session) }
-                    }
+                if !message.isDeleted, let link = content.firstWebLink {
+                    LinkPreviewCard(url: link, isFromMe: isFromMe)
+                        .padding(.top, 2)
                 }
 
                 if message.deliveryState.isPending { deliveryStatus }
@@ -87,24 +96,13 @@ struct MessageRow: View {
         .padding(.top, group.showsHeader ? 8 : 1)
         .padding(.bottom, 1)
         .contentShape(.rect)
-        .onHover { hovering in
-            // Ignored mid-scroll: rows moving under a still pointer would otherwise
-            // flicker the action strip the whole way down.
-            guard !isScrolling else { return }
-            isHovering = hovering
+        // Right-click: reactions and actions in one menu, as in Messages. The host
+        // takes only right clicks; everything else reaches the row as before.
+        .overlay {
+            if isActionable {
+                MessageMenuHost(actions: menuActions)
+            }
         }
-        .onChange(of: isScrolling) { _, scrolling in
-            if scrolling { isHovering = false }
-        }
-        .overlay(alignment: isFromMe ? .topLeading : .topTrailing) { hoverActions }
-        .contextMenu { MessageContextMenu(
-            message: message,
-            content: content,
-            capabilities: capabilities,
-            canEdit: canEdit,
-            canDelete: canDelete,
-            onReply: onReply, onEdit: onEdit, onDelete: onDelete, onReact: onReact
-        ) }
         .background(alignment: .leading) {
             if content.mentionsCurrentUser {
                 // A quiet tint rather than a badge: you notice it, it doesn't shout.
@@ -148,6 +146,17 @@ struct MessageRow: View {
                 .padding(.vertical, 6)
                 .background(bubbleFill, in: .rect(cornerRadius: 16, style: .continuous))
                 .foregroundStyle(isFromMe ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
+                // Press and hold, and the reactions float up above the bubble. The
+                // bubble itself lifts a touch while they are up, as it does in Messages.
+                .scaleEffect(isTapbackTarget ? 1.04 : 1, anchor: isFromMe ? .bottomTrailing : .bottomLeading)
+                .animation(reduceMotion ? nil : .snappy(duration: 0.25), value: isTapbackTarget)
+                .onLongPressGesture(minimumDuration: 0.35, maximumDistance: 6) {
+                    if isActionable && capabilities.supportsReactions { onShowTapback(message) }
+                }
+                // Where the bubble is, for the transcript to place the bar.
+                .anchorPreference(key: TapbackAnchorKey.self, value: .bounds) { anchor in
+                    isTapbackTarget ? [message.messageID: TapbackAnchor(bounds: anchor, isFromMe: isFromMe)] : [:]
+                }
         }
     }
 
@@ -249,19 +258,30 @@ struct MessageRow: View {
         }
     }
 
-    @ViewBuilder
-    private var hoverActions: some View {
-        if isHovering, !message.isDeleted, !message.deliveryState.isPending {
-            MessageHoverActions(
-                message: message,
-                capabilities: capabilities,
-                canEdit: canEdit,
-                canDelete: canDelete,
-                onReply: onReply, onEdit: onEdit, onDelete: onDelete, onReact: onReact
-            )
-            .padding(isFromMe ? .leading : .trailing, 16)
-            .transition(reduceMotion ? .identity : .opacity)
-        }
+    /// Deleted and not-yet-sent messages have no menu and no reactions.
+    private var isActionable: Bool {
+        !message.isDeleted && message.kind != .commentDeleted && !message.deliveryState.isPending
+    }
+
+    private var menuActions: MessageMenuActions {
+        MessageMenuActions(
+            canReply: message.isReplyable && capabilities.supportsReplies,
+            canEdit: canEdit,
+            canDelete: canDelete,
+            canReact: capabilities.supportsReactions,
+            hasReactions: !message.reactions.isEmpty,
+            myReactions: message.myReactions,
+            onReply: { onReply(message) },
+            onEdit: { onEdit(message) },
+            onDelete: { onDelete(message) },
+            onCopy: {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(content.preview, forType: .string)
+            },
+            onReact: { onReact($0, message) },
+            onShowReactions: { isShowingReactionDetail = true },
+            onMoreReactions: { onShowTapback(message) }
+        )
     }
 
     private var canEdit: Bool {

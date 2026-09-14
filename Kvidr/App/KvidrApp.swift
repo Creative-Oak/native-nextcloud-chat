@@ -9,6 +9,8 @@ enum TalkWindow {
 struct KvidrApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var app = AppModel()
+    /// Link previews outlive any one account: a page is a page whoever posted it.
+    @State private var linkPreviews = LinkPreviewLoader()
 
     var body: some Scene {
         WindowGroup {
@@ -17,6 +19,7 @@ struct KvidrApp: App {
                 .environment(\.preferences, app.dependencies.preferences)
                 .environment(\.avatarLoader, app.avatarLoader)
                 .environment(\.previewLoader, app.previewLoader)
+                .environment(\.linkPreviewLoader, linkPreviews)
                 .environment(\.talkSession, app.session)
                 .onAppear { appDelegate.app = app }
                 .frame(minWidth: 720, minHeight: 460)

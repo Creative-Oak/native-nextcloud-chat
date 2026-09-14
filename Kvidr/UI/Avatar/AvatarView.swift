@@ -15,12 +15,17 @@ struct AvatarView: View {
 
     var body: some View {
         ZStack {
-            fallback
+            // One or the other, never both. The server's icons for groups and Note to
+            // self have transparent backgrounds, and drawn over the fallback they came
+            // out as two pictures on top of each other. They get a plain disc instead.
             if let image {
+                Circle().fill(.quaternary)
                 Image(nsImage: image)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
                     .transition(.opacity)
+            } else {
+                fallback
             }
         }
         .frame(width: size, height: size)
@@ -130,22 +135,24 @@ struct ActorAvatarView: View {
 
     var body: some View {
         ZStack {
-            Circle().fill(tint.gradient)
-            if actor.isBot {
-                Image(systemName: "gearshape.fill")
-                    .font(.system(size: size * 0.4))
-                    .foregroundStyle(.white)
-            } else if actor.isDeletedUser {
-                Image(systemName: "person.slash.fill")
-                    .font(.system(size: size * 0.4))
-                    .foregroundStyle(.white)
-            } else {
-                Text(initials)
-                    .font(.system(size: size * 0.4, weight: .medium, design: .rounded))
-                    .foregroundStyle(.white)
-            }
             if let image {
+                Circle().fill(.quaternary)
                 Image(nsImage: image).resizable().aspectRatio(contentMode: .fill)
+            } else {
+                Circle().fill(tint.gradient)
+                if actor.isBot {
+                    Image(systemName: "gearshape.fill")
+                        .font(.system(size: size * 0.4))
+                        .foregroundStyle(.white)
+                } else if actor.isDeletedUser {
+                    Image(systemName: "person.slash.fill")
+                        .font(.system(size: size * 0.4))
+                        .foregroundStyle(.white)
+                } else {
+                    Text(initials)
+                        .font(.system(size: size * 0.4, weight: .medium, design: .rounded))
+                        .foregroundStyle(.white)
+                }
             }
         }
         .frame(width: size, height: size)

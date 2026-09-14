@@ -233,6 +233,28 @@ struct MessageContentParser: Sendable {
 
     // MARK: - Links
 
+    /// The first bare `http(s)://` URL in a piece of text, Markdown or not. Sentence
+    /// punctuation and a closing Markdown bracket after it are not part of it.
+    static func firstWebLink(in text: String) -> URL? {
+        var remainder = Substring(text)
+        while let range = remainder.range(of: "http", options: .caseInsensitive) {
+            let candidate = remainder[range.lowerBound...]
+            guard candidate.hasPrefix("http://") || candidate.hasPrefix("https://") else {
+                let skipTo = remainder.index(range.lowerBound, offsetBy: 4, limitedBy: remainder.endIndex) ?? remainder.endIndex
+                remainder = remainder[skipTo...]
+                continue
+            }
+            let end = candidate.firstIndex { $0.isWhitespace || $0 == ")" || $0 == ">" } ?? candidate.endIndex
+            var urlText = candidate[candidate.startIndex..<end]
+            while let last = urlText.last, ".,;:!?]".contains(last) {
+                urlText = urlText.dropLast()
+            }
+            if let url = URL(string: String(urlText)), url.isWebLink { return url }
+            remainder = remainder[urlText.endIndex...]
+        }
+        return nil
+    }
+
     /// Finds bare `http(s)://` URLs in plain text so they become real links.
     ///
     /// Markdown segments are handed to the Markdown renderer untouched, which already

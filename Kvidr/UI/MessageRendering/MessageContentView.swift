@@ -39,8 +39,8 @@ private struct MessageBlockView: View {
     var body: some View {
         switch block {
         case .paragraph(let nodes):
-            Text(MessageAttributedString.make(nodes, isFromMe: isFromMe))
-                .textSelection(.enabled)
+            // Selectable, but `InlineText` says so itself — see there for why.
+            InlineText(nodes: nodes, isFromMe: isFromMe)
                 .fixedSize(horizontal: false, vertical: true)
 
         case .code(let code, let language):
@@ -66,8 +66,7 @@ private struct MessageBlockView: View {
                         Text(isOrdered ? "\(index + 1)." : "•")
                             .foregroundStyle(.secondary)
                             .monospacedDigit()
-                        Text(MessageAttributedString.make(item, isFromMe: isFromMe))
-                            .textSelection(.enabled)
+                        InlineText(nodes: item, isFromMe: isFromMe)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
@@ -125,9 +124,10 @@ enum MessageAttributedString {
             return text
 
         case .link(let url, let label):
+            // No standing underline: links get one while the pointer is over them,
+            // which `InlineText` draws.
             var text = AttributedString(label)
             text.link = url
-            text.underlineStyle = .single
             if isFromMe { text.foregroundColor = .white }
             return text
 

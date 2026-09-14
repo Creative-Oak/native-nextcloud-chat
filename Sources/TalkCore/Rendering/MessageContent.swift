@@ -92,4 +92,54 @@ struct MessageContent: Sendable, Hashable {
     var isAttachmentOnly: Bool {
         blocks.count == 1 && { if case .attachment = blocks[0] { return true } else { return false } }()
     }
+
+    /// The first web link in the message, for a preview card. Only http(s), and only
+    /// links the parser found in the text — not a shared file's own link.
+    var firstWebLink: URL? {
+        for block in blocks {
+            if let url = block.firstWebLink { return url }
+        }
+        return nil
+    }
+}
+
+private extension MessageBlock {
+    var firstWebLink: URL? {
+        switch self {
+        case .paragraph(let nodes):
+            return nodes.firstWebLink
+        case .quote(let blocks):
+            return blocks.lazy.compactMap(\.firstWebLink).first
+        case .list(_, let items):
+            return items.lazy.compactMap(\.firstWebLink).first
+        case .code, .attachment:
+            return nil
+        }
+    }
+}
+
+private extension [InlineNode] {
+    var firstWebLink: URL? {
+        for node in self {
+            switch node {
+            case .link(let url, _):
+                if url.isWebLink { return url }
+            case .markdown(let source):
+                // Markdown text goes to the renderer whole, links and all, so the
+                // parser never split its URLs out. Found here the same way instead.
+                if let url = MessageContentParser.firstWebLink(in: source) { return url }
+            default:
+                continue
+            }
+        }
+        return nil
+    }
+}
+
+extension URL {
+    /// Something a browser can open — and a preview can be fetched for.
+    var isWebLink: Bool {
+        guard let scheme = scheme?.lowercased() else { return false }
+        return (scheme == "http" || scheme == "https") && host() != nil
+    }
 }

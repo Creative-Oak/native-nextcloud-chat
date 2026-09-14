@@ -21,7 +21,7 @@ SWIFTC=${SWIFTC:-swiftc}
 
 # Each stub is its own module, named after the framework it stands in for.
 # Order matters: SwiftUI's stub imports Combine and AppKit.
-for module in Combine UniformTypeIdentifiers SwiftData AppKit SwiftUI UserNotifications; do
+for module in Combine UniformTypeIdentifiers SwiftData AppKit LinkPresentation SwiftUI UserNotifications; do
     if [ -f "Tools/uicheck/stubs/$module.swift" ]; then
         $SWIFTC -emit-module -module-name "$module" \
             -emit-module-path "$MODULES/$module.swiftmodule" \
