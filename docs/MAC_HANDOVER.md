@@ -1,11 +1,12 @@
 # Mac handover
 
-Everything in this repository was written on Linux, where there is no macOS SDK. **Xcode
-has never built this app**, and no Nextcloud server has ever answered one of its requests.
+Everything in this repository was written on Linux, where there is no macOS SDK. Xcode has
+since built it — clean on the first attempt, under Xcode 26.3 — but **no Nextcloud server
+has ever answered one of its requests**.
 
 That is the one thing to keep in mind while reading the rest: the app is *verified* to a
-degree that is unusual for code that has never run, and *unproven* in the ways that only a
-Mac and a real server can settle. This document is the handover between those two states —
+degree that is unusual for code that has barely run, and *unproven* in the ways that only a
+real server can settle. This document is the handover between those two states —
 what has been checked and how, what is still open, what to do in what order, and what to
 send back when something goes wrong.
 
@@ -33,11 +34,12 @@ lists what is in 1.0 and what deliberately isn't.
 ## 2. What has been verified, and how
 
 `./Tools/preflight.sh` runs everything that can be checked without a Mac. It passes, and
-the same checks run in CI on every push:
+the same checks run in CI on every push. On a Mac it builds the app target with Xcode in
+place of the stub type-check, which proves strictly more — see the note under the table:
 
 | Check | What it proves |
 | --- | --- |
-| `swift build && swift test` — **213 tests** | The whole non-UI application is correct against recorded fixtures: OCS decoding, the merge rules, both sync engines, read-state policy, login flow, message parsing, every service's request shape. |
+| `swift build && swift test` — **228 tests** | The whole non-UI application is correct against recorded fixtures: OCS decoding, the merge rules, both sync engines, read-state policy, login flow, message parsing, every service's request shape. |
 | `Tools/uicheck/run.sh` | **The app target type-checks under Swift 6**, against stand-in SwiftUI/AppKit/SwiftData modules. |
 | `Tools/check_imports.py` | Every file importing a framework it actually uses. Caught four certain errors. |
 | `Tools/validate_pbxproj.py` | The Xcode project parses and its synchronized groups are intact. |
@@ -57,6 +59,14 @@ satisfy a nonisolated protocol requirement.
 
 **When the stub and your SDK disagree, your SDK is right.** Fix the app, then fix
 `Tools/uicheck/stubs/SwiftUI.swift` to match, so the next run catches the same thing.
+
+**`Tools/uicheck` cannot run on a Mac, and does not need to.** A module named `Combine`
+built alongside a real macOS SDK is a circular dependency against that SDK's own
+Foundation, which no flag gets around — the harness only works where the frameworks it
+stands in for are absent. `preflight.sh` therefore builds the app with `xcodebuild` on a
+Mac and runs the stub type-check only off Darwin; CI does the same, split across its two
+jobs. Keep the stubs in repair anyway: the Linux job is the only thing checking the app
+target there, and it is what keeps `Sources/TalkCore` free of any UI dependency.
 
 ### What no amount of Linux can check
 
@@ -199,11 +209,11 @@ python3 Tools/check_imports.py           # works anywhere
 python3 Tools/validate_pbxproj.py Kvidr.xcodeproj/project.pbxproj
 ```
 
-`Tools/uicheck/run.sh` is the odd one out: it exists for machines with no macOS SDK, and I
-have only ever run it on Linux. On a Mac it may or may not prefer its stub modules over the
-real frameworks, and it does not matter either way — you have Xcode. If you add a SwiftUI
-API the stubs don't declare, the Linux CI job will tell you, and the fix is to add it to
-`Tools/uicheck/stubs/`, never to change the app to suit the stub.
+`Tools/uicheck/run.sh` is the odd one out: it exists for machines with no macOS SDK, and it
+cannot run on a Mac at all — see *About the type-check* above for why. There is nothing to
+remember, because `preflight.sh` builds the app with Xcode instead when it runs on Darwin.
+If you add a SwiftUI API the stubs don't declare, the Linux CI job will tell you, and the
+fix is to add it to `Tools/uicheck/stubs/`, never to change the app to suit the stub.
 
 ---
 

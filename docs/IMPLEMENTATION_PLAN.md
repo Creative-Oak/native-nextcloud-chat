@@ -101,9 +101,9 @@ target is compiled by CI on a macOS runner. Anything not yet green on CI is mark
 - [x] Window frame restoration; quit-safe drafts; double-click a conversation
 - [x] Talk-hash capability refresh wired end to end
 - [x] Tooling that stands in for the compiler: `Tools/preflight.sh`
-- [ ] ⌘N create conversation (phase 7 — the menu item exists and is disabled)
+- [x] ⌘N create conversation — delivered in phase 7, gated on `canCreateConversations`
 - [ ] Performance pass on a real 10k-message conversation (needs a real server)
-- [ ] First-build pass on macOS: the SwiftUI layer has never been type-checked
+- [x] First-build pass on macOS: builds clean under Xcode 26.3, no errors and no warnings
 
 ## Phase 7 — Beyond the MVP (largely done)
 
@@ -129,14 +129,14 @@ target is compiled by CI on a macOS runner. Anything not yet green on CI is mark
 
 ## Known gaps
 
-- **The app has never been built by Xcode.** It was written on Linux, where no macOS SDK
-  exists. Everything in `Sources/TalkCore` is built and tested on every change;
-  `Kvidr/` is **type-checked** by `Tools/preflight.sh` against stand-in SwiftUI,
-  AppKit, SwiftData, Combine and UserNotifications modules (`Tools/uicheck`) under Swift 6,
-  which is what catches a wrong argument label, a missing member or an isolation mistake
-  before Xcode does. What that cannot check is the parts with no stand-in: how Liquid Glass
-  actually renders, SwiftData's macros, the Keychain, and anything that is a runtime
-  behaviour rather than a type. See docs/MAC_HANDOVER.md.
+- **Built by Xcode, but barely run.** It was written on Linux, where no macOS SDK exists;
+  Xcode 26.3 now builds it clean, which closed out SwiftData's macros and the Keychain —
+  the two things that had no stand-in. Everything in `Sources/TalkCore` is built and tested
+  on every change; where there is no macOS SDK, `Kvidr/` is **type-checked** against stand-in
+  SwiftUI, AppKit, SwiftData, Combine and UserNotifications modules (`Tools/uicheck`) under
+  Swift 6, which is what catches a wrong argument label, a missing member or an isolation
+  mistake before a compiler does. What no build settles is how Liquid Glass actually renders,
+  and anything that is a runtime behaviour rather than a type. See docs/MAC_HANDOVER.md.
 - **Not yet run against a real server.** Every request shape is verified against the
   documentation and against fixtures, but no live Nextcloud has answered one of them.
 
