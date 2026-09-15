@@ -5,4 +5,6 @@ public struct UTType: Sendable, Hashable {
     public static let image = UTType("public.image")
     public static let fileURL = UTType("public.file-url")
     public static let item = UTType("public.item")
+    public static let png = UTType("public.png")
+    public static let jpeg = UTType("public.jpeg")
 }

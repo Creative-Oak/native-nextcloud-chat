@@ -105,7 +105,7 @@ struct ChatView: View {
             // dragged out of the transcript or a browser arrives here indistinguishable
             // from a dragged document. The queue refuses those; saying so here as well
             // means the drag is reported as declined rather than silently swallowed.
-            let files = urls.filter(\.isLocalFile)
+            let files = urls.filter(\.isAttachableFile)
             guard !files.isEmpty else { return false }
             model.attachments.enqueue(urls: files)
             return true
