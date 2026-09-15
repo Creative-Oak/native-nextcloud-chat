@@ -34,6 +34,7 @@ struct NewPollSheet: View {
             footer
         }
         .frame(width: 460, height: 520)
+        .glassSheet()
     }
 
     private var header: some View {
@@ -49,7 +50,8 @@ struct NewPollSheet: View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Question").font(.caption).foregroundStyle(.secondary)
             TextField("What should we decide?", text: $model.question)
-                .textFieldStyle(.roundedBorder)
+                .textFieldStyle(.plain)
+                .sheetField()
         }
     }
 
@@ -60,7 +62,8 @@ struct NewPollSheet: View {
             ForEach($model.options.indices, id: \.self) { index in
                 HStack(spacing: 6) {
                     TextField("Option \(index + 1)", text: $model.options[index])
-                        .textFieldStyle(.roundedBorder)
+                        .textFieldStyle(.plain)
+                        .sheetField()
 
                     Button {
                         model.removeOption(at: index)

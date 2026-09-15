@@ -29,6 +29,8 @@ enum GlassRole {
     /// The message field. Floating chrome, so it earns glass — but not the *interactive*
     /// variant: a pointer highlight fights with a text cursor sitting in the same control.
     case field
+    /// A modal sheet. A panel by another name, in the larger radius a window corner wants.
+    case sheet
 }
 
 extension View {
@@ -46,7 +48,32 @@ extension View {
             glassEffect(.regular.tint(.accentColor).interactive(), in: .capsule)
         case .field:
             glassEffect(.regular, in: .rect(cornerRadius: cornerRadius ?? 18))
+        case .sheet:
+            glassEffect(.regular, in: .rect(cornerRadius: cornerRadius ?? 20))
         }
+    }
+
+    /// The whole treatment for a modal: glass, its own corner, and the sheet's opaque
+    /// backing taken away.
+    ///
+    /// `presentationBackground(.clear)` matters as much as the material does. Without it the
+    /// glass is laid over the sheet's own solid panel and has nothing to be a material
+    /// *over* — the result is a tinted rectangle that looks like glass in a screenshot and
+    /// like nothing at all when you move the window.
+    func glassSheet(cornerRadius: CGFloat = 20) -> some View {
+        glass(.sheet, cornerRadius: cornerRadius)
+            .presentationBackground(.clear)
+    }
+
+    /// A text field inside a glass sheet: a shape rather than another material.
+    ///
+    /// Not `.roundedBorder`, whose bezel is drawn for an opaque window and reads as a
+    /// control resting on nothing once the window is glass; and not glass either, which
+    /// stacked on glass is a smudge. Pair it with `.textFieldStyle(.plain)`.
+    func sheetField(cornerRadius: CGFloat = 8) -> some View {
+        padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .background(.quaternary.opacity(0.4), in: .rect(cornerRadius: cornerRadius))
     }
 
     /// A circular floating control — the scroll-to-bottom button.

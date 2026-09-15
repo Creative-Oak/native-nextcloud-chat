@@ -45,6 +45,7 @@ struct NewConversationSheet: View {
             footer
         }
         .frame(width: 460, height: 520)
+        .glassSheet()
         .background(.regularMaterial)
     }
 
@@ -100,9 +101,7 @@ struct NewConversationSheet: View {
                     .textFieldStyle(.plain)
                 if model.isSearching { ProgressView().controlSize(.small) }
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 6)
-            .glass(.floating, cornerRadius: 8)
+            .sheetField()
 
             if !model.selected.isEmpty {
                 selectedChips

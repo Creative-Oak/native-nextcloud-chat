@@ -21,6 +21,7 @@ struct MessageSearchSheet: View {
             footer
         }
         .frame(width: 620, height: 520)
+        .glassSheet()
         .task {
             isFieldFocused = true
             await model.checkAvailability()

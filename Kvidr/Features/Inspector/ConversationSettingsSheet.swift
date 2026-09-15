@@ -103,6 +103,7 @@ struct ConversationSettingsSheet: View {
             .padding(.vertical, 12)
         }
         .frame(width: 460, height: 520)
+        .glassSheet()
         .background(.regularMaterial)
         .confirmationDialog("Delete this conversation?", isPresented: $model.isConfirmingDelete) {
             Button("Delete for Everyone", role: .destructive) {
