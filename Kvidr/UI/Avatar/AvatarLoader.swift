@@ -93,12 +93,14 @@ final class AvatarLoader {
         do {
             var request = OCSRequest.get(path)
             request.timeout = 20
-            let response = try await client.sendRaw(request)
             // A profile picture, at the sizes this asks for, is tens of kilobytes. The
-            // transport's ceiling is the general API one — sixteen megabytes — which is not
-            // a limit on a decoration: three hundred of those is the memory cache alone. The
-            // request cannot carry its own ceiling (`OCSRequest` has no field for one), so
-            // the answer is judged here instead, before anything keeps a copy of it.
+            // general API ceiling — sixteen megabytes — is not a limit on a decoration, so
+            // the request carries its own and the transport stops reading at it, rather
+            // than taking the whole thing and being told afterwards.
+            request.maximumResponseSize = Self.maximumAvatarBytes
+            let response = try await client.sendRaw(request)
+            // Belt and braces: the transport refuses the oversized body, and nothing keeps
+            // a copy of one that slipped through a ceiling raised later by mistake.
             guard response.body.count <= Self.maximumAvatarBytes else {
                 Log.ui.debug("Avatar response was far too large to be a profile picture")
                 return nil

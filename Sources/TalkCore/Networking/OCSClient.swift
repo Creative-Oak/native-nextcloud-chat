@@ -10,6 +10,13 @@ struct OCSRequest: Sendable {
     var form: [String: String]?
     var timeout: TimeInterval = 30
     var requiresAuthentication = true
+    /// How many bytes of response this particular call is willing to take.
+    ///
+    /// The default suits an OCS payload. A caller that knows better should say so: an
+    /// avatar is a small square, and letting one arrive at the API's own ceiling means a
+    /// server can make the client hold sixteen megabytes per face it is asked about,
+    /// before anything has looked at what came back.
+    var maximumResponseSize: Int = HTTPRequest.apiResponseLimit
 
     static func get(_ path: String, query: [URLQueryItem] = []) -> OCSRequest {
         OCSRequest(method: .get, path: path, query: query)
@@ -158,7 +165,7 @@ actor OCSClient {
             headers: headers,
             body: body,
             timeout: request.timeout,
-            maximumResponseSize: HTTPRequest.apiResponseLimit
+            maximumResponseSize: request.maximumResponseSize
         )
 
         // Paths carry conversation tokens and user ids, and this log line is `.public`.
