@@ -381,8 +381,14 @@ extension URL {
     /// timeout, which is a change to the transport rather than to this predicate.
     var isAttachableFile: Bool {
         guard isLocalFile else { return false }
-        let values = try? resourceValues(forKeys: [.isRegularFileKey])
-        return values?.isRegularFile == true
+        if let isRegularFile = (try? resourceValues(forKeys: [.isRegularFileKey]))?.isRegularFile {
+            return isRegularFile
+        }
+        // Not every Foundation answers that key — this module builds on Linux too — and a
+        // predicate that has to fail closed must not fail closed on everything. Asking the
+        // file system for the item's type directly is the same question in older words.
+        let attributes = try? FileManager.default.attributesOfItem(atPath: resolvingSymlinksInPath().path)
+        return (attributes?[.type] as? FileAttributeType) == .typeRegular
     }
 
     /// Whether this URL names something inside `directory`.

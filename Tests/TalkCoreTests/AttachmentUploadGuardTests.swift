@@ -2,6 +2,12 @@ import Foundation
 import Testing
 @testable import TalkCore
 
+#if canImport(Glibc)
+import Glibc
+#elseif canImport(Darwin)
+import Darwin
+#endif
+
 /// The rules the upload path applies to a URL before it reads or deletes anything.
 ///
 /// A dropped or pasted `URL` is untrusted input: `.dropDestination(for: URL.self)` matches
@@ -49,6 +55,66 @@ struct AttachmentUploadGuardTests {
         #expect(URL(fileURLWithPath: "/Users/alice/report.pdf").isLocalFile)
     }
 
+    // MARK: - isAttachableFile
+
+    @Test("An ordinary file is attachable")
+    func acceptsRegularFile() throws {
+        let manager = FileManager.default
+        let root = manager.temporaryDirectory.appendingPathComponent("kvidr-tests-\(UUID().uuidString)")
+        try manager.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? manager.removeItem(at: root) }
+
+        let file = root.appendingPathComponent("report.pdf")
+        try Data("hello".utf8).write(to: file)
+        #expect(file.isAttachableFile)
+    }
+
+    @Test("A directory is not")
+    func refusesDirectory() throws {
+        let manager = FileManager.default
+        let root = manager.temporaryDirectory.appendingPathComponent("kvidr-tests-\(UUID().uuidString)")
+        try manager.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? manager.removeItem(at: root) }
+
+        #expect(!root.isAttachableFile)
+    }
+
+    @Test("A named pipe is not, which is the one that would never finish")
+    func refusesNamedPipe() throws {
+        // The predicate is what is tested, not the read: a test that actually handed a FIFO
+        // to `Data(contentsOf:)` to prove the point would hang the suite rather than fail it,
+        // which is exactly the bug. `mkfifo` and then ask.
+        let manager = FileManager.default
+        let root = manager.temporaryDirectory.appendingPathComponent("kvidr-tests-\(UUID().uuidString)")
+        try manager.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? manager.removeItem(at: root) }
+
+        let pipe = root.appendingPathComponent("report.pdf")
+        let made = mkfifo(pipe.path, 0o600)
+        try #require(made == 0)
+        #expect(!pipe.isAttachableFile)
+    }
+
+    @Test("A character device is not either")
+    func refusesCharacterDevice() {
+        // `/dev/zero` is readable, is not a directory, and answers forever.
+        let device = URL(fileURLWithPath: "/dev/zero")
+        #expect(device.isLocalFile)
+        #expect(!device.isAttachableFile)
+    }
+
+    @Test("A path with nothing at it is not")
+    func refusesMissingFile() {
+        let missing = URL(fileURLWithPath: "/var/empty/kvidr-\(UUID().uuidString)/report.pdf")
+        #expect(!missing.isAttachableFile)
+    }
+
+    @Test("Nothing that fails isLocalFile can pass isAttachableFile")
+    func refusesEverythingIsLocalFileRefuses() throws {
+        let link = try #require(URL(string: "https://cloud.example.com/secret"))
+        #expect(!link.isAttachableFile)
+    }
+
     // MARK: - The read itself
 
     @Test("Uploading a web URL neither fetches it nor sends a request")
@@ -73,6 +139,31 @@ struct AttachmentUploadGuardTests {
             _ = try await service.upload(transfer, folder: "/Talk", progress: { _ in })
         }
         // The point of the test: nothing was fetched and nothing was put in the user's Files.
+        #expect(transport.requestCount == 0)
+    }
+
+    @Test("Uploading something that is not a regular file is refused at the same door")
+    func uploadRefusesDirectory() async throws {
+        let manager = FileManager.default
+        let root = manager.temporaryDirectory.appendingPathComponent("kvidr-tests-\(UUID().uuidString)")
+        try manager.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? manager.removeItem(at: root) }
+
+        let transport = StubTransport(json: "")
+        let server = try ServerAddress.parse("https://cloud.example.com")
+        let credentials = Credentials(loginName: "alice", appPassword: "pw")
+        let service = AttachmentService(
+            server: server,
+            credentials: credentials,
+            userID: "alice",
+            transport: transport,
+            client: OCSClient(server: server, credentials: credentials, transport: transport)
+        )
+
+        let transfer = FileTransfer(fileURL: root, byteCount: 0)
+        await #expect(throws: TalkError.unexpectedResponse("Only files on this Mac can be attached")) {
+            _ = try await service.upload(transfer, folder: "/Talk", progress: { _ in })
+        }
         #expect(transport.requestCount == 0)
     }
 
