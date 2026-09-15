@@ -103,3 +103,11 @@ struct RichObject: Sendable, Hashable, Codable {
         }
     }
 }
+
+extension RichObject {
+    /// Whether this is a shape rather than a row: a picture we can actually draw, or a poll.
+    /// Those get no message bubble — see ``MessageContent/standalone``.
+    var drawsItsOwnShape: Bool {
+        type == .talkPoll || (isImage && previewAvailable)
+    }
+}

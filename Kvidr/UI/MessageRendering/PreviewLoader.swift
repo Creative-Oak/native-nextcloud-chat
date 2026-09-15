@@ -98,6 +98,9 @@ extension EnvironmentValues {
 struct InlineImageView: View {
     let object: RichObject
     var maximumWidth: CGFloat = 320
+    /// Rounder than a thumbnail in a row, because with no bubble around it the picture is
+    /// the shape the eye reads.
+    var cornerRadius: CGFloat = 16
 
     @Environment(\.previewLoader) private var loader
     @Environment(\.openAttachment) private var openAttachment
@@ -111,9 +114,9 @@ struct InlineImageView: View {
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(maxWidth: maximumWidth, maxHeight: 280)
-                    .clipShape(.rect(cornerRadius: 10))
+                    .clipShape(.rect(cornerRadius: cornerRadius, style: .continuous))
                     .overlay {
-                        RoundedRectangle(cornerRadius: 10)
+                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                             .strokeBorder(Color(nsColor: .separatorColor).opacity(0.6), lineWidth: 0.5)
                     }
                     .contentShape(.rect)
@@ -133,7 +136,7 @@ struct InlineImageView: View {
     /// Sized from the file's own dimensions where the server sent them, so the layout
     /// doesn't jump when the picture arrives.
     private var placeholder: some View {
-        RoundedRectangle(cornerRadius: 10)
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
             .fill(.quaternary.opacity(0.4))
             .frame(width: placeholderSize.width, height: placeholderSize.height)
             .overlay { ProgressView().controlSize(.small) }

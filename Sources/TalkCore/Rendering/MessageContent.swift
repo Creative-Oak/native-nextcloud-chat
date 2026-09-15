@@ -77,16 +77,27 @@ struct MessageContent: Sendable, Hashable {
 
     static let empty = MessageContent(blocks: [], mentionsCurrentUser: false)
 
-    /// The poll this message is, when a poll is all it is.
+    /// The attachment that draws its own container, and whatever else the message said.
     ///
-    /// A poll draws its own container — capsules on the transcript, as Messages does — so
-    /// the bubble that would otherwise hold it is skipped. Only when the poll is the whole
-    /// message: a poll quoted beside text still belongs in one.
-    var soloPoll: RichObject? {
-        guard blocks.count == 1, case .attachment(let object) = blocks[0], object.type == .talkPoll else {
-            return nil
+    /// A picture and a poll are shapes in their own right: Messages gives neither a bubble,
+    /// and puts a caption in a small bubble of its own underneath. Anything without a shape
+    /// — a file row, a location — stays in the bubble where it belongs.
+    var standalone: (object: RichObject, caption: [MessageBlock])? {
+        var shape: RichObject?
+        var caption: [MessageBlock] = []
+
+        for block in blocks {
+            guard case .attachment(let object) = block else {
+                caption.append(block)
+                continue
+            }
+            // Two of them have no obvious arrangement, so the bubble keeps them together.
+            guard shape == nil, object.drawsItsOwnShape else { return nil }
+            shape = object
         }
-        return object
+
+        guard let shape else { return nil }
+        return (shape, caption)
     }
 
     /// One-line projection for sidebar previews and notification bodies.

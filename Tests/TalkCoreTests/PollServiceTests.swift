@@ -232,32 +232,68 @@ struct PollServiceTests {
     }
 }
 
-@Suite("Poll messages")
-struct PollMessageTests {
+@Suite("Messages that draw their own shape")
+struct StandaloneAttachmentTests {
     private func poll(_ id: String = "7") -> RichObject {
         RichObject(type: .talkPoll, id: id, name: "Lunch?")
     }
 
-    @Test("A message that is only a poll draws its own container")
-    func soloPollSkipsTheBubble() {
-        let content = MessageContent(blocks: [.attachment(poll())], mentionsCurrentUser: false)
-        #expect(content.soloPoll?.id == "7")
+    private func image(_ id: String = "3", preview: Bool = true) -> RichObject {
+        RichObject(
+            type: .file, id: id, name: "cat.jpeg",
+            attributes: ["mimetype": "image/jpeg", "preview-available": preview ? "yes" : "no"]
+        )
     }
 
-    @Test("A poll with something beside it still belongs in a bubble")
-    func pollWithTextKeepsTheBubble() {
+    @Test("A poll on its own gets no bubble")
+    func soloPoll() {
+        let content = MessageContent(blocks: [.attachment(poll())], mentionsCurrentUser: false)
+        #expect(content.standalone?.object.id == "7")
+        #expect(content.standalone?.caption.isEmpty == true)
+    }
+
+    @Test("A captioned picture keeps its words, to go in a bubble of their own")
+    func captionedImage() {
+        // What Talk sends for a photo with a caption: the words, then the file.
         let content = MessageContent(
-            blocks: [.paragraph([.text("what do you think")]), .attachment(poll())],
+            blocks: [.paragraph([.text("Hep")]), .attachment(image())],
             mentionsCurrentUser: false
         )
-        // Otherwise the words would be left floating with no bubble of their own.
-        #expect(content.soloPoll == nil)
+        let standalone = content.standalone
+        #expect(standalone?.object.id == "3")
+        #expect(standalone?.caption.count == 1)
+        // The picture is drawn first and the caption under it, so the words come back
+        // separately rather than staying in the order the server sent them.
+        #expect(standalone?.caption.first?.plainText == "Hep")
     }
 
-    @Test("A lone file is not a poll")
-    func fileIsNotAPoll() {
-        let file = RichObject(type: .file, id: "3", name: "report.pdf")
+    @Test("A picture the server can't preview stays a row in a bubble")
+    func unpreviewableImage() {
+        let content = MessageContent(blocks: [.attachment(image(preview: false))], mentionsCurrentUser: false)
+        // Nothing to draw means nothing to draw bare: it falls back to the file row, which
+        // needs the bubble to sit in.
+        #expect(content.standalone == nil)
+    }
+
+    @Test("A plain file is a row, not a shape")
+    func plainFile() {
+        let file = RichObject(type: .file, id: "9", name: "report.pdf", attributes: ["mimetype": "application/pdf"])
         let content = MessageContent(blocks: [.attachment(file)], mentionsCurrentUser: false)
-        #expect(content.soloPoll == nil)
+        #expect(content.standalone == nil)
+    }
+
+    @Test("Two pictures have no obvious arrangement, so the bubble keeps them")
+    func twoImages() {
+        let content = MessageContent(
+            blocks: [.attachment(image("1")), .attachment(image("2"))],
+            mentionsCurrentUser: false
+        )
+        #expect(content.standalone == nil)
+    }
+
+    @Test("An ordinary message is untouched")
+    func plainText() {
+        let content = MessageContent(blocks: [.paragraph([.text("hello")])], mentionsCurrentUser: false)
+        #expect(content.standalone == nil)
     }
 }

@@ -14,9 +14,25 @@ struct MessageContentView: View {
     var isFromMe: Bool = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            ForEach(Array(content.blocks.enumerated()), id: \.offset) { _, block in
-                MessageBlockView(block: block, isFromMe: isFromMe)
+        VStack(alignment: isFromMe ? .trailing : .leading, spacing: 4) {
+            if let standalone = content.standalone {
+                // The picture (or the poll) first and bare, then whatever was said about it
+                // in a small bubble beneath — the arrangement Messages uses, and the reason
+                // a caption no longer sits above its own photo inside a slab of accent.
+                MessageBlockView(block: .attachment(standalone.object), isFromMe: isFromMe)
+
+                if !standalone.caption.isEmpty {
+                    VStack(alignment: .leading, spacing: 6) {
+                        ForEach(Array(standalone.caption.enumerated()), id: \.offset) { _, block in
+                            MessageBlockView(block: block, isFromMe: isFromMe)
+                        }
+                    }
+                    .messageBubble(isFromMe: isFromMe, cornerRadius: 14)
+                }
+            } else {
+                ForEach(Array(content.blocks.enumerated()), id: \.offset) { _, block in
+                    MessageBlockView(block: block, isFromMe: isFromMe)
+                }
             }
         }
         // Link colour comes from the tint, not from a foregroundColor attribute — SwiftUI

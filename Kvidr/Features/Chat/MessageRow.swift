@@ -140,35 +140,30 @@ struct MessageRow: View {
     private var bubble: some View {
         if message.isDeleted || message.kind == .commentDeleted {
             content_
-        } else if content.soloPoll != nil {
-            // A poll is its own container. Inside a bubble its capsules sit on the accent
-            // fill and their tints fight it — in Messages the poll *is* the bubble.
-            content_
         } else {
-            content_
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(bubbleFill, in: .rect(cornerRadius: 16, style: .continuous))
-                .foregroundStyle(isFromMe ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
-                // Press and hold, and the reactions float up above the bubble. The
-                // bubble itself lifts a touch while they are up, as it does in Messages.
-                .scaleEffect(isTapbackTarget ? 1.04 : 1, anchor: isFromMe ? .bottomTrailing : .bottomLeading)
-                .animation(reduceMotion ? nil : .snappy(duration: 0.25), value: isTapbackTarget)
-                .onLongPressGesture(minimumDuration: 0.35, maximumDistance: 6) {
-                    if isActionable && capabilities.supportsReactions { onShowTapback(message) }
+            Group {
+                if content.standalone != nil {
+                    // A picture and a poll are shapes already; a bubble around one only
+                    // makes its own fill fight the thing it is holding. The caption gets a
+                    // small bubble of its own instead — see `MessageContentView`.
+                    content_
+                } else {
+                    content_.messageBubble(isFromMe: isFromMe)
                 }
-                // Where the bubble is, for the transcript to place the bar.
-                .anchorPreference(key: TapbackAnchorKey.self, value: .bounds) { anchor in
-                    isTapbackTarget ? [message.messageID: TapbackAnchor(bounds: anchor, isFromMe: isFromMe)] : [:]
-                }
+            }
+            // Press and hold, and the reactions float up above the message. It lifts a
+            // touch while they are up, as it does in Messages. Outside the branch above:
+            // a picture is as reactable as a sentence.
+            .scaleEffect(isTapbackTarget ? 1.04 : 1, anchor: isFromMe ? .bottomTrailing : .bottomLeading)
+            .animation(reduceMotion ? nil : .snappy(duration: 0.25), value: isTapbackTarget)
+            .onLongPressGesture(minimumDuration: 0.35, maximumDistance: 6) {
+                if isActionable && capabilities.supportsReactions { onShowTapback(message) }
+            }
+            // Where the message is, for the transcript to place the bar.
+            .anchorPreference(key: TapbackAnchorKey.self, value: .bounds) { anchor in
+                isTapbackTarget ? [message.messageID: TapbackAnchor(bounds: anchor, isFromMe: isFromMe)] : [:]
+            }
         }
-    }
-
-    private var bubbleFill: AnyShapeStyle {
-        isFromMe
-            ? AnyShapeStyle(Color.accentColor)
-            // Opacity on `primary` rather than a fixed grey, so it inverts with the theme.
-            : AnyShapeStyle(Color.primary.opacity(0.09))
     }
 
     /// Secondary marks inside a bubble can't use `.tertiary` — it disappears on accent.
