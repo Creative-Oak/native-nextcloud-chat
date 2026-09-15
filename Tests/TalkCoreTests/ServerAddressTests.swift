@@ -82,4 +82,23 @@ struct ServerAddressTests {
     func localHostDetection(_ input: (String, Bool)) {
         #expect(ServerAddress.isLocalHost(input.0) == input.1)
     }
+
+    /// `10.evil.example` and friends are registrable public domains. A prefix match handed
+    /// them the one exemption in the app that tolerates cleartext credentials.
+    @Test("A public hostname that merely looks like a private address is not local", arguments: [
+        "10.evil.example", "192.168.evil.example", "172.16.evil.example",
+        "127.0.0.1.evil.example", "localhost.evil.example", "10.0.0.5.evil.example",
+        "local", "notlocalhost.com", "192.168.1", "10.0.0.256", "172.16.0.1.2"
+    ])
+    func rejectsLookalikeLocalHosts(_ host: String) {
+        #expect(ServerAddress.isLocalHost(host) == false)
+    }
+
+    @Test("Real loopback and private addresses still pass", arguments: [
+        "127.0.0.1", "127.1.2.3", "10.0.0.5", "172.31.255.254", "192.168.1.50",
+        "::1", "[::1]", "LOCALHOST", "nextcloud.local", "dev.localhost"
+    ])
+    func acceptsRealLocalHosts(_ host: String) {
+        #expect(ServerAddress.isLocalHost(host))
+    }
 }

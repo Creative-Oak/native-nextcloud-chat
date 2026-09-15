@@ -59,12 +59,17 @@ struct ResponseBudgetTests {
     @Test("A body that declares nothing is counted as it lands, and dropped when it overruns")
     func countsWhatActuallyArrives() {
         var budget = ResponseBudget(limit: 8)
-        #expect(budget.accept(Data(repeating: 0x61, count: 5)))
+        let firstChunk = budget.accept(Data(repeating: 0x61, count: 5))
+        #expect(firstChunk)
         #expect(budget.body.count == 5)
-        #expect(budget.accept(Data(repeating: 0x61, count: 3)))
+
+        let secondChunk = budget.accept(Data(repeating: 0x61, count: 3))
+        #expect(secondChunk)
         #expect(budget.body.count == 8)
+
         // One byte past the ceiling: refused, and what had accumulated goes with it.
-        #expect(budget.accept(Data(repeating: 0x61, count: 1)) == false)
+        let overrun = budget.accept(Data(repeating: 0x61, count: 1))
+        #expect(overrun == false)
         #expect(budget.body.isEmpty)
     }
 
@@ -128,8 +133,13 @@ struct ServerTextTests {
         // The cap plus the ellipsis that says it was cut.
         #expect((bounded?.count ?? 0) <= TalkError.serverTextLimit + 1)
 
-        #expect(TalkError.sanitizedServerText("one\nline\u{1B}[2J") == "one line [2J")
-        #expect(TalkError.sanitizedServerText("   ") == nil)
-        #expect(TalkError.sanitizedServerText(nil) == nil)
+        let stripped = TalkError.sanitizedServerText("one\nline\u{1B}[2J")
+        #expect(stripped == "one line [2J")
+
+        let blank = TalkError.sanitizedServerText("   ")
+        #expect(blank == nil)
+
+        let absent = TalkError.sanitizedServerText(nil)
+        #expect(absent == nil)
     }
 }

@@ -72,8 +72,9 @@ struct HTTPRequest: Sendable {
     /// ``apiResponseLimit``.
     var maximumResponseSize: Int = HTTPRequest.transferResponseLimit
 
-    /// Ample for any OCS payload this client asks for — the largest is a 100-message page.
-    static let apiResponseLimit = 8 * 1024 * 1024
+    /// Ample for any OCS payload this client asks for. The largest is a 100-message chat
+    /// page, which at Talk's 32 000-character message limit cannot plausibly reach this.
+    static let apiResponseLimit = 16 * 1024 * 1024
     /// A file the user asked for. Still bounded: the body is held in memory as `Data`.
     static let transferResponseLimit = 128 * 1024 * 1024
 }

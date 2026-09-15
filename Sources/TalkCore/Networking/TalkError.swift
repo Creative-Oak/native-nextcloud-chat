@@ -145,9 +145,10 @@ enum TalkError: Error, Sendable, Equatable {
     /// value rather than depending on every call site remembering it.
     static func sanitizedServerText(_ message: String?) -> String? {
         guard let message else { return nil }
-        var cleaned = String(message.unicodeScalars.map { scalar in
+        var cleaned = String(message.unicodeScalars.map { scalar -> Character in
             // C0/C1 controls, which is where line breaks, tabs and terminal escapes live.
-            (scalar.value < 0x20 || (0x7F...0x9F).contains(scalar.value)) ? " " : Character(scalar)
+            if scalar.value < 0x20 || (0x7F...0x9F).contains(scalar.value) { return " " }
+            return Character(scalar)
         })
         cleaned = cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleaned.isEmpty else { return nil }

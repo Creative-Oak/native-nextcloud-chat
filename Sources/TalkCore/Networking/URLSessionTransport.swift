@@ -325,14 +325,16 @@ private final class TransportDelegate: NSObject, URLSessionDataDelegate, @unchec
         totalBytesExpectedToSend: Int64
     ) {
         guard totalBytesExpectedToSend > 0 else { return }
-        let progress = lock.withLock { pending[task.taskIdentifier]?.progress }
+        let progress = lock.withLock { () -> (@Sendable (Double) -> Void)? in
+            pending[task.taskIdentifier]?.progress
+        }
         progress?(min(1, Double(totalBytesSent) / Double(totalBytesExpectedToSend)))
     }
 
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: (any Error)?) {
         // Taken out of the table under the lock, so from here on this entry is ours alone
         // and the continuation is resumed exactly once.
-        guard let entry = lock.withLock({ pending.removeValue(forKey: task.taskIdentifier) }),
+        guard let entry = lock.withLock({ () -> Pending? in pending.removeValue(forKey: task.taskIdentifier) }),
               let continuation = entry.continuation
         else { return }
         entry.continuation = nil
@@ -365,7 +367,7 @@ private final class TaskHandle: @unchecked Sendable {
 
     /// - Returns: whether the task may keep running. `false` means cancellation arrived first.
     func adopt(_ task: URLSessionTask) -> Bool {
-        lock.withLock {
+        lock.withLock { () -> Bool in
             guard !isCancelled else { return false }
             self.task = task
             return true
@@ -373,7 +375,7 @@ private final class TaskHandle: @unchecked Sendable {
     }
 
     func cancel() {
-        let task: URLSessionTask? = lock.withLock {
+        let task = lock.withLock { () -> URLSessionTask? in
             isCancelled = true
             defer { self.task = nil }
             return self.task
