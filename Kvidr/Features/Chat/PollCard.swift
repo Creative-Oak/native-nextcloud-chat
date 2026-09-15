@@ -187,7 +187,9 @@ private struct PollOptionRow: View {
 
     private var share: Double {
         guard poll.hasResults, let total = poll.voterCount, total > 0 else { return 0 }
-        return Double(poll.votes(for: optionID)) / Double(total)
+        // Clamped: nothing should exceed the voter count, but a bar wider than its row is a
+        // worse way to find out that something did.
+        return min(1, Double(poll.votes(for: optionID)) / Double(total))
     }
 
     var body: some View {

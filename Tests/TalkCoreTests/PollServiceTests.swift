@@ -68,21 +68,55 @@ struct PollServiceTests {
         #expect(poll.status == .open)
     }
 
-    @Test("An open poll you haven't voted in has no results, and that is not an error")
-    func openPollWithheldResults() async throws {
-        // No `votes`, no `numVoters`, no `votedSelf` — the shape of every poll before you
-        // have voted in it. A client that requires those fields cannot decode this.
-        let transport = StubTransport(json: ocsEnvelope(pollJSON()))
+    @Test("A poll you have just made decodes, empty vote array and all")
+    func freshlyCreatedPollDecodes() async throws {
+        // What the server actually sends back from `create`: `renderPoll` assigns an empty
+        // PHP array to `votes` while it is withholding the results, and `json_encode` writes
+        // that as `[]` rather than `{}`. Typed as a dictionary, this fails to decode — and
+        // it is the very first poll anyone sees.
+        let extra = #","votes":[],"numVoters":0,"votedSelf":[]"#
+        let transport = StubTransport(json: ocsEnvelope(pollJSON(extra: extra)))
         let service = PollService(client: try client(transport))
 
         let poll = try await service.poll(token: "tok", pollID: 7)
 
+        #expect(poll.id == 7)
+        #expect(poll.options.count == 3)
+        #expect(poll.votes(for: 0) == 0)
+    }
+
+    @Test("An open poll you haven't voted in withholds its results, and says so")
+    func openPollWithheldResults() async throws {
+        let extra = #","votes":[],"numVoters":0,"votedSelf":[]"#
+        let transport = StubTransport(json: ocsEnvelope(pollJSON(extra: extra)))
+        let service = PollService(client: try client(transport))
+
+        let poll = try await service.poll(token: "tok", pollID: 7)
+
+        // The empty map means "nobody voted" and "you may not see" at the same time, so this
+        // is decided the way the server decides it rather than by the field being there.
         #expect(poll.hasResults == false)
         #expect(poll.hasVoted == false)
-        #expect(poll.votedSelf.isEmpty)
-        #expect(poll.voterCount == nil)
-        // Reading a count anyway answers nought rather than trapping.
         #expect(poll.votes(for: 0) == 0)
+    }
+
+    @Test("Voting on a visible-result poll is what opens the results")
+    func votingRevealsResults() async throws {
+        let extra = #","votes":{"option-0":1},"numVoters":1,"votedSelf":[0]"#
+        let transport = StubTransport(json: ocsEnvelope(pollJSON(extra: extra)))
+        let service = PollService(client: try client(transport))
+        #expect(try await service.poll(token: "tok", pollID: 7).hasResults)
+    }
+
+    @Test("A hidden-result poll stays shut until it closes, even after you vote")
+    func hiddenResultsStayHidden() async throws {
+        let voted = #","votes":[],"numVoters":0,"votedSelf":[0]"#
+        var transport = StubTransport(json: ocsEnvelope(pollJSON(resultMode: 1, extra: voted)))
+        #expect(try await PollService(client: try client(transport)).poll(token: "tok", pollID: 7).hasResults == false)
+
+        let closed = #","votes":{"option-0":2},"numVoters":2,"votedSelf":[0]"#
+        transport = StubTransport(json: ocsEnvelope(pollJSON(status: 1, resultMode: 1, extra: closed)))
+        #expect(try await PollService(client: try client(transport)).poll(token: "tok", pollID: 7).hasResults)
     }
 
     @Test("Vote counts arrive as a map keyed by option name, not an array")
@@ -102,6 +136,7 @@ struct PollServiceTests {
         #expect(poll.votedSelf == [0])
         #expect(poll.hasVoted)
         #expect(poll.hasResults)
+        #expect(poll.voteCounts == [0: 3, 1: 1])
     }
 
     @Test("A vote sends the chosen option ids; an empty vote retracts")

@@ -31,22 +31,26 @@ struct Poll: Sendable, Equatable, Identifiable {
     /// Option ids this participant chose. Empty means they haven't voted.
     var votedSelf: [Int]
 
-    /// Counts by option id, once the server is willing to say — see ``results``. An option
-    /// nobody chose is missing rather than zero, so read it through ``votes(for:)``.
-    var voteCounts: [Int: Int]?
+    /// Counts by option id. An option nobody chose is missing rather than zero, so read it
+    /// through ``votes(for:)``.
+    var voteCounts: [Int: Int]
     var voterCount: Int?
     /// Who voted for what. Public closed polls only.
     var details: [PollVote]?
 
-    /// Whether the server has told us the results yet.
+    /// Whether the counts mean anything yet.
     ///
-    /// It withholds them until the reader has voted on a visible-result poll, or the poll
-    /// has closed (the author and moderators see them sooner). So "no results" is the
-    /// normal state of the first poll anyone is shown, not an error.
-    var hasResults: Bool { voteCounts != nil }
+    /// Worked out the same way the server does in `PollController::renderPoll`, rather than
+    /// read off the response: it sends `votes` either way, as an empty array when it is
+    /// withholding them. So an empty map is "nobody has voted" and "you may not see" at
+    /// once, and only the rule tells them apart.
+    var hasResults: Bool {
+        if status == .closed { return true }
+        return resultMode == .visible && !votedSelf.isEmpty
+    }
 
     /// Votes for one option, counting an absent entry as the nought it means.
-    func votes(for optionID: Int) -> Int { voteCounts?[optionID] ?? 0 }
+    func votes(for optionID: Int) -> Int { voteCounts[optionID] ?? 0 }
 
     var hasVoted: Bool { !votedSelf.isEmpty }
     var allowsMultipleAnswers: Bool { maxVotes == 0 || maxVotes > 1 }
@@ -181,7 +185,7 @@ private struct PollDTO: Decodable, Sendable {
     let resultMode: Int
     let maxVotes: Int
     let votedSelf: [Int]?
-    let votes: [String: Int]?
+    let votes: VoteCounts?
     let numVoters: Int?
     let details: [PollVoteDTO]?
 
@@ -197,22 +201,37 @@ private struct PollDTO: Decodable, Sendable {
             resultMode: Poll.ResultMode(rawValue: resultMode) ?? .hiddenUntilClosed,
             maxVotes: maxVotes,
             votedSelf: votedSelf ?? [],
-            voteCounts: Self.counts(from: votes),
+            voteCounts: votes?.byOptionID ?? [:],
             voterCount: numVoters,
             details: details?.map(\.model)
         )
     }
 
-    /// `{"option-0": 3}` → `[0: 3]`. Anything not shaped like that is dropped rather than
-    /// guessed at.
-    private static func counts(from votes: [String: Int]?) -> [Int: Int]? {
-        guard let votes else { return nil }
+}
+
+/// The two shapes `votes` arrives in.
+///
+/// `{"option-0": 3}` when anyone has voted and the reader may see it, and `[]` when not —
+/// because `renderPoll` assigns an empty PHP array, which `json_encode` writes as a JSON
+/// array rather than an object. Talk prefixes the keys precisely to dodge that conversion
+/// and then meets it again on the empty case; a client that types this as a dictionary
+/// fails to decode the first poll it creates.
+private struct VoteCounts: Decodable, Sendable {
+    let byOptionID: [Int: Int]
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        guard let map = try? container.decode([String: Int].self) else {
+            // The empty array, or something newer. Either way: no counts, rather than no poll.
+            byOptionID = [:]
+            return
+        }
         var counts: [Int: Int] = [:]
-        for (key, count) in votes {
-            guard let id = Int(key.dropFirst("option-".count)), key.hasPrefix("option-") else { continue }
+        for (key, count) in map where key.hasPrefix("option-") {
+            guard let id = Int(key.dropFirst("option-".count)) else { continue }
             counts[id] = count
         }
-        return counts
+        byOptionID = counts
     }
 }
 

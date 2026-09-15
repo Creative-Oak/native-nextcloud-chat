@@ -643,10 +643,20 @@ Voting again replaces the previous vote, and `optionIds: []` retracts it.
 zero. The prose documentation lists it beside `options` as though the two were parallel
 arrays, which they are not.
 
-**Second trap:** `votes`, `numVoters` and `details` are *conditionally present*. The server
-sends them only once the actor has voted on a public poll, or the poll is closed (the
-creator and moderators see them sooner). A client that types them as non-optional will fail
-to decode an open poll it has not voted in — which is the first poll anyone ever sees.
+**Second trap, and the one that bites first:** that map arrives as **`[]`, a JSON array,
+whenever it is empty.** `renderPoll` assigns an empty PHP array, and `json_encode` writes
+that as an array rather than an object — Talk prefixes the keys with `option-` precisely to
+stop PHP collapsing them into an array, and then meets the same conversion on the empty
+case. So `votes` has two shapes and a client must decode both, or it fails on the very
+first poll it creates.
+
+**Third trap:** do not read "the server is withholding the results" off the presence of
+`votes` — it is always sent. `renderPoll` blanks it while withholding, so an empty map means
+*nobody has voted* and *you may not see* at once. Work it out the way the server does:
+results are readable when the poll is **closed**, or when `resultMode` is 0 and the reader's
+own `votedSelf` is non-empty. `numVoters` is likewise forced to 0 for a reader who may not
+see it — but sent truthfully to the poll's author and to moderators, so they know when to
+close it.
 
 ---
 
