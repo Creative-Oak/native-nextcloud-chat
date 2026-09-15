@@ -7,7 +7,8 @@
 // the app sees them.
 import Foundation
 import SwiftUI
-import UniformTypeIdentifiers
+// Re-exported, as the real PhotosUI does, so `.item` resolves at the call site.
+@_exported import UniformTypeIdentifiers
 
 /// The file a transfer handed over, in the temporary place the system put it.
 public struct ReceivedTransferredFile: Sendable {
