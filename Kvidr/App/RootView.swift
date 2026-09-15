@@ -461,7 +461,17 @@ struct RootView: View {
         // While a draft is open these stand down, so the To: band below has the top of the
         // pane to itself. The band is not a toolbar item: one sizes itself to its content
         // and clamps a frame, so it could never span the row from in here.
-        if !app.isShowingDraft {
+        //
+        // Something invisible takes their place, though, and has to. A toolbar with nothing
+        // in it collapses to a shorter row — which drags the traffic lights up with it, so
+        // they jumped every time a draft opened, and left the band centring itself in a strip
+        // that had just changed height underneath it.
+        if app.isShowingDraft {
+            ToolbarItem(placement: .navigation) {
+                Color.clear.frame(width: 1, height: GlassMetrics.control)
+            }
+            .sharedBackgroundVisibility(.hidden)
+        } else {
             ToolbarItem(placement: .navigation) {
                 Button {
                     app.newMessage()
