@@ -20,6 +20,10 @@ final class ConversationDraft {
     /// The first message. Kept here so clicking away to another conversation and back does
     /// not lose what you had typed.
     var text = ""
+    /// Bumped every time ⌘N is pressed, the second one included. The view watches it rather
+    /// than only its own appearance, or asking for a new message while a draft is already
+    /// open would select the row and leave the cursor wherever it was.
+    private(set) var focusRequest = 0
 
     var search = "" {
         didSet {
@@ -38,6 +42,10 @@ final class ConversationDraft {
 
     init(session: Session) {
         self.session = session
+    }
+
+    func requestRecipientFocus() {
+        focusRequest += 1
     }
 
     // MARK: - Recipients

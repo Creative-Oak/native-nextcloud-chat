@@ -46,7 +46,16 @@ struct NewMessageView: View {
             suggestions.padding(.top, titleBarHeight + 6)
         }
         .navigationTitle(draft.title)
-        .onAppear { recipientsFocused = true }
+        // Keyed on the request rather than on appearing, so a second ⌘N puts the cursor back
+        // in the To: field instead of only selecting the row that is already selected.
+        //
+        // And on the turn after, not this one: a field that is still being built is not in
+        // the responder chain yet, and focus set at it there goes nowhere.
+        .task(id: draft.focusRequest) {
+            try? await Task.sleep(for: .milliseconds(30))
+            guard !Task.isCancelled else { return }
+            recipientsFocused = true
+        }
     }
 
     /// The band's margin, which is whatever centring it in the toolbar's strip asks for.

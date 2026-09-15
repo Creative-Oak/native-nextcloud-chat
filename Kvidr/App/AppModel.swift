@@ -373,6 +373,7 @@ final class AppModel {
         guard let session else { return }
         if draft == nil { draft = ConversationDraft(session: session) }
         selectedToken = ConversationDraftToken.value
+        draft?.requestRecipientFocus()
     }
 
     /// The × on the draft's row. Nothing reached the server, so nothing is deleted.
