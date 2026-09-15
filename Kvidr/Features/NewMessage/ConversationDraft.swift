@@ -112,6 +112,33 @@ final class ConversationDraft {
         }
     }
 
+    // MARK: - Browsing
+
+    /// Everyone the server is willing to list, for the + button's contact browser.
+    private(set) var contacts: [DirectoryEntry] = []
+    private(set) var isBrowsingContacts = false
+    private(set) var didBrowse = false
+
+    /// Asks for a page of contacts with no search term at all.
+    ///
+    /// An empty answer is ambiguous and the endpoint cannot disambiguate it: a server with
+    /// user enumeration turned off returns nothing here and looks exactly like a server with
+    /// nobody on it. The browser says as much rather than showing an empty list.
+    func browseContacts() async {
+        guard !isBrowsingContacts else { return }
+        isBrowsingContacts = true
+        defer {
+            isBrowsingContacts = false
+            didBrowse = true
+        }
+        do throws(TalkError) {
+            contacts = try await session.directory.search("", limit: 100, allowingEmptyTerm: true)
+        } catch {
+            contacts = []
+            self.error = error.userMessage
+        }
+    }
+
     // MARK: - Sending
 
     /// Creates the conversation and sends the first message into it.

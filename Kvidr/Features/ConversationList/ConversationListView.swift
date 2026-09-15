@@ -106,7 +106,11 @@ struct ConversationListView: View {
     @ViewBuilder
     private var draftRow: some View {
         if let draft {
-            DraftRow(draft: draft, onDiscard: onDiscardDraft)
+            DraftRow(
+                draft: draft,
+                onDiscard: onDiscardDraft,
+                isSelected: ConversationDraftToken.isDraft(selection)
+            )
                 .tag(ConversationDraftToken.value)
                 .listRowSeparator(.hidden)
         }
@@ -366,47 +370,56 @@ struct ConversationRow: View {
 
 /// The unsent conversation's row.
 ///
+/// Built to `ConversationRow`'s measurements rather than its own — the same gutter, the same
+/// 40pt avatar, the same text inset and weight — so it sits in the list as a conversation
+/// that happens to have no messages yet, rather than as a banner stuck above one. What it
+/// drops is the preview line and the timestamp, because it has neither.
+///
 /// Its × throws away a local object: nothing has reached the server, so there is nothing to
 /// confirm and nothing to undo.
 private struct DraftRow: View {
     @Bindable var draft: ConversationDraft
     var onDiscard: () -> Void
+    var isSelected = false
 
     @State private var isHovering = false
 
+    private static let gutter: CGFloat = 8
+    private static let avatar: CGFloat = 40
+
     var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "square.and.pencil")
-                .font(.system(size: 15))
-                .foregroundStyle(.secondary)
-                .frame(width: 36, height: 36)
-                .background(.quaternary.opacity(0.5), in: .circle)
+        HStack(spacing: 5) {
+            // The unread gutter, empty: it is what lines the avatar up with every other row.
+            Color.clear
+                .frame(width: Self.gutter, height: Self.gutter)
+                .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 1) {
+            HStack(spacing: 10) {
+                Image(systemName: "square.and.pencil")
+                    .font(.system(size: 16))
+                    .foregroundStyle(.secondary)
+                    .frame(width: Self.avatar, height: Self.avatar)
+                    .background(.quaternary.opacity(0.5), in: .circle)
+
                 Text(draft.title)
-                    .fontWeight(.semibold)
+                    .font(.system(size: 15, weight: .semibold))
                     .lineLimit(1)
-                if !draft.recipients.isEmpty {
-                    Text("Not sent yet")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                    .truncationMode(.tail)
+
+                Spacer(minLength: 4)
+
+                Button(action: onDiscard) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 10, weight: .bold))
                 }
+                .buttonStyle(.plain)
+                .foregroundStyle(isSelected ? .primary : .secondary)
+                .opacity(isHovering ? 1 : 0)
+                .help("Discard this message")
+                .accessibilityLabel("Discard this message")
             }
-
-            Spacer(minLength: 0)
-
-            Button(action: onDiscard) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 10, weight: .bold))
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(.secondary)
-            .opacity(isHovering ? 1 : 0)
-            .help("Discard this message")
-            .accessibilityLabel("Discard this message")
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 7)
         .contentShape(.rect)
         .onHover { isHovering = $0 }
     }

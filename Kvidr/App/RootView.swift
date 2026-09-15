@@ -10,6 +10,8 @@ struct RootView: View {
     @Environment(AppModel.self) private var app
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var composerFocused = false
+    /// Owned here because the To: field lives in the toolbar, not in the detail pane.
+    @FocusState private var recipientsFocused: Bool
     @State private var searchFocusRequest = false
     /// The command palette, while it is up. A model per showing: it starts empty.
     @State private var palette: CommandPaletteModel?
@@ -243,7 +245,7 @@ struct RootView: View {
             HStack(spacing: 0) {
                 Group {
                     if app.isShowingDraft, let draft = app.draft {
-                        NewMessageView(draft: draft) { conversation in
+                        NewMessageView(draft: draft, recipientsFocused: $recipientsFocused) { conversation in
                             app.draftSent(conversation)
                         }
                     } else if let chat = app.chat {
@@ -435,24 +437,36 @@ struct RootView: View {
     private var detailToolbar: some ToolbarContent {
         // At the conversation column's leading edge, just past the sidebar, which is
         // where Messages keeps its compose button.
-        ToolbarItem(placement: .navigation) {
-            Button {
-                app.newMessage()
-            } label: {
-                Label("New Message", systemImage: "square.and.pencil")
+        // The band takes the whole row while a draft is open, as it does in Messages, so
+        // these two stand down rather than crowding beside it.
+        if app.isShowingDraft, let draft = app.draft {
+            ToolbarItem(placement: .principal) {
+                RecipientBand(draft: draft, isFocused: $recipientsFocused)
+                    .frame(minWidth: 280, maxWidth: .infinity)
             }
-            .help("New Message (⌘N)")
+            .sharedBackgroundVisibility(.hidden)
+        } else {
+            ToolbarItem(placement: .navigation) {
+                Button {
+                    app.newMessage()
+                } label: {
+                    Label("New Message", systemImage: "square.and.pencil")
+                }
+                .help("New Message (⌘N)")
+            }
         }
 
         // Beside compose, in a circle of its own. Neighbouring items of one placement
         // share a capsule; a different placement is enough to part them. (An item that
         // opts out of the sharing is drawn bare, and an invisible item between them
         // is given the toolbar's minimum width, so neither of those would do.)
-        ToolbarItem(placement: .automatic) {
-            Button(action: openPalette) {
-                Label("Go to Anything", systemImage: "magnifyingglass")
+        if !app.isShowingDraft {
+            ToolbarItem(placement: .automatic) {
+                Button(action: openPalette) {
+                    Label("Go to Anything", systemImage: "magnifyingglass")
+                }
+                .help("Go to Anything (⌘P)")
             }
-            .help("Go to Anything (⌘P)")
         }
 
         // Conditional rather than an item that is sometimes empty: an empty item still

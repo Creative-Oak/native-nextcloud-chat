@@ -64,14 +64,21 @@ actor DirectoryService {
     ///     can rank and filter sensibly.
     ///   - shareTypes: `0` users, `1` groups, `7` teams/circles — the defaults cover
     ///     everyone you can put in a conversation.
+    ///   - allowingEmptyTerm: pass `true` to *browse* rather than search. The endpoint has no
+    ///     guard against an empty term — `AutoCompleteController::get` hands it straight to
+    ///     `filteredSearch` — so it answers with a page of everyone you may see. What it
+    ///     cannot do is say why an empty answer is empty: a server with user enumeration
+    ///     turned off (`shareapi_allow_share_dialog_user_enumeration`) returns nothing here,
+    ///     and looks exactly like a server with nobody on it.
     func search(
         _ term: String,
         inConversation token: String? = nil,
         shareTypes: [Int] = [0, 1, 7],
-        limit: Int = 20
+        limit: Int = 20,
+        allowingEmptyTerm: Bool = false
     ) async throws(TalkError) -> [DirectoryEntry] {
         let term = term.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !term.isEmpty else { return [] }
+        guard !term.isEmpty || allowingEmptyTerm else { return [] }
 
         var query = [
             URLQueryItem(name: "search", value: term),
