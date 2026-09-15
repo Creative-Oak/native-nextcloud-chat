@@ -21,87 +21,55 @@ struct NewConversationSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            header
-            Divider()
-
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    kindPicker
-
-                    if model.kind != .direct {
-                        nameField
+            // No title band and no dividers: a Mac sheet has no title bar, and is identified
+            // by what it holds and the window behind it. A bold heading over a rule is a
+            // phone modal's chrome.
+            Form {
+                Section {
+                    Picker("Kind", selection: $model.kind) {
+                        ForEach(NewConversationModel.Kind.allCases) { kind in
+                            Text(kind.title).tag(kind)
+                        }
                     }
-
-                    if model.kind == .publicRoom {
-                        passwordField
-                    }
-
-                    peopleSection
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
                 }
-                .padding(16)
-            }
 
-            Divider()
+                if model.kind != .direct {
+                    Section {
+                        TextField("Name", text: $model.name, prompt: Text("Design review"))
+                    }
+                }
+
+                if model.kind == .publicRoom {
+                    Section {
+                        SecureField("Password", text: $model.password, prompt: Text("Leave empty for no password"))
+                    } footer: {
+                        Text("Anyone with the link can join. A password is optional.")
+                    }
+                }
+
+                peopleSection
+            }
+            .formStyle(.grouped)
+
             footer
         }
         .frame(width: 460, height: 520)
     }
 
-    private var header: some View {
-        HStack {
-            Text("New Conversation")
-                .font(.headline)
-            Spacer()
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-    }
-
-    private var kindPicker: some View {
-        Picker("", selection: $model.kind) {
-            ForEach(NewConversationModel.Kind.allCases) { kind in
-                Text(kind.title).tag(kind)
-            }
-        }
-        .pickerStyle(.segmented)
-        .labelsHidden()
-    }
-
-    private var nameField: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Name")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            TextField("Design review", text: $model.name)
-                .textFieldStyle(.roundedBorder)
-        }
-    }
-
-    private var passwordField: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Password (optional)")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            SecureField("Leave empty for no password", text: $model.password)
-                .textFieldStyle(.roundedBorder)
-        }
-    }
-
+    @ViewBuilder
     private var peopleSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(model.kind == .direct ? "Person" : "Add people")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            HStack(spacing: 6) {
-                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                TextField("Search people, groups and teams", text: $model.search)
-                    .textFieldStyle(.plain)
-                if model.isSearching { ProgressView().controlSize(.small) }
-            }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 6)
-            .glass(.floating, cornerRadius: 8)
+        Section(model.kind == .direct ? "Person" : "Add people") {
+            // A real text field: its focus ring and its bezel are the system's, rather than
+            // a magnifier glyph and a pill drawn by hand.
+            TextField("Search", text: $model.search, prompt: Text("Search people, groups and teams"))
+                .textFieldStyle(.roundedBorder)
+                .overlay(alignment: .trailing) {
+                    if model.isSearching {
+                        ProgressView().controlSize(.small).padding(.trailing, 6)
+                    }
+                }
 
             if !model.selected.isEmpty {
                 selectedChips
@@ -109,36 +77,33 @@ struct NewConversationSheet: View {
 
             if model.results.isEmpty && model.search.count >= 2 && !model.isSearching {
                 Text("No matches.")
-                    .font(.callout)
                     .foregroundStyle(.secondary)
             }
 
-            VStack(spacing: 0) {
-                ForEach(model.results) { entry in
-                    Button {
-                        model.toggle(entry)
-                    } label: {
-                        HStack(spacing: 8) {
-                            Image(systemName: entry.source.symbolName)
-                                .foregroundStyle(.secondary)
-                                .frame(width: 18)
-                            VStack(alignment: .leading, spacing: 0) {
-                                Text(entry.label).lineLimit(1)
-                                if let subline = entry.subline, !subline.isEmpty {
-                                    Text(subline).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
-                                }
-                            }
-                            Spacer(minLength: 0)
-                            if model.isSelected(entry) {
-                                Image(systemName: "checkmark").foregroundStyle(Color.accentColor)
+            // Rows of the form, so they get its own insets and separators rather than a
+            // stack of hand-padded buttons.
+            ForEach(model.results) { entry in
+                Button {
+                    model.toggle(entry)
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: entry.source.symbolName)
+                            .foregroundStyle(.secondary)
+                            .frame(width: 18)
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text(entry.label).lineLimit(1)
+                            if let subline = entry.subline, !subline.isEmpty {
+                                Text(subline).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
                             }
                         }
-                        .contentShape(.rect)
-                        .padding(.vertical, 5)
-                        .padding(.horizontal, 8)
+                        Spacer(minLength: 0)
+                        if model.isSelected(entry) {
+                            Image(systemName: "checkmark").foregroundStyle(Color.accentColor)
+                        }
                     }
-                    .buttonStyle(.plain)
+                    .contentShape(.rect)
                 }
+                .buttonStyle(.plain)
             }
         }
     }

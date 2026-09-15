@@ -18,80 +18,49 @@ struct NewPollSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            header
-            Divider()
-
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    question
-                    options
-                    settings
+            Form {
+                Section("Question") {
+                    TextField("Question", text: $model.question, prompt: Text("What should we decide?"))
+                        .labelsHidden()
                 }
-                .padding(16)
-            }
 
-            Divider()
+                Section("Options") {
+                    ForEach($model.options.indices, id: \.self) { index in
+                        HStack(spacing: 6) {
+                            TextField("Option", text: $model.options[index], prompt: Text("Option \(index + 1)"))
+                                .labelsHidden()
+
+                            Button {
+                                model.removeOption(at: index)
+                            } label: {
+                                Image(systemName: "minus.circle.fill").foregroundStyle(.tertiary)
+                            }
+                            .buttonStyle(.plain)
+                            // Two is the fewest a poll can be and still be a question.
+                            .disabled(model.options.count <= 2)
+                            .help("Remove this option")
+                        }
+                    }
+
+                    Button("Add Option", systemImage: "plus") { model.addOption() }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(Color.accentColor)
+                }
+
+                Section {
+                    Toggle("Allow more than one answer", isOn: $model.allowsMultipleAnswers)
+                    Toggle("Hide results until the poll ends", isOn: $model.hidesResults)
+                } footer: {
+                    Text(model.hidesResults
+                         ? "Nobody sees the counts, or who voted, until you end the poll."
+                         : "Everyone sees the counts, and who voted for what, as votes come in.")
+                }
+            }
+            .formStyle(.grouped)
+
             footer
         }
         .frame(width: 460, height: 520)
-    }
-
-    private var header: some View {
-        HStack {
-            Text("New Poll").font(.headline)
-            Spacer()
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-    }
-
-    private var question: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Question").font(.caption).foregroundStyle(.secondary)
-            TextField("What should we decide?", text: $model.question)
-                .textFieldStyle(.roundedBorder)
-        }
-    }
-
-    private var options: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Options").font(.caption).foregroundStyle(.secondary)
-
-            ForEach($model.options.indices, id: \.self) { index in
-                HStack(spacing: 6) {
-                    TextField("Option \(index + 1)", text: $model.options[index])
-                        .textFieldStyle(.roundedBorder)
-
-                    Button {
-                        model.removeOption(at: index)
-                    } label: {
-                        Image(systemName: "minus.circle.fill").foregroundStyle(.tertiary)
-                    }
-                    .buttonStyle(.plain)
-                    // Two is the fewest a poll can be and still be a question.
-                    .disabled(model.options.count <= 2)
-                    .help("Remove this option")
-                }
-            }
-
-            Button("Add Option", systemImage: "plus") { model.addOption() }
-                .buttonStyle(.link)
-                .font(.caption)
-                .padding(.top, 2)
-        }
-    }
-
-    private var settings: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Toggle("Allow more than one answer", isOn: $model.allowsMultipleAnswers)
-            Toggle("Hide results until the poll ends", isOn: $model.hidesResults)
-            Text(model.hidesResults
-                 ? "Nobody sees the counts, or who voted, until you end the poll."
-                 : "Everyone sees the counts, and who voted for what, as votes come in.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
     }
 
     private var footer: some View {
