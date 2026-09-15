@@ -264,6 +264,22 @@ struct ActiveChatSyncEngineTests {
         #expect(!events.contains { $0.state == .live })
     }
 
+    @Test("Every state the loop retries from counts as retrying, not only the one called offline")
+    func retryingStatesAreNotJustOffline() {
+        // What this guards is `ChatModel.reconnect()`. Only four NSURLError codes map to
+        // `TalkError.offline`; a captive portal, a VPN flap or a server going away arrive as
+        // `.timedOut` or `.transport` and land on `.reconnecting` instead. Asking the state
+        // rather than one error's spelling is what makes "the network is back" mean the same
+        // thing for the open conversation as it does for the sidebar.
+        #expect(ChatSyncState.offline.isRetrying)
+        #expect(ChatSyncState.reconnecting(attempt: 1).isRetrying)
+
+        #expect(ChatSyncState.live.isRetrying == false)
+        #expect(ChatSyncState.loadingHistory.isRetrying == false)
+        // Terminal, not retrying: a 401 or a conversation that no longer exists.
+        #expect(ChatSyncState.idle.isRetrying == false)
+    }
+
     @Test("The conversation you switched *to* keeps its stream when the old loop winds up")
     func switchingKeepsTheNewStream() async throws {
         let transport = StubTransport { _ in .status(304) }

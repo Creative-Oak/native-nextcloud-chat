@@ -183,7 +183,12 @@ final class ChatModel {
     }
 
     func reconnect() async {
-        guard syncTask == nil || syncState == .offline else { return }
+        // Any state the loop is retrying from, not just the one spelled `.offline`. A poll
+        // dropped by a captive portal, a VPN or a server going away surfaces as `.timedOut`
+        // or `.transport` (see `URLSessionTransport.map`), which lands on `.reconnecting` —
+        // and the conversation would then sit out its own backoff, up to thirty seconds,
+        // while the sidebar beside it refreshed the moment the network came back.
+        guard syncTask == nil || syncState.isRetrying else { return }
         await activate()
     }
 

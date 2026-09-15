@@ -15,6 +15,19 @@ enum ChatSyncState: Sendable, Equatable {
     case live
     case reconnecting(attempt: Int)
     case offline
+
+    /// Waiting out a backoff rather than connected, so "the network is back" should cut the
+    /// wait short. Exhaustive on purpose: a new state has to make up its mind here.
+    ///
+    /// `.idle` is deliberately not one of these. It is where a 401 or a deleted conversation
+    /// leaves the loop, and reconnecting into those means hammering a server that already
+    /// said no.
+    var isRetrying: Bool {
+        switch self {
+        case .offline, .reconnecting: true
+        case .idle, .loadingHistory, .live: false
+        }
+    }
 }
 
 /// Keeps one conversation up to date, using Talk's documented long poll.
