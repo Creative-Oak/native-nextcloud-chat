@@ -59,8 +59,15 @@ struct ConversationListView: View {
             }
         }
         .listStyle(.sidebar)
-        .searchable(text: $model.filterText, placement: .sidebar, prompt: "Search Conversations")
-        .searchFocused($isSearchFocused)
+        // The search field as Messages draws it: a rounded pane at the top of the
+        // sidebar. `.searchable` on this list gives the toolbar's small field, which
+        // cannot be restyled.
+        .safeAreaInset(edge: .top, spacing: 0) {
+            SidebarSearchField(text: $model.filterText, isFocused: $isSearchFocused)
+                .padding(.horizontal, 12)
+                .padding(.top, 6)
+                .padding(.bottom, 8)
+        }
         .overlay { emptyState }
         // `initial:` because ⌘F from the compact sidebar creates this list with the
         // request already set — a change-only observer would never see it.
@@ -110,6 +117,42 @@ struct ConversationListView: View {
         }
     }
 
+}
+
+/// The sidebar's search field, drawn as Messages draws it: a glass capsule with a
+/// magnifier, the prompt, and a clear button once there is something to clear. Escape
+/// empties it and gives up focus.
+private struct SidebarSearchField: View {
+    @Binding var text: String
+    var isFocused: FocusState<Bool>.Binding
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+            TextField("Search", text: $text, prompt: Text("Search"))
+                .textFieldStyle(.plain)
+                .focused(isFocused)
+                .onExitCommand {
+                    text = ""
+                    isFocused.wrappedValue = false
+                }
+            if !text.isEmpty {
+                Button {
+                    text = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Clear Search")
+            }
+        }
+        .font(.system(size: 13))
+        .padding(.horizontal, 10)
+        .frame(height: 30)
+        .glass(.field, cornerRadius: 15)
+    }
 }
 
 /// The pinned favourites, as a grid of faces above the list.
