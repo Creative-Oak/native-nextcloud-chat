@@ -56,6 +56,9 @@ struct NewMessageView: View {
         //
         // And on the turn after, not this one: a field that is still being built is not in
         // the responder chain yet, and focus set at it there goes nowhere.
+        // One request, when the draft opens: it fills the list the + button shows and the
+        // corpus the fuzzy matching needs, and both want it before you start typing.
+        .task { await draft.browseContacts() }
         .task(id: draft.focusRequest) {
             try? await Task.sleep(for: .milliseconds(30))
             guard !Task.isCancelled else { return }

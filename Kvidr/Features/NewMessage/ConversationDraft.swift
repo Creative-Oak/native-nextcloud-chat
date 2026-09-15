@@ -142,6 +142,11 @@ final class ConversationDraft {
             return
         }
 
+        // Local matches, straight away and without waiting for the network: the corpus is
+        // already here once the contact browser has filled it.
+        results = DirectoryEntry.matches(for: term, server: [], known: contacts, excluding: recipients)
+        highlighted = 0
+
         isSearching = true
         searchTask = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(200))
@@ -152,7 +157,14 @@ final class ConversationDraft {
                 // in advance, so nothing can be ruled out of the results.
                 let found = try await self.session.directory.search(term, shareTypes: [0, 1, 7])
                 guard !Task.isCancelled, self.search == term else { return }
-                self.results = found.filter { !self.recipients.contains($0) }
+                // The server's matches, plus anyone already listed whose letters are merely
+                // in order — which the server's own matching will not find.
+                self.results = DirectoryEntry.matches(
+                    for: term,
+                    server: found,
+                    known: self.contacts,
+                    excluding: self.recipients
+                )
                 self.highlighted = 0
             } catch {
                 self.results = []
@@ -174,7 +186,7 @@ final class ConversationDraft {
     /// user enumeration turned off returns nothing here and looks exactly like a server with
     /// nobody on it. The browser says as much rather than showing an empty list.
     func browseContacts() async {
-        guard !isBrowsingContacts else { return }
+        guard !isBrowsingContacts, !didBrowse else { return }
         isBrowsingContacts = true
         defer {
             isBrowsingContacts = false

@@ -123,3 +123,48 @@ struct DirectoryEntry: Sendable, Hashable, Identifiable {
         source == .groups || source == .teams || source == .circles
     }
 }
+
+extension DirectoryEntry {
+    /// The matches to offer for what has been typed.
+    ///
+    /// Two sources, because the server cannot do all of it. Its autocomplete matches prefixes
+    /// and substrings, so "hvr" finds nobody however patient you are — letters merely in
+    /// order is not a thing it looks for. Anyone already known locally is matched here as
+    /// well, by ``PaletteRanking``, which does: the same grading the command palette and the
+    /// sidebar's filter use, so "hvr" and "h v r" both find Heine Volder Rødder.
+    ///
+    /// The server's own results are never dropped, only reordered. It knows things this does
+    /// not — who you talk to, who shares a team with you — and a result it thought worth
+    /// sending is worth showing even when the letters do not line up.
+    static func matches(
+        for query: String,
+        server: [DirectoryEntry],
+        known: [DirectoryEntry],
+        excluding chosen: [DirectoryEntry] = [],
+        limit: Int = 8
+    ) -> [DirectoryEntry] {
+        let taken = Set(chosen.map(\.id))
+        let server = server.filter { !taken.contains($0.id) }
+
+        var union = server
+        var seen = Set(server.map(\.id))
+        for entry in known where !taken.contains(entry.id) && !seen.contains(entry.id) {
+            union.append(entry)
+            seen.insert(entry.id)
+        }
+
+        let ranked = PaletteRanking.rank(union, query: query, limit: limit) {
+            [$0.label, $0.subline ?? "", $0.identifier]
+        }
+
+        // Anything the server sent that the grading would have thrown away goes on the end
+        // rather than out: it matched something, even if not something we can see.
+        var result = ranked
+        var kept = Set(ranked.map(\.id))
+        for entry in server where !kept.contains(entry.id) && result.count < limit {
+            result.append(entry)
+            kept.insert(entry.id)
+        }
+        return result
+    }
+}

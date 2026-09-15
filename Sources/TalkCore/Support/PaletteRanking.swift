@@ -66,9 +66,23 @@ enum PaletteRanking {
     }
 
     private static func fold(_ text: String) -> String {
-        text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let folded = text.trimmingCharacters(in: .whitespacesAndNewlines)
             .folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: nil)
+        // Fast path: most text has none of these in it.
+        guard folded.contains(where: { transliterations[$0] != nil }) else { return folded }
+        return String(folded.flatMap { transliterations[$0] ?? String($0) })
     }
+
+    /// The letters `diacriticInsensitive` cannot reach.
+    ///
+    /// It decomposes a letter into a base and a mark — é is *e* and an acute, å is *a* and a
+    /// ring — and strips the mark. But ø, æ and ß are letters in their own right, with no
+    /// mark to take off, so folding leaves them exactly as they were and "Rodder" never finds
+    /// Rødder. On a server full of Danish names that is most of them.
+    private static let transliterations: [Character: String] = [
+        "ø": "o", "æ": "ae", "œ": "oe", "ß": "ss",
+        "đ": "d", "ð": "d", "þ": "th", "ł": "l", "ı": "i", "ħ": "h", "ŋ": "n"
+    ]
 
     private static func words(of text: String) -> [Substring] {
         text.split { !$0.isLetter && !$0.isNumber }
