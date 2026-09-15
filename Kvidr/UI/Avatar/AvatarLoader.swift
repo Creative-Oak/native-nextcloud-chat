@@ -31,7 +31,13 @@ final class AvatarLoader {
     init(client: OCSClient, supportsConversationAvatars: Bool) {
         self.client = client
         self.supportsConversationAvatars = supportsConversationAvatars
-        self.diskCache = AvatarDiskCache()
+        // One cache, however many loaders. A loader is rebuilt whenever the server says its
+        // capabilities moved, and the disk cache's idea of how much it has written since it
+        // last swept up lived on the loader — so a server that changed one capability every
+        // few dozen avatars reset the budget before it was ever reached, and the sweep never
+        // ran at all. The state has to outlive the loader for the budget to mean anything.
+        self.diskCache = AvatarDiskCache.shared
+        Task { await AvatarDiskCache.shared.prepareOnce() }
     }
 
     /// Already in memory? Use this from `body` — it never suspends, so the first frame can
@@ -88,6 +94,15 @@ final class AvatarLoader {
             var request = OCSRequest.get(path)
             request.timeout = 20
             let response = try await client.sendRaw(request)
+            // A profile picture, at the sizes this asks for, is tens of kilobytes. The
+            // transport's ceiling is the general API one — sixteen megabytes — which is not
+            // a limit on a decoration: three hundred of those is the memory cache alone. The
+            // request cannot carry its own ceiling (`OCSRequest` has no field for one), so
+            // the answer is judged here instead, before anything keeps a copy of it.
+            guard response.body.count <= Self.maximumAvatarBytes else {
+                Log.ui.debug("Avatar response was far too large to be a profile picture")
+                return nil
+            }
             guard let image = NSImage(data: response.body) else { return nil }
             // Not after a purge: a fetch still in flight when the account signed out must
             // not put back what the purge has just cleared away.
@@ -102,6 +117,9 @@ final class AvatarLoader {
         }
     }
 
+    /// What an avatar is allowed to weigh.
+    private static let maximumAvatarBytes = 2 * 1024 * 1024
+
     private func store(_ image: NSImage, for key: String) {
         if memory.count >= memoryLimit { memory.removeAll(keepingCapacity: true) }
         memory[key] = image
@@ -113,8 +131,9 @@ final class AvatarLoader {
     /// away: a user id is not ours to choose, and collapsing `.`, `_`, `@` and `+` — all of
     /// which Nextcloud allows — to the same character made `alice.smith` and `alice_smith`
     /// one cache entry, so whoever was fetched first wore the other's face for a day. The
-    /// escape is injective, which is the property that closes that; it also only ever
-    /// produces hex digits, so a key still cannot name a file outside the cache directory.
+    /// escape is injective, which is the property that closes that; it is also bounded, and
+    /// spells names out of hex digits and nothing else, so a key can neither name a file
+    /// outside the cache directory nor one the filesystem refuses to open.
     private func cacheKey(_ subject: Subject, size: Int, dark: Bool) -> String {
         let suffix = "\(size)\(dark ? "-dark" : "")"
         switch subject {
@@ -145,13 +164,36 @@ final class AvatarLoader {
 
 /// Disk half of the avatar cache. An actor so file I/O stays off the main thread; it only
 /// ever moves `Data`, which crosses actor boundaries freely.
+///
+/// One instance for the whole process, because the budget below is only a budget if it
+/// survives everything that can replace an ``AvatarLoader``.
 private actor AvatarDiskCache {
+    static let shared = AvatarDiskCache()
+
+    /// The cache directory, and the one the current key format lives in inside it.
+    private let root: URL
     private let directory: URL
-    private var writesSinceTrim = 0
+    private var bytesSinceTrim = 0
+    private var hasPrepared = false
 
     init() {
-        directory = URL.cachesDirectory.appending(path: "app.kvidr.mac/Avatars", directoryHint: .isDirectory)
+        root = URL.cachesDirectory.appending(path: "app.kvidr.mac/Avatars", directoryHint: .isDirectory)
+        directory = root.appending(path: Self.formatVersion, directoryHint: .isDirectory)
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    }
+
+    /// Once per launch: collect what an older build left behind, and put the cache back
+    /// inside its budget before anything is added to it.
+    ///
+    /// Trimming only from the write path meant a Mac that was never signed out could carry
+    /// whatever the last run left there indefinitely, because the sweep is only reached by
+    /// writing enough to trigger it. Two directory listings at startup is not a cost worth
+    /// avoiding.
+    func prepareOnce() {
+        guard !hasPrepared else { return }
+        hasPrepared = true
+        removeSupersededFormats()
+        trim()
     }
 
     /// - Parameter maximumAge: how old the file may be, or `nil` when the key itself
@@ -168,9 +210,14 @@ private actor AvatarDiskCache {
 
     func write(_ data: Data, key: String) {
         try? data.write(to: fileURL(key), options: .atomic)
-        writesSinceTrim += 1
-        if writesSinceTrim >= Self.writesBetweenTrims {
-            writesSinceTrim = 0
+        // Bytes rather than a count of writes. A count only bounds the directory if every
+        // file is about the same size, and nothing on the other end of this promises that:
+        // the transport's ceiling is sixteen megabytes, so fifty writes between sweeps was
+        // eight hundred megabytes against a twenty megabyte budget. Counting what was
+        // actually written makes the overshoot the same size whatever the server sends.
+        bytesSinceTrim += data.count
+        if bytesSinceTrim >= Self.bytesBetweenTrims {
+            bytesSinceTrim = 0
             trim()
         }
     }
@@ -178,8 +225,29 @@ private actor AvatarDiskCache {
     /// Empties the cache, then puts the directory back so the loader still works.
     func purge() {
         let manager = FileManager.default
-        try? manager.removeItem(at: directory)
+        try? manager.removeItem(at: root)
         try? manager.createDirectory(at: directory, withIntermediateDirectories: true)
+        bytesSinceTrim = 0
+    }
+
+    /// Deletes avatars cached under a key format this build no longer uses.
+    ///
+    /// The names changed when the escape did, so those files can never be read again — and
+    /// they are the ones that hold the previous format's problem: a directory full of
+    /// filenames each naming a colleague of whoever used this Mac, readable by anything that
+    /// can read the user's caches, kept for as long as the Mac runs. Eviction on age and size
+    /// would take them eventually and only eventually; this takes them at the next launch.
+    ///
+    /// By directory rather than by pattern-matching names, so a format that has been gone for
+    /// two releases is collected as surely as the one before it, without anything having to
+    /// remember how it used to spell things.
+    private func removeSupersededFormats() {
+        let manager = FileManager.default
+        guard let entries = try? manager.contentsOfDirectory(at: root, includingPropertiesForKeys: nil)
+        else { return }
+        for entry in entries where entry.lastPathComponent != Self.formatVersion {
+            try? manager.removeItem(at: entry)
+        }
     }
 
     /// Keeps the cache to a budget, oldest first.
@@ -190,15 +258,15 @@ private actor AvatarDiskCache {
     /// avatar's key names its own version, so it would otherwise be kept forever, including
     /// for conversations the user left years ago.
     ///
-    /// From the write path rather than a timer, every so many writes, because the cost is a
-    /// directory listing and the cache only grows when something is written to it.
+    /// Hidden files are listed too, unlike everywhere else: an atomic write that was
+    /// interrupted leaves a dot-prefixed temporary behind, and skipping those meant they were
+    /// neither counted against the budget nor ever collected.
     private func trim() {
         let manager = FileManager.default
         let keys: [URLResourceKey] = [.contentModificationDateKey, .fileSizeKey]
         guard let files = try? manager.contentsOfDirectory(
             at: directory,
-            includingPropertiesForKeys: keys,
-            options: [.skipsHiddenFiles]
+            includingPropertiesForKeys: keys
         ) else { return }
 
         var entries: [(url: URL, modified: Date, size: Int)] = files.map { file in
@@ -222,7 +290,13 @@ private actor AvatarDiskCache {
         }
     }
 
-    private static let writesBetweenTrims = 50
+    /// The subdirectory the current key format writes into. Bumped whenever the shape of a
+    /// key changes, which is what makes the previous format's files identifiable and so
+    /// removable — see ``removeSupersededFormats()``.
+    private static let formatVersion = "2"
+    /// How much may be written between two sweeps. The cache therefore never exceeds its
+    /// budget by more than this plus one avatar.
+    private static let bytesBetweenTrims = 4 * 1024 * 1024
     private static let byteBudget = 20 * 1024 * 1024
     private static let maximumAge: TimeInterval = 30 * 24 * 60 * 60
 

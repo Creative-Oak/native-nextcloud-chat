@@ -26,7 +26,7 @@ enum CacheKey {
     /// No key is ever longer than this.
     ///
     /// Two of them still have to fit inside one filename: the avatar cache's conversation key
-    /// is `room-<token>-<version>-<size>-dark.img`, which is 21 characters of scaffolding
+    /// is `room-<token>-<version>-<size>-dark.img`, which is 20 characters of scaffolding
     /// around two keys, so 112 each leaves 11 bytes spare against the filesystem's 255.
     static let maximumLength = 112
 
@@ -66,26 +66,26 @@ enum CacheKey {
     }
 
     private static func hex(_ bytes: [UInt8]) -> String {
-        var hex = ""
-        hex.reserveCapacity(bytes.count * 2)
+        var out = ""
+        out.reserveCapacity(bytes.count * 2)
         for byte in bytes {
-            hex.append(digits[Int(byte >> 4)])
-            hex.append(digits[Int(byte & 0x0F)])
+            out.append(digits[Int(byte >> 4)])
+            out.append(digits[Int(byte & 0x0F)])
         }
-        return hex
+        return out
     }
 
     /// Sixteen hex digits, never fewer, so the pieces of a bounded name cannot slide into
     /// each other.
     private static func hex64(_ value: UInt64) -> String {
-        var hex = ""
-        hex.reserveCapacity(16)
+        var out = ""
+        out.reserveCapacity(16)
         var shift = 60
         while shift >= 0 {
-            hex.append(digits[Int((value >> UInt64(shift)) & 0xF)])
+            out.append(digits[Int((value >> UInt64(shift)) & 0xF)])
             shift -= 4
         }
-        return hex
+        return out
     }
 
     /// FNV-1a, which is not a cryptographic hash and is not being asked to be one: it is
