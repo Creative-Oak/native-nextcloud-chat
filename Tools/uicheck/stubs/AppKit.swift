@@ -196,6 +196,7 @@ public final class NSItemProvider: NSObject, @unchecked Sendable {
 }
 
 @MainActor open class NSScrollView: NSView {
+    public convenience init() { self.init(frame: .zero) }
     open var documentView: NSView?
     open var drawsBackground: Bool = true
     open var hasVerticalScroller: Bool = false
