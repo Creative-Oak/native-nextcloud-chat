@@ -262,7 +262,7 @@ final class NewConversationModel {
                 )
             }
 
-            let conversation = try await session.conversations.create(request)
+            let conversation = try await session.conversations.create(request).conversation
 
             // `invite` carries at most one person, so anyone else picked is added after the
             // fact. A group already invited `selected.first` via `invite`; an open room

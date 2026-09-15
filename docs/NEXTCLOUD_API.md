@@ -485,8 +485,31 @@ a non-empty array as "online" marks everybody online.
 `readOnly`, `listable`, `messageExpiration`, `lobbyState`, `permissions`, `mentionPermissions`,
 `recordingConsent`, `emoji`, `avatarColor`, `participants`, `owner`, `preset`.
 
-We send only `roomType`, `roomName`, `invite`, `source`, `description` and `password`.
-`invite` carries one invitee; the rest are added afterwards via the participants endpoint.
+Three things `RoomController::createRoom` does that are not obvious from the parameter list,
+and that a client wanting Messages' "new message" flow depends on:
+
+**Everyone at once.** `participants` is a map of source → ids —
+`participants[users][0]`, `participants[groups][0]`, `participants[teams][0]` — and invites
+them all as the room is made. `invite` plus `source` is the legacy single-invitee route, which
+needs a follow-up call per extra person.
+
+**A one-to-one is idempotent.** `roomType=1` looks for an existing one-to-one with that person
+and answers **200** with it; only when there is none does it create one and answer **201**. So
+"start a conversation with X" never duplicates and never fails because one exists — and the
+HTTP status is the only thing that says which happened.
+
+**A group must be named**, though `roomName` is documented as optional:
+
+```php
+if ($roomName === '') {
+    $roomName = $this->roomService->prepareConversationName($invite ?: '---');
+}
+```
+
+With no name and no legacy `invite`, the conversation is literally called `---`. A client that
+lets people make unnamed groups has to supply a name of its own. Limits elsewhere in the
+controller: a one-to-one refuses the bridge bot and yourself (`invite`, 403/404), and
+`isNotAllowedToCreateConversations` is a server policy that answers 403 `permissions`.
 
 ### Managing one
 

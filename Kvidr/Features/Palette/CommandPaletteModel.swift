@@ -240,7 +240,7 @@ final class CommandPaletteModel {
             ? .group(named: entry.label, inviting: entry)
             : .oneToOne(with: entry.identifier)
         do {
-            return try await session.conversations.create(request)
+            return try await session.conversations.create(request).conversation
         } catch {
             creationError = "Couldn't start a conversation with \(entry.label)."
             return nil

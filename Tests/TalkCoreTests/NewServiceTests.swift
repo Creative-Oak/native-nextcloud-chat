@@ -130,14 +130,17 @@ struct NewServiceTests {
 
     @Test("Creating a one-to-one sends the documented room type and invite")
     func createOneToOne() async throws {
-        let transport = StubTransport(json: ocsEnvelope(#"{"token":"new1","type":1,"name":"bob","displayName":"Bob"}"#, statuscode: 201))
-        let conversation = try await ConversationService(client: try client(transport)).create(.oneToOne(with: "bob"))
+        // 201 on the response as well as in the envelope, the way Nextcloud answers OCS v2 —
+        // the HTTP status is what says whether the room was made or merely found.
+        let transport = StubTransport(json: ocsEnvelope(#"{"token":"new1","type":1,"name":"bob","displayName":"Bob"}"#, statuscode: 201), status: 201)
+        let created = try await ConversationService(client: try client(transport)).create(.oneToOne(with: "bob"))
 
         #expect(transport.lastRequest?.method == .post)
         #expect(transport.lastRequest?.url.path == "/ocs/v2.php/apps/spreed/api/v4/room")
         #expect(form(transport.lastRequest) == ["roomType": "1", "invite": "bob", "source": "users"])
-        #expect(conversation.token == "new1")
-        #expect(conversation.isOneToOne)
+        #expect(created.conversation.token == "new1")
+        #expect(created.conversation.isOneToOne)
+        #expect(created.existed == false)   // 201: Talk made it
     }
 
     @Test("Creating a group sends its name, and a public room its password")
@@ -150,6 +153,43 @@ struct NewServiceTests {
 
         _ = try await service.create(.publicRoom(named: "Open questions", password: "hunter2"))
         #expect(form(transport.lastRequest) == ["roomType": "3", "roomName": "Open questions", "password": "hunter2"])
+    }
+
+    @Test("A draft sends everyone in one call, as an indexed participants array")
+    func createWithParticipants() async throws {
+        let transport = StubTransport(json: ocsEnvelope(#"{"token":"new3","type":2,"name":"Heine & Lea"}"#, statuscode: 201))
+        let service = ConversationService(client: try client(transport))
+
+        let draft = try #require(NewConversation.draft(
+            recipients: [
+                DirectoryEntry(identifier: "heine", label: "Heine", source: .users),
+                DirectoryEntry(identifier: "lea", label: "Lea", source: .users),
+                DirectoryEntry(identifier: "design", label: "Design", source: .groups)
+            ],
+            isOpen: false
+        ))
+        _ = try await service.create(draft)
+
+        let fields = form(transport.lastRequest)
+        #expect(fields["roomType"] == "2")
+        #expect(fields["roomName"] == "Heine, Lea & Design")
+        // One call rather than a create plus an invitation each.
+        #expect(fields["participants[users][0]"] == "heine")
+        #expect(fields["participants[users][1]"] == "lea")
+        #expect(fields["participants[groups][0]"] == "design")
+        #expect(fields["invite"] == nil)
+    }
+
+    @Test("A one-to-one you already have comes back as one that already existed")
+    func createOneToOneThatExists() async throws {
+        // 200, not 201: `RoomController::createOneToOneRoom` looks for the room first and
+        // hands back the one you have. Telling the two apart is what makes a new message to
+        // someone you already talk to land in the conversation you already have.
+        let transport = StubTransport(json: ocsEnvelope(#"{"token":"old1","type":1,"name":"bob"}"#), status: 200)
+        let created = try await ConversationService(client: try client(transport)).create(.oneToOne(with: "bob"))
+
+        #expect(created.existed)
+        #expect(created.conversation.token == "old1")
     }
 
     // MARK: - Shared items
