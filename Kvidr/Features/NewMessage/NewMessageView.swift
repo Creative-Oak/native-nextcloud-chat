@@ -14,7 +14,6 @@ struct NewMessageView: View {
     var body: some View {
         VStack(spacing: 0) {
             toField
-            Divider()
 
             if !draft.results.isEmpty {
                 results
@@ -37,6 +36,9 @@ struct NewMessageView: View {
 
     // MARK: - To
 
+    /// The band across the top, floating as Messages' does rather than sitting in a header
+    /// with a rule under it: glass, the full width, and the toggle riding at its trailing
+    /// edge the way the composer's buttons ride at its.
     private var toField: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Text("To:")
@@ -73,13 +75,30 @@ struct NewMessageView: View {
 
             // Public rather than private. A one-to-one cannot be public, so switching this on
             // makes even a single recipient an open conversation.
-            Toggle("Open", isOn: $draft.isOpen)
-                .toggleStyle(.switch)
-                .controlSize(.mini)
-                .help("Anyone on the server can find and join this conversation")
+            //
+            // A `Toggle` in `.button` style rather than a switch: it is still a toggle to
+            // VoiceOver and to the keyboard, but it takes the app's own glass — a pill that
+            // tints with the accent when it is on, like a reaction that includes you.
+            Toggle(isOn: $draft.isOpen) {
+                Label("Open", systemImage: "globe")
+                    .font(.callout)
+                    .labelStyle(.titleAndIcon)
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 1)
+            }
+            .toggleStyle(.button)
+            .buttonStyle(.plain)
+            .glass(draft.isOpen ? .selectedChip : .chip)
+            .foregroundStyle(draft.isOpen ? AnyShapeStyle(.white) : AnyShapeStyle(.secondary))
+            .help("Anyone on the server can find and join this conversation")
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 9)
+        .frame(minHeight: GlassMetrics.control)
+        .glass(.field, cornerRadius: GlassMetrics.control / 2)
+        .padding(.horizontal, 12)
+        .padding(.top, 10)
+        .padding(.bottom, 6)
     }
 
     private var results: some View {

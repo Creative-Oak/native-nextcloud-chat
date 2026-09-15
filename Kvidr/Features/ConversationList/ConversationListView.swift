@@ -37,13 +37,10 @@ struct ConversationListView: View {
 
     var body: some View {
         List(selection: $selection) {
-            // Above everything, including the pinned faces: it is the thing you just asked
-            // for, and it leaves when you send or dismiss it.
-            if let draft {
-                DraftRow(draft: draft, onDiscard: onDiscardDraft)
-                    .tag(ConversationDraftToken.value)
-                    .listRowSeparator(.hidden)
-            }
+            // Under the pinned faces rather than over them, where Messages puts it — the
+            // faces are the top of the sidebar and a draft does not displace them. When
+            // there are none to sit under, it goes first instead.
+            if !hasPinnedFaces { draftRow }
 
             ForEach(model.sections) { group in
                 switch group.section {
@@ -55,6 +52,7 @@ struct ConversationListView: View {
                     PinnedConversations(conversations: group.items, selection: $selection)
                         .listRowInsets(EdgeInsets())
                         .listRowSeparator(.hidden)
+                    draftRow
 
                 // The only heading. Messages has none, and "Conversations" over the
                 // conversations said nothing; archived ones are the one group that
@@ -100,6 +98,20 @@ struct ConversationListView: View {
     }
 
     @ViewBuilder
+    /// Whether the grid of faces is on screen for the draft to sit beneath.
+    private var hasPinnedFaces: Bool {
+        !model.isFiltering && model.sections.contains { $0.section == .favorites }
+    }
+
+    @ViewBuilder
+    private var draftRow: some View {
+        if let draft {
+            DraftRow(draft: draft, onDiscard: onDiscardDraft)
+                .tag(ConversationDraftToken.value)
+                .listRowSeparator(.hidden)
+        }
+    }
+
     private func rows(_ conversations: [Conversation]) -> some View {
         ForEach(conversations) { conversation in
             // No tap gesture of any kind here, deliberately. A SwiftUI tap recogniser on
