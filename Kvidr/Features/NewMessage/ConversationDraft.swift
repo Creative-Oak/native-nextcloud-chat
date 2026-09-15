@@ -33,19 +33,50 @@ final class ConversationDraft {
     }
 
     private(set) var results: [DirectoryEntry] = []
+    /// Which match the arrow keys are on. Reset whenever the matches change, since the row
+    /// that was highlighted is rarely the same row afterwards.
+    private(set) var highlighted = 0
     private(set) var isSearching = false
     private(set) var isSending = false
     private(set) var error: String?
+
+    /// Files staged before there is anywhere to put them. Uploading needs no conversation —
+    /// only sharing does — so they go up while you are still deciding who to send them to.
+    let attachments: AttachmentQueue
 
     private let session: Session
     @ObservationIgnored private var searchTask: Task<Void, Never>?
 
     init(session: Session) {
         self.session = session
+        self.attachments = AttachmentQueue(session: session)
     }
 
     func requestRecipientFocus() {
         focusRequest += 1
+    }
+
+    /// The match Return would take.
+    var highlightedResult: DirectoryEntry? {
+        results.indices.contains(highlighted) ? results[highlighted] : nil
+    }
+
+    func moveHighlight(by delta: Int) {
+        guard !results.isEmpty else { return }
+        highlighted = (highlighted + delta + results.count) % results.count
+    }
+
+    func highlight(_ index: Int) {
+        guard results.indices.contains(index) else { return }
+        highlighted = index
+    }
+
+    /// Takes the highlighted match, if there is one. Return in the To: field.
+    @discardableResult
+    func acceptHighlighted() -> Bool {
+        guard let entry = highlightedResult else { return false }
+        toggle(entry)
+        return true
     }
 
     // MARK: - Recipients
@@ -56,7 +87,9 @@ final class ConversationDraft {
     }
 
     var canSend: Bool {
-        !recipients.isEmpty && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isSending
+        guard !recipients.isEmpty, !isSending else { return false }
+        // A picture with nothing typed is a message, the same as it is in a conversation.
+        return !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || attachments.hasStaged
     }
 
     /// What this will become — `nil` until somebody is in it.
@@ -77,8 +110,15 @@ final class ConversationDraft {
             // list open over a field you are done with.
             search = ""
             results = []
+            highlighted = 0
         }
         error = nil
+    }
+
+    /// Escape: drop the matches without dropping what was typed.
+    func clearSearch() {
+        results = []
+        highlighted = 0
     }
 
     func remove(_ entry: DirectoryEntry) {
@@ -113,6 +153,7 @@ final class ConversationDraft {
                 let found = try await self.session.directory.search(term, shareTypes: [0, 1, 7])
                 guard !Task.isCancelled, self.search == term else { return }
                 self.results = found.filter { !self.recipients.contains($0) }
+                self.highlighted = 0
             } catch {
                 self.results = []
                 self.error = error.userMessage
@@ -168,6 +209,16 @@ final class ConversationDraft {
             // still here for another go.
             self.error = error.userMessage
             return nil
+        }
+
+        // Anything staged goes into the conversation that now exists, with the typed words
+        // as the first one's caption — the same rule as sending into a conversation. The
+        // queue itself is handed on to the new `ChatModel`, since its uploads may still be
+        // running and the draft is about to be thrown away.
+        if attachments.hasStaged {
+            attachments.adopt(token: created.conversation.token)
+            attachments.send(caption: message, replyTo: nil)
+            return created.conversation
         }
 
         do throws(TalkError) {

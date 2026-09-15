@@ -42,8 +42,13 @@ struct NewMessageView: View {
         }
         // Hanging from the band rather than filling the pane: the matches belong under the
         // field they came from, the way Messages drops them out of the To: field.
-        .overlay(alignment: .top) {
-            suggestions.padding(.top, titleBarHeight + 6)
+        // Under where you are typing rather than centred over the band: the matches belong
+        // to the field they came from. Leading-aligned, inset past the "To:" label, which is
+        // where the cursor sits before any chips are in the way.
+        .overlay(alignment: .topLeading) {
+            suggestions
+                .padding(.top, titleBarHeight + 4)
+                .padding(.leading, bandInset + Self.toLabelWidth)
         }
         .navigationTitle(draft.title)
         // Keyed on the request rather than on appearing, so a second ⌘N puts the cursor back
@@ -63,6 +68,10 @@ struct NewMessageView: View {
         max(6, (titleBarHeight - GlassMetrics.control) / 2)
     }
 
+    /// How far into the band the typing starts: its own leading padding, plus "To:" and the
+    /// gap after it. Enough to put the matches under the cursor rather than under the label.
+    private static let toLabelWidth: CGFloat = 44
+
     @ViewBuilder
     private var suggestions: some View {
         if !draft.results.isEmpty {
@@ -73,10 +82,11 @@ struct NewMessageView: View {
                     }
                     .padding(.horizontal, 10)
                     .padding(.vertical, 4)
-                    // The first match reads as the one Return would take, as it does in
-                    // Messages, rather than every row looking equally likely.
+                    // The highlighted match is the one Return takes, and the arrow keys move
+                    // it — so this follows the keyboard rather than always sitting on the top
+                    // row. The pointer moves it too, so hovering and pressing Return agree.
                     .background {
-                        if index == 0 {
+                        if index == draft.highlighted {
                             // 16 less the 6 it is inset by: a rounded rectangle inside
                             // another wants the difference, or the two curves sit at
                             // different centres and the eye reads a double border.
@@ -85,6 +95,7 @@ struct NewMessageView: View {
                                 .padding(.horizontal, 6)
                         }
                     }
+                    .onHover { if $0 { draft.highlight(index) } }
                 }
             }
             .padding(.vertical, 6)
@@ -99,7 +110,21 @@ struct NewMessageView: View {
     // MARK: - Message
 
     private var composer: some View {
+        VStack(spacing: 0) {
+            AttachmentTray(queue: draft.attachments)
+            field
+        }
+    }
+
+    private var field: some View {
         HStack(alignment: .bottom, spacing: 8) {
+            if draft.attachments.canAttach {
+                // A draft has no conversation yet, and does not need one: uploading is
+                // WebDAV, and only sharing needs somewhere to share into. The queue takes
+                // its token when the conversation is made.
+                AttachmentMenu(queue: draft.attachments, destination: draft.title)
+            }
+
             TextField("", text: $draft.text, prompt: Text("Message"), axis: .vertical)
                 .textFieldStyle(.plain)
                 .lineLimit(1...6)

@@ -31,6 +31,10 @@ final class AppModel {
     /// The unsent conversation, if there is one. One at a time, and in memory: an
     /// unaddressed, unsent conversation is not data yet.
     private(set) var draft: ConversationDraft?
+    /// A draft's attachment queue, in the moment between the conversation existing and its
+    /// `ChatModel` being built. Its files may still be going up, so it is handed over rather
+    /// than left to be collected with the draft.
+    @ObservationIgnored private var attachmentsInTransit: (token: String, queue: AttachmentQueue)?
 
     var selectedToken: String? {
         didSet {
@@ -238,9 +242,15 @@ final class AppModel {
         inspector = InspectorModel(session: session, conversation: conversation)
 
         let previous = chat
+        // A conversation that has just come from a draft takes the draft's queue with it,
+        // files and all. Anything else gets one of its own.
+        let inherited = attachmentsInTransit?.token == conversation.token ? attachmentsInTransit?.queue : nil
+        attachmentsInTransit = nil
+
         let model = ChatModel(
             session: session,
             conversation: conversation,
+            attachments: inherited,
             readContext: { [weak self] in self?.currentReadContext() ?? ReadStateContext() },
             onReadMarker: { [weak self] token, messageID in
                 self?.conversationList?.markRead(token: token, upTo: messageID)
@@ -387,6 +397,9 @@ final class AppModel {
 
     /// The draft became a real conversation: show it, and let the draft go.
     func draftSent(_ conversation: Conversation) {
+        if let queue = draft?.attachments, queue.hasStaged {
+            attachmentsInTransit = (conversation.token, queue)
+        }
         draft = nil
         conversationCreated(conversation)
     }

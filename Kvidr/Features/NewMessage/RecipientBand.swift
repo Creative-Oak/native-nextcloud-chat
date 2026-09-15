@@ -41,6 +41,27 @@ struct RecipientBand: View {
                         draft.removeLastRecipient()
                         return .handled
                     }
+                    // The matches are a list you walk, not a set of things to aim at. Ignored
+                    // rather than swallowed when there are none, so the keys still do whatever
+                    // the field would have done with them.
+                    .onKeyPress(.upArrow) {
+                        guard !draft.results.isEmpty else { return .ignored }
+                        draft.moveHighlight(by: -1)
+                        return .handled
+                    }
+                    .onKeyPress(.downArrow) {
+                        guard !draft.results.isEmpty else { return .ignored }
+                        draft.moveHighlight(by: 1)
+                        return .handled
+                    }
+                    .onKeyPress(.return) {
+                        draft.acceptHighlighted() ? .handled : .ignored
+                    }
+                    .onKeyPress(.escape) {
+                        guard !draft.results.isEmpty else { return .ignored }
+                        draft.clearSearch()
+                        return .handled
+                    }
             }
             // Takes the slack, so the band's chips stay left and the globe and + sit at the
             // trailing edge rather than everything bunching in the middle of a wide band.

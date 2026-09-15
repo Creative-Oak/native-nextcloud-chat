@@ -19,13 +19,16 @@ final class AttachmentQueue {
     private(set) var isDropTargeted = false
 
     private let session: Session
-    private let token: String
+    /// Nil in a draft: uploading needs no conversation, only sharing does, so files can go
+    /// up while you are still deciding who to send them to. Set once the conversation exists
+    /// — see ``adopt(token:)``.
+    private var token: String?
     @ObservationIgnored private var pump: Task<Void, Never>?
     /// The transfers the send button has committed. Everything else is still just staged,
     /// however far up it has got.
     @ObservationIgnored private var committed: Set<UUID> = []
 
-    init(session: Session, token: String) {
+    init(session: Session, token: String? = nil) {
         self.session = session
         self.token = token
     }
@@ -42,6 +45,16 @@ final class AttachmentQueue {
 
     func setDropTargeted(_ targeted: Bool) {
         isDropTargeted = targeted
+    }
+
+    /// Hands the queue the conversation its files belong in, once there is one.
+    ///
+    /// Anything committed before this was waiting on exactly that, so the pump is asked to
+    /// look again.
+    func adopt(token: String) {
+        guard self.token == nil else { return }
+        self.token = token
+        start()
     }
 
     // MARK: - Staging
@@ -126,7 +139,7 @@ final class AttachmentQueue {
             switch transfer.state {
             case .queued:
                 return (index, .upload)
-            case .uploaded where committed.contains(transfer.id):
+            case .uploaded where committed.contains(transfer.id) && token != nil:
                 return (index, .share)
             default:
                 continue
@@ -203,7 +216,7 @@ final class AttachmentQueue {
     }
 
     private func share(_ transfer: FileTransfer) async {
-        guard let path = transfer.remotePath else {
+        guard let token, let path = transfer.remotePath else {
             update(transfer.id) { $0.state = .queued }
             return
         }

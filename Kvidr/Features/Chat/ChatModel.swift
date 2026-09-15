@@ -125,15 +125,19 @@ final class ChatModel {
         session.account.isMe(message.actor)
     }
 
+    /// - Parameter attachments: a queue to take over rather than make. A conversation that
+    ///   has just come from a draft inherits the draft's, because its files may still be
+    ///   going up — making a fresh one here would drop them mid-upload.
     init(
         session: Session,
         conversation: Conversation,
+        attachments: AttachmentQueue? = nil,
         readContext: @escaping @MainActor () -> ReadStateContext,
         onReadMarker: @escaping @MainActor (String, Int) -> Void
     ) {
         self.session = session
         self.conversation = conversation
-        self.attachments = AttachmentQueue(session: session, token: conversation.token)
+        self.attachments = attachments ?? AttachmentQueue(session: session, token: conversation.token)
         self.readContext = readContext
         self.onReadMarker = onReadMarker
     }
