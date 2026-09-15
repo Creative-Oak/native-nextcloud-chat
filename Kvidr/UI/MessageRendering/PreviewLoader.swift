@@ -97,8 +97,13 @@ extension EnvironmentValues {
 /// An image shared into the conversation, shown inline.
 struct InlineImageView: View {
     let object: RichObject
-    var maximumWidth: CGFloat = 320
-    var maximumHeight: CGFloat = 280
+    /// Inside the 520pt a message row allows itself, with room left for the bubble's own
+    /// padding — a picture should read as a message, not as the window.
+    var maximumWidth: CGFloat = 420
+    /// Generous, because it is not really a limit on how big a picture is: a landscape one
+    /// runs out of width long before this. It is here to stop a tall panorama becoming a
+    /// column you have to scroll past.
+    var maximumHeight: CGFloat = 520
     /// Rounder than a thumbnail in a row, because with no bubble around it the picture is
     /// the shape the eye reads.
     var cornerRadius: CGFloat = 16
