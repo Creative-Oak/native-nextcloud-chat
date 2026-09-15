@@ -69,6 +69,10 @@ public struct Selector: Equatable, Hashable, Sendable {
     public func activate(ignoringOtherApps: Bool) {}
     public func activate() {}
     public func orderFrontCharacterPalette(_ sender: Any?) {}
+    /// How the app opens Settings: SwiftUI's own `showSettingsWindow:` is reachable only
+    /// by selector, so this is the one place the app talks to AppKit that way.
+    @discardableResult
+    public func sendAction(_ action: Selector, to target: Any?, from sender: Any?) -> Bool { false }
     public static let didBecomeActiveNotification = Notification.Name("NSApplicationDidBecomeActive")
     public static let didResignActiveNotification = Notification.Name("NSApplicationDidResignActive")
     public enum TerminateReply: Sendable { case terminateNow, terminateCancel, terminateLater }
@@ -134,6 +138,14 @@ public struct NSColor: Sendable {
     public func string(forType type: PasteboardType) -> String? { nil }
     public func data(forType type: PasteboardType) -> Data? { nil }
     public func canReadObject(forClasses classes: [AnyClass], options: [AnyHashable: Any]?) -> Bool { false }
+
+    /// The composer reads dropped and pasted files through this, with
+    /// `urlReadingFileURLsOnly` so a pasteboard cannot offer it a web URL to go and fetch.
+    public struct ReadingOptionKey: Hashable, Sendable {
+        public static let urlReadingFileURLsOnly = ReadingOptionKey()
+        public static let urlReadingContentsConformToTypes = ReadingOptionKey()
+    }
+    public func readObjects(forClasses classes: [AnyClass], options: [ReadingOptionKey: Any]? = nil) -> [Any]? { nil }
 }
 
 public final class NSItemProvider: NSObject, @unchecked Sendable {
