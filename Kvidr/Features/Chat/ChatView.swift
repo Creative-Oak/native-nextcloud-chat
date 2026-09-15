@@ -14,6 +14,9 @@ struct ChatView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Owned by the window so ⌘⇧K and Return-from-the-sidebar can move focus here.
     @Binding var composerFocused: Bool
+    /// Keeps the frosted band over the header up whether or not the pointer is there —
+    /// while the sidebar has given way to the inspector, as Messages does.
+    var isHeaderAlwaysFrosted = false
 
     @State private var highlightedMessageID: Int?
     @State private var didInitialScroll = false
@@ -24,6 +27,10 @@ struct ChatView: View {
     /// The message whose reactions are floating above it, if any.
     @State private var tapbackMessageID: Int?
     @State private var tapbackBarSize: CGSize = .zero
+    /// The toolbar's depth, from the top of the window — where the pointer counts as
+    /// being over the header, and how far the frosted band reaches.
+    @State private var toolbarDepth: CGFloat = 0
+    @State private var isPointerOverHeader = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -60,6 +67,22 @@ struct ChatView: View {
                 }
         }
         .background(Color(nsColor: .textBackgroundColor))
+        // Where the pointer counts as over the header — the toolbar and the name
+        // capsule under it — which is what brings the frosted band up; the band itself
+        // is the transcript's top scroll edge, hardened.
+        .onGeometryChange(for: CGFloat.self) { proxy in
+            proxy.safeAreaInsets.top
+        } action: { depth in
+            toolbarDepth = depth
+        }
+        .onContinuousHover(coordinateSpace: .local) { phase in
+            switch phase {
+            case .active(let point):
+                isPointerOverHeader = point.y < Self.frostDepth(below: toolbarDepth)
+            case .ended:
+                isPointerOverHeader = false
+            }
+        }
         // Their face, up in the toolbar band, over the name capsule that hangs below
         // it. Drawn here rather than as a toolbar item so it is centred on the
         // transcript — a toolbar item centres on the whole column, panel included. The
@@ -135,7 +158,14 @@ struct ChatView: View {
             .safeAreaBar(edge: .top, spacing: 0) {
                 ConversationHeader(conversation: model.conversation)
             }
-            .scrollEdgeEffectStyle(.soft, for: .top)
+            // Messages' frosted band: the strip over the transcript — the toolbar and
+            // the name capsule — is the soft edge fade until the pointer is up there,
+            // then the hard edge: the system's own frosted pocket, its material the
+            // sidebar's, a hairline at its foot, and the messages behind read through
+            // frost. Drawn by the system rather than by hand, so it is the same grey as
+            // the sidebar wherever the window sits. It stays hard while the sidebar is
+            // away for the inspector.
+            .scrollEdgeEffectStyle(isPointerOverHeader || isHeaderAlwaysFrosted ? .hard : .soft, for: .top)
             // Deliberately two Bools rather than two distances. A raw offset changes on
             // every frame of a scroll, so an Equatable built from offsets is never equal
             // to its predecessor and this action runs every frame — which is both the
@@ -229,6 +259,12 @@ struct ChatView: View {
                 tapbackOverlay(anchors)
             }
         }
+    }
+
+    /// How far the header reaches from the top of the window: the toolbar, and the name
+    /// capsule hanging under it.
+    private static func frostDepth(below toolbarDepth: CGFloat) -> CGFloat {
+        toolbarDepth + ConversationHeader.depthBelowToolbar
     }
 
     /// The floating reactions over the message that was pressed, with the rest of the

@@ -151,7 +151,11 @@ struct RootView: View {
             HStack(spacing: 0) {
                 Group {
                     if let chat = app.chat {
-                        ChatView(model: chat, composerFocused: $composerFocused)
+                        ChatView(
+                            model: chat,
+                            composerFocused: $composerFocused,
+                            isHeaderAlwaysFrosted: isSidebarYieldingToInspector
+                        )
                             // A fresh view per conversation: no state bleeds between them.
                             .id(chat.token)
                     } else if app.phase == .ready {
