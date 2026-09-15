@@ -73,4 +73,77 @@ struct CacheKeyTests {
         #expect(CacheKey.fileName("\u{00E9}").count == 4)   // é is two bytes in UTF-8
         #expect(CacheKey.fileName("").isEmpty)
     }
+
+    // MARK: - Identifiers too long to spell out
+
+    /// A filename stops at 255 bytes, so an unbounded key is not a key at all: the write
+    /// fails, the read fails, and the entry misses *every* time it is looked up. The server
+    /// picks the identifier, so it can mint as many permanently-uncacheable ones as it likes
+    /// and have each of them refetched on every render, forever.
+    @Test("No key is ever longer than the bound", arguments: [1, 55, 56, 57, 200, 4000])
+    func neverExceedsTheBound(_ byteCount: Int) {
+        let key = CacheKey.fileName(String(repeating: "a", count: byteCount))
+        #expect(key.count <= CacheKey.maximumLength)
+    }
+
+    @Test("A key long enough to fit is still spelled out in full")
+    func shortIdentifiersAreUnchanged() {
+        let identifier = String(repeating: "a", count: 56)
+        let key = CacheKey.fileName(identifier)
+        #expect(key.count == 112)
+        #expect(key.allSatisfy { $0.isHexDigit })
+    }
+
+    @Test("A bounded key is a fixed width, and a fixed one")
+    func boundedKeysArePinned() {
+        let key = CacheKey.fileName(String(repeating: "a", count: 57))
+        #expect(key.count == 81)
+        // Pinned, because the name has to be the same one next launch or the cache is a
+        // write-only directory: prefix, hash of the whole identifier, then its length.
+        #expect(key == "x61616161616161616161616161616161616161616161616136819478e9f520540000000000000039")
+    }
+
+    @Test("Truncation on its own is what this is not")
+    func longIdentifiersSharingAPrefixStayApart() {
+        // The R4-5 collision, one size up: two ids that agree for the first fifty characters
+        // and differ after it. A key that only kept a prefix would merge them and hand one
+        // account the other's face again.
+        let first = String(repeating: "u", count: 30) + "alpha" + String(repeating: "z", count: 30)
+        let second = String(repeating: "u", count: 30) + "bravo" + String(repeating: "z", count: 30)
+        #expect(CacheKey.fileName(first) != CacheKey.fileName(second))
+    }
+
+    @Test("Length alone tells two otherwise-identical prefixes apart")
+    func longIdentifiersOfDifferentLengthsStayApart() {
+        let short = String(repeating: "a", count: 57)
+        let long = String(repeating: "a", count: 58)
+        #expect(CacheKey.fileName(short) != CacheKey.fileName(long))
+    }
+
+    @Test("A bounded key and a spelled-out one can never be the same string")
+    func theTwoFormsCannotCollide() {
+        // Hex has no `x` in it, so the marker that opens a bounded name cannot begin a
+        // spelled-out one — which is what keeps the two namespaces disjoint without anyone
+        // having to reason about lengths.
+        let bounded = CacheKey.fileName(String(repeating: "a", count: 200))
+        #expect(bounded.hasPrefix("x"))
+        #expect(!CacheKey.fileName("alice").hasPrefix("x"))
+    }
+
+    @Test("A bounded key is still filename-safe, and still joins unambiguously")
+    func boundedKeysStaySafe() {
+        let key = CacheKey.fileName(String(repeating: "../etc/passwd:", count: 30))
+        #expect(key.allSatisfy { $0.isHexDigit && !$0.isUppercase || $0 == "x" })
+        #expect(!key.contains("/"))
+        #expect(!key.contains("."))
+        // The avatar cache splits `room-<token>-<version>-<size>` on `-`, so no key may
+        // contain one, however long the identifier behind it was.
+        #expect(!key.contains("-"))
+    }
+
+    @Test("The same long identifier always gives the same key")
+    func boundedKeysAreDeterministic() {
+        let identifier = String(repeating: "alice.smith@corp.example", count: 20)
+        #expect(CacheKey.fileName(identifier) == CacheKey.fileName(identifier))
+    }
 }

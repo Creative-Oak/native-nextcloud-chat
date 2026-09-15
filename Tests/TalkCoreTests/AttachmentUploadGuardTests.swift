@@ -89,10 +89,10 @@ struct AttachmentUploadGuardTests {
         try manager.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? manager.removeItem(at: root) }
 
-        let pipe = root.appendingPathComponent("report.pdf")
-        let made = mkfifo(pipe.path, 0o600)
+        let fifo = root.appendingPathComponent("report.pdf")
+        let made = mkfifo(fifo.path, 0o600)
         try #require(made == 0)
-        #expect(!pipe.isAttachableFile)
+        #expect(!fifo.isAttachableFile)
     }
 
     @Test("A character device is not either")
