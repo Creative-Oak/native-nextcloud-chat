@@ -6,20 +6,24 @@ import SwiftUI
 /// space between the two fields is where the people you are searching for appear.
 struct NewMessageView: View {
     @Bindable var draft: ConversationDraft
-    /// Owned by the window, because the To: field it drives lives in the toolbar.
+    /// Owned by the window, because the To: band sits above this view's own content.
     @FocusState.Binding var recipientsFocused: Bool
+    /// The strip the toolbar would have occupied, measured by the window.
+    var titleBarHeight: CGFloat
     var onSent: (Conversation) -> Void
 
     @FocusState private var isMessageFocused: Bool
 
     var body: some View {
         VStack(spacing: 0) {
-            // Full width less a margin at each end, the way the composer sits at the other
-            // end of the pane. The toolbar above it is empty while a draft is open, so this
-            // is the top of the window in everything but name.
+            // On the traffic lights' line, not under it. The pane has taken the strip the
+            // toolbar reserves — the compose and search buttons stand down while a draft is
+            // open, so nothing else wants it — and the band is centred in it, full width less
+            // a margin at each end the way the composer sits at the other end of the pane.
             RecipientBand(draft: draft, isFocused: $recipientsFocused)
                 .padding(.horizontal, 12)
-                .padding(.top, 8)
+                .padding(.top, max(6, (titleBarHeight - GlassMetrics.control) / 2))
+                .padding(.bottom, 6)
 
             Spacer(minLength: 0)
 
@@ -36,7 +40,7 @@ struct NewMessageView: View {
         // Hanging from the band rather than filling the pane: the matches belong under the
         // field they came from, the way Messages drops them out of the To: field.
         .overlay(alignment: .top) {
-            suggestions.padding(.top, GlassMetrics.control + 12)
+            suggestions.padding(.top, titleBarHeight + 6)
         }
         .navigationTitle(draft.title)
         .onAppear { recipientsFocused = true }

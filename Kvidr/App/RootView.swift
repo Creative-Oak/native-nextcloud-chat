@@ -10,8 +10,13 @@ struct RootView: View {
     @Environment(AppModel.self) private var app
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var composerFocused = false
-    /// Owned here because the To: field lives in the toolbar, not in the detail pane.
+    /// Owned here because the To: field is the top of the draft pane, above its content.
     @FocusState private var recipientsFocused: Bool
+    /// How tall a strip the window reserves for the toolbar. Measured, not assumed: it is the
+    /// system's number and it moves with the toolbar style. The draft's To: band is placed
+    /// into that strip, which is the only way to get it onto the traffic lights' line —
+    /// a toolbar item cannot, because one sizes to its content and clamps any frame.
+    @State private var titleBarHeight: CGFloat = 52
     @State private var searchFocusRequest = false
     /// The command palette, while it is up. A model per showing: it starts empty.
     @State private var palette: CommandPaletteModel?
@@ -245,9 +250,16 @@ struct RootView: View {
             HStack(spacing: 0) {
                 Group {
                     if app.isShowingDraft, let draft = app.draft {
-                        NewMessageView(draft: draft, recipientsFocused: $recipientsFocused) { conversation in
+                        NewMessageView(
+                            draft: draft,
+                            recipientsFocused: $recipientsFocused,
+                            titleBarHeight: titleBarHeight
+                        ) { conversation in
                             app.draftSent(conversation)
                         }
+                        // The pane takes the toolbar's strip so the band can sit in it. Safe
+                        // in this column: the traffic lights are over the sidebar, not here.
+                        .ignoresSafeArea(.container, edges: .top)
                     } else if let chat = app.chat {
                         ChatView(
                             model: chat,
@@ -267,6 +279,15 @@ struct RootView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                // Read here, where the safe area still exists — the draft pane above ignores
+                // it, so it cannot measure its own.
+                .background {
+                    GeometryReader { proxy in
+                        Color.clear
+                            .onAppear { titleBarHeight = proxy.safeAreaInsets.top }
+                            .onChange(of: proxy.safeAreaInsets.top) { _, new in titleBarHeight = new }
+                    }
+                }
 
                 if isShowingInspector, let inspector = app.inspector {
                     InspectorView(
