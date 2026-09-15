@@ -10,8 +10,17 @@ extension ChatModel {
         MessageActor(kind: .users, id: session.account.userID, displayName: session.account.resolvedDisplayName)
     }
 
+    /// Whether the send button should light up.
+    ///
+    /// Kept in step with `send()` below, deliberately: a picture with nothing typed is a
+    /// message, and when only `send()` knew that, Return worked while the button beside it
+    /// stayed grey.
     var canSend: Bool {
-        conversation.canPostMessages && !trimmedDraft.isEmpty && trimmedDraft.count <= capabilities.config.effectiveMaxMessageLength
+        guard conversation.canPostMessages else { return false }
+        guard !trimmedDraft.isEmpty || attachments.hasStaged else { return false }
+        // The words become the attachment's caption, and a caption is a message as far as
+        // the length limit is concerned.
+        return trimmedDraft.count <= capabilities.config.effectiveMaxMessageLength
     }
 
     var trimmedDraft: String {
@@ -33,11 +42,14 @@ extension ChatModel {
             return
         }
 
+        // The same question the button asks, rather than a second version of it. Stating the
+        // rule twice is what let Return and the button disagree: Return would send a message
+        // too long for the server, and the button would not send a picture with no words.
+        guard canSend else { return }
         let text = trimmedDraft
-        guard conversation.canPostMessages else { return }
 
         // With something staged, the words ride along as its caption rather than arriving as
-        // a message of their own — so sending a photo with nothing typed has to work too.
+        // a message of their own.
         // See docs/plans/2026-09-15-attachments-photos-polls-design.md § 1.
         if attachments.hasStaged {
             attachments.send(caption: text, replyTo: replyingTo?.messageID)
@@ -45,8 +57,6 @@ extension ChatModel {
             replyingTo = nil
             return
         }
-
-        guard !text.isEmpty else { return }
 
         let reference = ReferenceID.generate()
         let replyTo = replyingTo?.messageID
