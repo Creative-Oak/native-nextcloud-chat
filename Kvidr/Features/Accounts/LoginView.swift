@@ -178,18 +178,43 @@ final class LoginModel {
                 // Cancel, or a second attempt against a different server, replaces
                 // `session`. Without this a flow that completed a moment too late would
                 // still sign the app in — at the address the user had just backed out of.
-                guard !Task.isCancelled, self.session == flow else { return }
+                guard !Task.isCancelled, self.session == flow else {
+                    // Dropping the result on the floor is not enough. By this point the app
+                    // password exists on the server and sits in the keychain, and no account
+                    // row is about to be saved — so nothing would ever reference it, delete
+                    // it or revoke it again. Detached on purpose: this task has just been
+                    // cancelled, and the revoke is an HTTP request that would be cancelled
+                    // along with it.
+                    Task.detached { await authentication.discardLogin(result) }
+                    return
+                }
                 self.phase = .finishing
                 await self.app.signedIn(account: result.account)
             } catch let failure as TalkError {
                 guard failure != .cancelled else { return }
-                self.error = failure.userMessage
+                self.error = Self.message(for: failure, address: address)
                 self.phase = .enteringServer
             } catch {
                 self.error = TalkError.unexpectedResponse("\(error)").userMessage
                 self.phase = .enteringServer
             }
         }
+    }
+
+    /// An origin mismatch is the one login failure a user can act on, and the error it
+    /// arrives as renders for them as "The server sent something unexpected." — true, and
+    /// no help at all. kvidr refuses these on purpose, because an install whose
+    /// `overwritehost` or `overwrite.cli.url` names another address is indistinguishable
+    /// from a relay standing in front of one; but a refusal with nowhere to go next is a
+    /// dead end. The address named here is the user's own text, normalised. The one the
+    /// server claimed is deliberately not repeated — that is the untrusted half.
+    private static func message(for failure: TalkError, address: ServerAddress) -> String {
+        guard AuthenticationService.isOriginMismatch(failure) else { return failure.userMessage }
+        return """
+        This server answers as a different address than \(address.displayString). \
+        Sign in with the address your Nextcloud calls its own — the one your browser shows \
+        while you’re using it.
+        """
     }
 
     func reopenBrowser() {

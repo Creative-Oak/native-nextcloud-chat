@@ -106,7 +106,7 @@ struct LoginFlowTests {
         {"poll":{"token":"t","endpoint":"https://evil.example/login/v2/poll"},
          "login":"https://cloud.example.com/login/v2/flow/abc"}
         """)
-        await #expect(throws: TalkError.unexpectedResponse("login/v2 poll URL is not on cloud.example.com")) {
+        await #expect(throws: TalkError.unexpectedResponse("login/v2 origin mismatch: the poll URL is not on cloud.example.com")) {
             try await service(transport).beginLogin(server: try ServerAddress.parse("https://cloud.example.com"))
         }
     }
@@ -117,7 +117,7 @@ struct LoginFlowTests {
         {"poll":{"token":"t","endpoint":"https://cloud.example.com/login/v2/poll"},
          "login":"https://evil.example/login/v2/flow/abc"}
         """)
-        await #expect(throws: TalkError.unexpectedResponse("login/v2 login URL is not on cloud.example.com")) {
+        await #expect(throws: TalkError.unexpectedResponse("login/v2 origin mismatch: the login URL is not on cloud.example.com")) {
             try await service(transport).beginLogin(server: try ServerAddress.parse("https://cloud.example.com"))
         }
     }
@@ -128,7 +128,7 @@ struct LoginFlowTests {
         {"poll":{"token":"t","endpoint":"https://cloud.example.com/login/v2/poll"},
          "login":"https://cloud.example.com:8443/login/v2/flow/abc"}
         """)
-        await #expect(throws: TalkError.unexpectedResponse("login/v2 login URL is not on cloud.example.com")) {
+        await #expect(throws: TalkError.unexpectedResponse("login/v2 origin mismatch: the login URL is not on cloud.example.com")) {
             try await service(transport).beginLogin(server: try ServerAddress.parse("https://cloud.example.com"))
         }
     }
@@ -161,7 +161,7 @@ struct LoginFlowTests {
         let service = service(transport, store: store)
 
         let session = try await service.beginLogin(server: address)
-        await #expect(throws: TalkError.unexpectedResponse("login/v2 poll returned credentials for another server")) {
+        await #expect(throws: TalkError.unexpectedResponse("login/v2 origin mismatch: the poll response named another server")) {
             try await service.completeLogin(session)
         }
         #expect(try store.credentials(for: Account.identifier(server: address, loginName: "alice")) == nil)
@@ -177,6 +177,42 @@ struct LoginFlowTests {
         #expect(!AuthenticationService.isSameOrigin(URL(string: "http://cloud.example.com/nextcloud")!, as: server))
         // A hostless URL can't be pinned to an origin, so it matches nothing.
         #expect(!AuthenticationService.isSameOrigin(URL(string: "file:///etc/passwd")!, as: server))
+    }
+
+    @Test("A trailing dot is the same host, not a different one")
+    func absoluteFQDNIsTheSameOrigin() throws {
+        // `cloud.example.com.` is a legal absolute FQDN and a perfectly ordinary thing to
+        // paste. The server answers with the relative spelling, so before this the two
+        // compared unequal and the user was locked out of their own Nextcloud.
+        let typedAbsolute = try ServerAddress.parse("https://cloud.example.com.")
+        let relativeReply = try #require(URL(string: "https://cloud.example.com/login/v2/poll"))
+        #expect(AuthenticationService.isSameOrigin(relativeReply, as: typedAbsolute))
+
+        let typedRelative = try ServerAddress.parse("https://cloud.example.com")
+        let absoluteReply = try #require(URL(string: "https://cloud.example.com./login/v2/poll"))
+        #expect(AuthenticationService.isSameOrigin(absoluteReply, as: typedRelative))
+
+        // Normalising the dot must not start merging hosts that really are different, and
+        // the port is still part of the origin on both spellings.
+        let otherHost = try #require(URL(string: "https://evil.example./x"))
+        #expect(!AuthenticationService.isSameOrigin(otherHost, as: typedAbsolute))
+        let otherPort = try #require(URL(string: "https://cloud.example.com:8443/x"))
+        #expect(!AuthenticationService.isSameOrigin(otherPort, as: typedAbsolute))
+    }
+
+    @Test("The login screen can tell an origin refusal apart from any other failure")
+    func originRefusalIsRecognisable() {
+        // LoginView reads this to swap "The server sent something unexpected." for a
+        // sentence naming the address the user typed. It is the only automated cover that
+        // line has — nothing in Kvidr/ is reachable from this target.
+        #expect(AuthenticationService.isOriginMismatch(
+            .unexpectedResponse("login/v2 origin mismatch: the login URL is not on cloud.example.com")
+        ))
+        #expect(AuthenticationService.isOriginMismatch(
+            .unexpectedResponse("login/v2 origin mismatch: the poll response named another server")
+        ))
+        #expect(!AuthenticationService.isOriginMismatch(.unexpectedResponse("login/v2 returned an unusable URL")))
+        #expect(!AuthenticationService.isOriginMismatch(.insecureServer(host: "cloud.example.com")))
     }
 
     @Test("404 from the poll endpoint means 'not yet', not failure")
@@ -314,6 +350,7 @@ struct LoginFlowTests {
         let outcome = await service(transport, store: store).signOut(account: account)
 
         #expect(outcome.isClean)
+        #expect(!outcome.foundNothingStored)
         #expect(outcome.warning == nil)
         #expect(try store.credentials(for: account.id) == nil)
         let request = try #require(transport.lastRequest)
@@ -383,8 +420,8 @@ struct LoginFlowTests {
         #expect(outcome.warning != nil)
     }
 
-    @Test("Signing out an account with nothing stored has nothing to warn about")
-    func signOutWithNothingStoredIsClean() async throws {
+    @Test("Signing out with nothing stored doesn’t get to claim it revoked anything")
+    func signOutWithNothingStoredSaysSo() async throws {
         let transport = StubTransport(json: "{}")
         let account = Account(
             server: try ServerAddress.parse("https://cloud.example.com"),
@@ -394,9 +431,69 @@ struct LoginFlowTests {
 
         let outcome = await service(transport).signOut(account: account)
 
-        #expect(outcome.isClean)
-        #expect(outcome.warning == nil)
+        // Nothing to send the revocation with, so nothing was revoked. This used to report
+        // a clean sign-out, which is how an app password left behind by an upgrade — still
+        // listed as a device, still working — became invisible instead of merely stranded.
         #expect(transport.lastRequest == nil)
+        #expect(outcome.foundNothingStored)
+        #expect(!outcome.revokedOnServer)
+        #expect(!outcome.isClean)
+        #expect(outcome.warning != nil)
+    }
+
+    @Test("A login the app throws away takes its app password with it")
+    func discardRevokesAndDeletesTheCredential() async throws {
+        let transport = router([
+            "/ocs/v2.php/core/apppassword": { _, _ in .json(ocsEnvelope("[]")) }
+        ])
+        let store = InMemoryCredentialStore()
+        let account = Account(
+            server: try ServerAddress.parse("https://cloud.example.com"),
+            loginName: "alice",
+            userID: "alice"
+        )
+        let credentials = Credentials(loginName: "alice", appPassword: "secret")
+        try store.store(credentials, for: account.id)
+
+        await service(transport, store: store)
+            .discardLogin(AuthenticatedAccount(account: account, credentials: credentials))
+
+        // Deleting the keychain item alone would leave a working app password on the
+        // server with nothing in the app that will ever mention it again, so the revoke is
+        // the half that matters — and it is authenticated with the password being revoked.
+        let request = try #require(transport.lastRequest)
+        #expect(request.method == .delete)
+        #expect(request.url.path == "/ocs/v2.php/core/apppassword")
+        #expect(request.headers["Authorization"] == credentials.authorizationHeaderValue)
+        let remaining = try store.credentials(for: account.id)
+        #expect(remaining == nil)
+    }
+
+    @Test("Discarding a stale login leaves a newer credential for the same account alone")
+    func discardKeepsTheCredentialThatWon() async throws {
+        let transport = router([
+            "/ocs/v2.php/core/apppassword": { _, _ in .json(ocsEnvelope("[]")) }
+        ])
+        let store = InMemoryCredentialStore()
+        let account = Account(
+            server: try ServerAddress.parse("https://cloud.example.com"),
+            loginName: "alice",
+            userID: "alice"
+        )
+        let abandoned = Credentials(loginName: "alice", appPassword: "first-attempt")
+        let winner = Credentials(loginName: "alice", appPassword: "second-attempt")
+        try store.store(winner, for: account.id)
+
+        await service(transport, store: store)
+            .discardLogin(AuthenticatedAccount(account: account, credentials: abandoned))
+
+        // The abandoned password is revoked either way — it is live on the server. But the
+        // item under this account id belongs to the attempt that finished first, and
+        // deleting that would sign the user out of the account they just signed into.
+        let request = try #require(transport.lastRequest)
+        #expect(request.headers["Authorization"] == abandoned.authorizationHeaderValue)
+        let remaining = try store.credentials(for: account.id)
+        #expect(remaining == winner)
     }
 }
 
