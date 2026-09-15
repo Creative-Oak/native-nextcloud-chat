@@ -349,13 +349,20 @@ struct ConversationSyncEngineTests {
 
     @Test("Coming back to the app forces a full refresh, so removals are noticed")
     func activationForcesFullRefresh() async throws {
-        let transport = StubTransport(json: ocsEnvelope("[]", ))
+        let transport = StubTransport(json: ocsEnvelope("[]"))
         let client = OCSClient(
             server: try ServerAddress.parse("https://cloud.example.com"),
             credentials: Credentials(loginName: "alice", appPassword: "pw"),
             transport: transport
         )
-        let engine = ConversationSyncEngine(service: ConversationService(client: client), sleeper: { _ in })
+        // Parks instead of returning instantly, unlike the sleeper the other tests use. The
+        // loop then only moves between refreshes when something wakes it, which is what lets
+        // this test say *which* refresh the activation below is meant to affect: with an
+        // instant sleeper the next one is already under way about half the time.
+        let engine = ConversationSyncEngine(
+            service: ConversationService(client: client),
+            sleeper: { _ in try await Task.sleep(for: .seconds(3600)) }
+        )
         await engine.seed(modifiedSince: 1_757_000_000)
 
         let stream = await engine.start()
@@ -365,11 +372,54 @@ struct ConversationSyncEngineTests {
                 results.append(result)
                 if results.count == 1 { await engine.applicationDidBecomeActive() }
             }
-            if results.count >= 3 { await engine.stop(); break }
+            if results.count >= 2 { await engine.stop(); break }
         }
 
         #expect(results[0].isIncremental == false)   // first run
         #expect(results[1].isIncremental == false)   // forced by activation
+        // A seeded cursor and all: coming back asks for everything, or the removals that
+        // happened while we were away stay on screen.
+        #expect(transport.requests[1].url.query()?.contains("modifiedSince") == false)
+    }
+
+    @Test("An activation that lands mid-request still gets its own full refresh")
+    func activationDuringRequestIsNotLost() async throws {
+        let transport = StubTransport(
+            json: ocsEnvelope("[]"),
+            headers: ["X-Nextcloud-Talk-Modified-Before": "1757700123"]
+        )
+        // Wide enough that `spin` below reliably catches the request while it is in flight.
+        transport.latency = .milliseconds(200)
+        let client = OCSClient(
+            server: try ServerAddress.parse("https://cloud.example.com"),
+            credentials: Credentials(loginName: "alice", appPassword: "pw"),
+            transport: transport
+        )
+        let engine = ConversationSyncEngine(
+            service: ConversationService(client: client),
+            sleeper: { _ in try await Task.sleep(for: .seconds(3600)) }
+        )
+
+        let stream = await engine.start()
+        let consumer = Task { for await _ in stream {} }
+
+        // 1: the first run, always full. The loop then parks.
+        await spin { transport.requestCount >= 1 }
+        // 2: an ordinary incremental refresh, which we interrupt half way through.
+        await engine.refreshNow()
+        await spin { transport.requestCount >= 2 }
+        await engine.applicationDidBecomeActive()
+
+        // 3: the refresh the activation asked for. Cancelling the sleep is no use here —
+        // the loop was not asleep — so without the note it leaves, the user waits out the
+        // whole interval for the removals they came back to see.
+        await spin { transport.requestCount == 3 }
+        await engine.stop()
+        _ = await consumer.value
+
+        #expect(transport.requests[1].url.query()?.contains("modifiedSince=1757700123") == true)
+        let afterActivation = try #require(transport.requests.dropFirst(2).first)
+        #expect(afterActivation.url.query()?.contains("modifiedSince") == false)
     }
 
     @Test("A 401 stops the loop and reports it once")

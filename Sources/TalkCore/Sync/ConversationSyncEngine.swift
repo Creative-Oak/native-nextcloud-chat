@@ -32,7 +32,16 @@ actor ConversationSyncEngine {
     private var modifiedSince: Int?
     private var lastFullRefresh: Date?
     private var isApplicationActive = true
-    private var forceFullRefresh = false
+
+    /// Counts the "we may have missed things" signals. A refresh records the count it set
+    /// out with, so a signal that arrives while it is in flight is not credited to a
+    /// response that predates it — it still gets a full refresh of its own.
+    private var fullRefreshDemand = 0
+    private var servedFullRefreshDemand = 0
+
+    /// A "go now" that arrived while the loop was working rather than sleeping, kept until
+    /// the loop reaches its next sleep and skips it.
+    private var wakeRequested = false
 
     init(
         service: ConversationService,
@@ -58,22 +67,23 @@ actor ConversationSyncEngine {
         task?.cancel()
         sleepTask?.cancel()
         task = nil
+        wakeRequested = false
         continuation?.finish()
         continuation = nil
     }
 
     /// ⌘R, or anything else that should refresh right now.
     func refreshNow(full: Bool = false) {
-        if full { forceFullRefresh = true }
-        sleepTask?.cancel()
+        if full { fullRefreshDemand += 1 }
+        wake()
     }
 
     /// Window activation, wake from sleep, network recovery: all of them mean "we may have
     /// missed things", so the next refresh is a full one.
     func applicationDidBecomeActive() {
         isApplicationActive = true
-        forceFullRefresh = true
-        sleepTask?.cancel()
+        fullRefreshDemand += 1
+        wake()
     }
 
     func applicationDidResignActive() {
@@ -83,6 +93,15 @@ actor ConversationSyncEngine {
     /// Seeds the cursor from persisted state so a relaunch doesn't refetch everything.
     func seed(modifiedSince: Int?) {
         self.modifiedSince = modifiedSince
+    }
+
+    /// Cuts the current sleep short — and leaves a note in case the loop is not asleep yet.
+    /// Cancelling `sleepTask` lands on nothing when the signal arrives mid-request, and the
+    /// loop would then sleep out the whole interval before acting on it: ⌘R, or coming back
+    /// to the app, appearing to do nothing for thirty seconds.
+    private func wake() {
+        wakeRequested = true
+        sleepTask?.cancel()
     }
 
     // MARK: - The loop
@@ -96,6 +115,8 @@ actor ConversationSyncEngine {
 
         while !Task.isCancelled {
             let wantsFull = shouldFullRefresh()
+            // Read here, before the request suspends us, for the same reason `wantsFull` is.
+            let servingDemand = fullRefreshDemand
             do {
                 let result = try await service.conversations(modifiedSince: wantsFull ? nil : modifiedSince)
 
@@ -111,7 +132,7 @@ actor ConversationSyncEngine {
 
                 if wantsFull {
                     lastFullRefresh = now()
-                    forceFullRefresh = false
+                    servedFullRefreshDemand = servingDemand
                 }
 
                 if attempt > 0 { continuation.yield(.offline(false)) }
@@ -144,18 +165,24 @@ actor ConversationSyncEngine {
     }
 
     private func shouldFullRefresh() -> Bool {
-        if forceFullRefresh { return true }
+        if fullRefreshDemand > servedFullRefreshDemand { return true }
         guard let lastFullRefresh else { return true }   // first run
         return now().timeIntervalSince(lastFullRefresh) >= fullRefreshInterval
     }
 
-    /// Interruptible sleep: `refreshNow()` cancels it so ⌘R is instant.
+    /// Interruptible sleep: `wake()` cancels it so ⌘R is instant, and it is skipped outright
+    /// when the signal got here first.
     private func sleep(_ seconds: TimeInterval) async {
+        if wakeRequested {
+            wakeRequested = false
+            return
+        }
         guard seconds > 0 else { return }
         let sleeper = self.sleeper
         let task = Task<Void, Never> { _ = try? await sleeper(seconds) }
         sleepTask = task
         await task.value
         sleepTask = nil
+        wakeRequested = false
     }
 }
