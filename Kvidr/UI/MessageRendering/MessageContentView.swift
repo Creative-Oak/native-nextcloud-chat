@@ -141,7 +141,10 @@ enum MessageAttributedString {
             guard let parsed = try? AttributedString(markdown: cleaned, options: options) else {
                 return AttributedString(cleaned)
             }
-            return withoutRefusedLinks(parsed)
+            // Foundation attaches a `.link` to any destination it can build a `URL` from,
+            // including the ones this app will not open. The strip is in the core, where a
+            // test can reach it — see ``AttributedString/withoutRefusedLinks``.
+            return parsed.withoutRefusedLinks
 
         case .mention(let mention):
             var text = AttributedString(mention.displayLabel)
@@ -189,33 +192,6 @@ enum MessageAttributedString {
             if let link = object.link, link.isWebLink { text.link = link }
             return text
         }
-    }
-
-    /// The same string, minus every link the Markdown parser attached to a destination
-    /// this app would refuse to open.
-    ///
-    /// Foundation's parser makes a `.link` run out of anything it can build a `URL` from,
-    /// `smb:` and `file:` and `shortcuts:` included, and it does that at render time —
-    /// after everything the parser in the core decided. Sanitising the nodes upstream
-    /// would not reach it. So the rule `linkify` applies to plain text is applied here, to
-    /// what the Markdown parser found: a destination that is not a web link is not a link.
-    private static func withoutRefusedLinks(_ parsed: AttributedString) -> AttributedString {
-        guard parsed.runs.contains(where: { isRefused($0.link) }) else { return parsed }
-
-        // Rebuilt rather than edited in place: mutating an `AttributedString` while
-        // walking its own runs is the kind of thing that works until it doesn't.
-        var cleaned = AttributedString()
-        for run in parsed.runs {
-            var piece = AttributedString(parsed[run.range])
-            if isRefused(piece.link) { piece.link = nil }
-            cleaned.append(piece)
-        }
-        return cleaned
-    }
-
-    private static func isRefused(_ url: URL?) -> Bool {
-        guard let url else { return false }
-        return !url.isWebLink
     }
 }
 

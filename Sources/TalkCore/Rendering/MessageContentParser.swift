@@ -255,13 +255,20 @@ struct MessageContentParser: Sendable {
 
     /// Every bare `http(s)://` URL in a piece of text, Markdown or not, in the order they
     /// appear. Sentence punctuation and a closing Markdown bracket after one are not part
-    /// of it.
+    /// of it, and neither is anything inside a code span.
     ///
     /// One loop, so the URL a preview card is fetched for and the URL the menu offers to
     /// copy are found the same way and can never disagree about where a message points.
     static func webLinks(in text: String, limit: Int = MessageContentParser.maximumLinksListed) -> [URL] {
         var found: [URL] = []
-        var remainder = Substring(text)
+        for span in outsideCodeSpans(text) where found.count < limit {
+            collectWebLinks(in: span, into: &found, limit: limit)
+        }
+        return found
+    }
+
+    private static func collectWebLinks(in text: Substring, into found: inout [URL], limit: Int) {
+        var remainder = text
 
         while found.count < limit, let range = remainder.range(of: "http", options: .caseInsensitive) {
             let candidate = remainder[range.lowerBound...]
@@ -278,7 +285,73 @@ struct MessageContentParser: Sendable {
             if let url = URL(string: String(urlText)), url.isWebLink { found.append(url) }
             remainder = remainder[urlText.endIndex...]
         }
-        return found
+    }
+
+    /// The pieces of `text` that are not inside an inline code span, in order.
+    ///
+    /// A URL someone wrote in backticks is a URL they chose to show rather than to offer:
+    /// it renders monospaced and unclickable. It must not be fetched either — a preview
+    /// card would reach out to that address from the reader's machine the moment the
+    /// message scrolled into view, which is the one thing quoting it as text was meant to
+    /// avoid. Fenced blocks never reach here, ``splitBlocks(_:allowMarkdown:)`` having
+    /// already made them their own ``MessageBlock/code``; this is the inline case.
+    ///
+    /// CommonMark's rule and no more of it: a run of *n* backticks opens a span that the
+    /// next run of exactly *n* closes. A run with no partner is ordinary text, so the scan
+    /// steps over it rather than swallowing the rest of the message — which also keeps a
+    /// lone backtick from hiding a link. Every branch of both loops moves an index
+    /// strictly forward, so a message cannot be written that makes this one spin.
+    static func outsideCodeSpans(_ text: String) -> [Substring] {
+        guard text.contains(where: { $0 == "`" }) else { return [text[...]] }
+
+        var spans: [Substring] = []
+        var plainStart = text.startIndex
+        var index = text.startIndex
+
+        while index < text.endIndex {
+            guard text[index] == "`" else {
+                index = text.index(after: index)
+                continue
+            }
+            let openingEnd = endOfBacktickRun(in: text, from: index)
+            let length = text.distance(from: index, to: openingEnd)
+
+            guard let closingEnd = endOfClosingRun(in: text, from: openingEnd, length: length) else {
+                // Nothing closes it, so the backticks are just characters. Carry on past
+                // them; the text they opened stays in the span being built.
+                index = openingEnd
+                continue
+            }
+            spans.append(text[plainStart..<index])
+            plainStart = closingEnd
+            index = closingEnd
+        }
+        spans.append(text[plainStart...])
+        return spans
+    }
+
+    /// One past the last backtick of the run starting at `start`, which must be a backtick.
+    private static func endOfBacktickRun(in text: String, from start: String.Index) -> String.Index {
+        var end = start
+        while end < text.endIndex, text[end] == "`" { end = text.index(after: end) }
+        return end
+    }
+
+    /// One past the end of the first backtick run of exactly `length` at or after `start`.
+    private static func endOfClosingRun(in text: String, from start: String.Index, length: Int) -> String.Index? {
+        var index = start
+        while index < text.endIndex {
+            guard text[index] == "`" else {
+                index = text.index(after: index)
+                continue
+            }
+            let end = endOfBacktickRun(in: text, from: index)
+            if text.distance(from: index, to: end) == length { return end }
+            // A longer or shorter run cannot close this one, and cannot open a nested span
+            // either — resume after it rather than inside it.
+            index = end
+        }
+        return nil
     }
 
     /// Finds bare `http(s)://` URLs in plain text so they become real links.

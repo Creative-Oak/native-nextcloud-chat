@@ -173,7 +173,13 @@ actor AttachmentService {
 
         for attempt in 0..<Self.maximumNameAttempts {
             let candidate = Self.name(fileName, attempt: attempt)
-            let path = "\(folder)/\(candidate)"
+            // One string, written once and then shared under that same name. The PUT below
+            // goes to exactly this path and exactly this path is what comes back for
+            // `share(path:)`. They used to be allowed to differ — the URL got the safe
+            // spelling of the name and the caller got the raw one — so `Invoice #42.pdf`
+            // went up as `Invoice _42.pdf`, the share asked for a file the server had never
+            // written, and the send failed with the upload left behind in the user's Files.
+            let path = Endpoint.filePath("\(folder)/\(candidate)")
 
             var headers: HTTPHeaders = [
                 "Content-Type": "application/octet-stream",

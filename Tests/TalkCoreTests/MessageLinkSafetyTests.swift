@@ -213,6 +213,69 @@ struct MessageLinkSafetyTests {
         #expect(content.firstWebLink == URL(string: "https://a.example/1"))
     }
 
+    // MARK: - Code spans
+
+    /// A URL written in backticks is a URL somebody chose to show rather than to offer. It
+    /// renders monospaced and unclickable — and it must not be fetched either, or the
+    /// preview card reaches out to that address from the reader's machine as soon as the
+    /// message scrolls into view, which is the one thing quoting it as text was for.
+    @Test("A URL inside an inline code span is neither offered nor fetched")
+    func inlineCodeIsNotALink() {
+        let content = parser.parse(
+            text: "run `curl https://tracker.evil.tld/beacon` when you get a chance",
+            parameters: [:],
+            isMarkdown: true
+        )
+        #expect(content.firstWebLink == nil)
+        #expect(content.webLinks.isEmpty)
+    }
+
+    @Test("A link beside a code span is still found")
+    func linksBesideCodeSpansSurvive() {
+        let content = parser.parse(
+            text: "see https://a.example/1 — `https://tracker.evil.tld/b` — and https://b.example/2",
+            parameters: [:],
+            isMarkdown: true
+        )
+        #expect(content.webLinks.map(\.absoluteString) == ["https://a.example/1", "https://b.example/2"])
+        #expect(content.firstWebLink == URL(string: "https://a.example/1"))
+    }
+
+    @Test("A code span opened with two backticks can hold one, and still hides its URL")
+    func longerCodeFence() {
+        let content = parser.parse(
+            text: "``a ` https://tracker.evil.tld/b``",
+            parameters: [:],
+            isMarkdown: true
+        )
+        #expect(content.firstWebLink == nil)
+    }
+
+    /// The failure mode to avoid is the opposite one: a stray backtick swallowing the rest
+    /// of the message. Nothing closes it, so it is an ordinary character.
+    @Test("An unmatched backtick hides nothing")
+    func unmatchedBacktickHidesNothing() {
+        let content = parser.parse(text: "almost ` https://a.example/1", parameters: [:], isMarkdown: true)
+        #expect(content.firstWebLink == URL(string: "https://a.example/1"))
+
+        let between = parser.parse(
+            text: "`` one ` two https://a.example/1",
+            parameters: [:],
+            isMarkdown: true
+        )
+        #expect(between.firstWebLink == URL(string: "https://a.example/1"))
+    }
+
+    @Test("A fenced block was already excluded, and still is")
+    func fencedBlocksStayExcluded() {
+        let content = parser.parse(
+            text: "look:\n```\ncurl https://tracker.evil.tld/beacon\n```\ndone",
+            parameters: [:],
+            isMarkdown: true
+        )
+        #expect(content.firstWebLink == nil)
+    }
+
     // MARK: - Previews
 
     @Test("A preview is never fetched for an address only the reader can reach")

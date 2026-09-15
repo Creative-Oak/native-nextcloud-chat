@@ -54,17 +54,30 @@ enum Endpoint {
     // Files sharing (not Talk — the Files app's share API, used for attachments)
     static let shares = "\(ocs)/apps/files_sharing/api/v1/shares"
 
+    /// A path inside the user's own storage, every segment of it made safe.
+    ///
+    /// The one spelling of a file this app uses. An attachment is written over WebDAV and
+    /// then shared by name through a different API, and the two have to name the same
+    /// file: **the path used to write and the path used to share are the same string**.
+    /// That holds because ``AttachmentService`` asks here once and keeps the answer, and
+    /// because a second pass changes nothing — a path that has been through `filePath` is
+    /// already a sequence of single, safe segments, so ``webDAV(userID:path:)`` can be
+    /// handed one without mangling it a second time.
+    static func filePath(_ path: String) -> String {
+        let parts = path
+            .split(separator: "/", omittingEmptySubsequences: true)
+            .map { segment(String($0)) }
+            .joined(separator: "/")
+        return "/" + parts
+    }
+
     /// WebDAV path for a file in the user's own storage.
     ///
     /// The file name goes in decoded, like every other path here. It used to be
     /// percent-encoded first and then encoded again by `URLComponents`, which is why a
     /// space became `%2520` and `café.pdf` became `caf%25C3%25A9.pdf`.
     static func webDAV(userID: String, path: String) -> String {
-        let parts = path
-            .split(separator: "/", omittingEmptySubsequences: true)
-            .map { segment(String($0)) }
-            .joined(separator: "/")
-        return "/remote.php/dav/files/\(segment(userID))/\(parts)"
+        "/remote.php/dav/files/\(segment(userID))\(filePath(path))"
     }
 
     // Attendees
@@ -84,19 +97,24 @@ enum Endpoint {
     /// One path segment, still decoded.
     ///
     /// ``ServerAddress/url(path:query:)`` percent-encodes on the way out, so a space, an
-    /// accent, a `%` or a `&` in a token or a file name is already harmless by the time it
-    /// reaches the wire. What encoding cannot undo is *structure*: a `/` would add a
-    /// segment and re-point the call, and a `.` or `..` segment would walk up the path — so
-    /// a token of `../../index.php` must not be allowed to turn an authenticated POST into
-    /// a POST somewhere else. Those characters are flattened to `_`, which yields a
-    /// conversation that does not exist rather than a different endpoint.
+    /// accent, a `%`, a `&`, a `?` or a `#` in a token or a file name is already harmless
+    /// by the time it reaches the wire. What encoding cannot undo is *structure*: a `/`
+    /// would add a segment and re-point the call, and a `.` or `..` segment would walk up
+    /// the path — so a token of `../../index.php` must not be allowed to turn an
+    /// authenticated POST into a POST somewhere else. Those characters are flattened to
+    /// `_`, which yields a conversation that does not exist rather than a different
+    /// endpoint.
     ///
-    /// `?` and `#` are flattened for the same reason, one step earlier than they need to
-    /// be: they are only safe because `URLComponents` escapes them, and the point of doing
-    /// it here is not to have to trust that.
+    /// Only the structural ones. `?` and `#` used to be flattened here as well, on the
+    /// grounds that not having to trust `URLComponents` cost nothing. It cost `Invoice
+    /// #42.pdf`: the name was flattened on the way into the URL and not on the way back
+    /// out, so the file went up as `Invoice _42.pdf` and the share that followed asked the
+    /// server for a file it had never written. Neither character can start a query or a
+    /// fragment from inside a path once escaped — `URLComponents` escapes both, and
+    /// ``EndpointPathTests`` pins that rather than leaving it to be discovered.
     static func segment(_ raw: String) -> String {
         let flattened = String(raw.map { character -> Character in
-            if character == "/" || character == "\\" || character == "?" || character == "#" { return "_" }
+            if character == "/" || character == "\\" { return "_" }
             if let ascii = character.asciiValue, ascii < 0x20 || ascii == 0x7F { return "_" }
             return character
         })

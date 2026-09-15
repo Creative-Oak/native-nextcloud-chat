@@ -67,6 +67,55 @@ struct EndpointPathTests {
         #expect(url.path.hasSuffix("/..") == false)
     }
 
+    /// `?` and `#` used to be flattened to `_` by ``Endpoint/segment(_:)`` so that nothing
+    /// here had to depend on `URLComponents`. That cost more than it saved — it renamed the
+    /// user's file between the upload and the share — so the dependency is real now, and
+    /// pinned here rather than assumed.
+    @Test("A question mark or a hash is escaped into the path, not left to start a query")
+    func escapesQueryAndFragmentDelimiters() throws {
+        let url = try server().url(path: Endpoint.chat("tok?setReadMarker=1#now"))
+        #expect(url.query == nil)
+        #expect(url.fragment == nil)
+        #expect(url.absoluteString.contains("%3F"))
+        #expect(url.absoluteString.contains("%23"))
+        // Still exactly one segment for the token, and it still says what it said.
+        #expect(url.path == "/ocs/v2.php/apps/spreed/api/v1/chat/tok?setReadMarker=1#now")
+        #expect(url.path.split(separator: "/", omittingEmptySubsequences: true).count == 8)
+    }
+
+    /// The invariant an attachment rests on: **the path used to write the file and the path
+    /// used to share it are the same string**. They were not. `Invoice #42.pdf` was
+    /// flattened on its way into the WebDAV URL and handed back raw, so the PUT created
+    /// `Invoice _42.pdf` and the share that followed asked the server for a file it had
+    /// never written — a failed send and a stray upload.
+    @Test("An ordinary punctuation mark in a file name survives into both paths")
+    func fileNamesKeepTheirPunctuation() throws {
+        let path = Endpoint.filePath("/Talk/Invoice #42 (draft?).pdf")
+        #expect(path == "/Talk/Invoice #42 (draft?).pdf")
+        // `upload` returns this string and also builds the WebDAV URL from it, so running
+        // it through a second time has to be a no-op.
+        #expect(Endpoint.filePath(path) == path)
+
+        let url = try server().url(path: Endpoint.webDAV(userID: "alice", path: path))
+        #expect(url.query == nil)
+        #expect(url.fragment == nil)
+        #expect(url.path == "/remote.php/dav/files/alice/Talk/Invoice #42 (draft?).pdf")
+        #expect(url.absoluteString.contains("%23"))
+        #expect(url.absoluteString.contains("%3F"))
+    }
+
+    @Test("A file name still cannot add a segment or climb out of its folder")
+    func fileNamesStayInOneSegment() throws {
+        #expect(Endpoint.filePath("/Talk/../../etc/passwd") == "/Talk/_/_/etc/passwd")
+        #expect(Endpoint.filePath("/Talk/a/b.pdf") == "/Talk/a/b.pdf")
+        #expect(Endpoint.filePath("/Talk/back\\slash.pdf") == "/Talk/back_slash.pdf")
+        #expect(Endpoint.filePath("/Talk/nul\u{0}del\u{7F}.pdf") == "/Talk/nul_del_.pdf")
+        #expect(Endpoint.filePath("") == "/")
+
+        let url = try server().url(path: Endpoint.webDAV(userID: "alice", path: "/Talk/../../etc/passwd"))
+        #expect(url.path == "/remote.php/dav/files/alice/Talk/_/_/etc/passwd")
+    }
+
     @Test("The same holds for the paths a message id or a provider id lands in")
     func otherInterpolatedValues() throws {
         let reaction = try server().url(path: Endpoint.reaction("../../room", 7))
