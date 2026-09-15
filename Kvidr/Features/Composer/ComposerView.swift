@@ -15,6 +15,14 @@ struct ComposerView: View {
         VStack(spacing: 0) {
             AttachmentTray(queue: model.attachments)
 
+            if !model.attachments.pendingPastedFiles.isEmpty {
+                PastedFilesBar(
+                    files: model.attachments.pendingPastedFiles,
+                    onAttach: { model.attachments.confirmPastedFiles() },
+                    onCancel: { model.attachments.discardPastedFiles() }
+                )
+            }
+
             if let replyingTo = model.replyingTo {
                 ComposerContextBar(
                     symbol: "arrowshape.turn.up.left",
@@ -103,7 +111,9 @@ struct ComposerView: View {
                 },
                 onPasteFiles: { urls in
                     guard model.attachments.canAttach else { return }
-                    model.attachments.enqueue(urls: urls)
+                    // Held rather than attached: a paste is the one way a file reaches the
+                    // composer without anyone having pointed at it.
+                    model.attachments.enqueue(pastedFiles: urls)
                 }
             )
             .frame(height: height)
@@ -196,6 +206,67 @@ struct ComposerView: View {
         } else if model.replyingTo != nil {
             model.cancelReply()
         }
+    }
+}
+
+/// The strip that asks before a pasted file is attached.
+///
+/// The one attachment the app does not take on trust. Everything else was dragged, picked or
+/// photographed; a `public.file-url` on the general pasteboard was put there by *something*,
+/// which is not the same as by the person now pressing `⌘V` in a chat window. Naming the file
+/// and waiting is the whole of the fix: the bytes are not read, so nothing has left the Mac
+/// while this is on screen.
+private struct PastedFilesBar: View {
+    let files: [URL]
+    var onAttach: () -> Void
+    var onCancel: () -> Void
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "doc.on.clipboard")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            VStack(alignment: .leading, spacing: 0) {
+                Text(title)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text(detail)
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+
+            Spacer()
+
+            Button("Attach", action: onAttach)
+                .buttonStyle(.link)
+                .font(.caption)
+
+            Button(action: onCancel) {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundStyle(.tertiary)
+            }
+            .buttonStyle(.plain)
+            .help("Don’t attach")
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .glass(.panel, cornerRadius: 12)
+        .padding(.horizontal, 12)
+        .padding(.top, 6)
+    }
+
+    private var title: String {
+        files.count == 1 ? "Attach this pasted file?" : "Attach these \(files.count) pasted files?"
+    }
+
+    /// The names, so what is about to be uploaded is readable *before* it is uploaded —
+    /// and readable in the direction it is written, since whoever planted the file also
+    /// chose its name and `id_rsa\u{202E}gnp.` reads as a picture.
+    private var detail: String {
+        files.map { $0.lastPathComponent.withoutInvisibleMarks }.joined(separator: ", ")
     }
 }
 

@@ -12,6 +12,9 @@ import Observation
 /// Uploads run one at a time rather than all at once: a dozen parallel PUTs to the same
 /// Nextcloud is a good way to get rate-limited, and a queue also makes the progress
 /// readable.
+///
+/// One thing does not start straight away: a file named by the pasteboard, which waits to be
+/// acknowledged before it becomes a transfer at all — see ``enqueue(pastedFiles:)``.
 @MainActor
 @Observable
 final class AttachmentQueue {
