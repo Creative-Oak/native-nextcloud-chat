@@ -32,19 +32,34 @@ struct ComposerTextView: NSViewRepresentable {
     var onEditPrevious: () -> Void
     var onMoveSuggestion: (Int) -> Void
     var onAcceptSuggestion: () -> Void
+    /// A screenshot, or an image copied from a browser.
+    var onPasteImage: (NSImage) -> Void
+    /// Files copied in Finder.
+    var onPasteFiles: ([URL]) -> Void
 
     /// One line, and the ceiling before it starts scrolling instead of growing.
     static let minimumHeight: CGFloat = 22
     static let maximumHeight: CGFloat = 140
 
     func makeNSView(context: Context) -> NSScrollView {
-        let scrollView = NSTextView.scrollableTextView()
+        // Built by hand rather than `NSTextView.scrollableTextView()`, which makes a stock
+        // `NSTextView`: pasting a picture into a chat has to attach it, and the only hook
+        // for that is the text view's own.
+        let scrollView = NSScrollView()
         scrollView.drawsBackground = false
         scrollView.hasVerticalScroller = false
         scrollView.autohidesScrollers = true
         scrollView.verticalScrollElasticity = .none
 
-        guard let textView = scrollView.documentView as? NSTextView else { return scrollView }
+        let textView = ComposerNSTextView(frame: .zero)
+        textView.minSize = NSSize(width: 0, height: 0)
+        textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+        textView.isVerticallyResizable = true
+        textView.isHorizontallyResizable = false
+        textView.autoresizingMask = [.width]
+        textView.textContainer?.containerSize = NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude)
+        scrollView.documentView = textView
+
         textView.delegate = context.coordinator
         textView.drawsBackground = false
         textView.isRichText = false
@@ -67,6 +82,8 @@ struct ComposerTextView: NSViewRepresentable {
 
         let coordinator = context.coordinator
         coordinator.textView = textView
+        textView.onPasteImage = { [weak coordinator] image in coordinator?.parent.onPasteImage(image) }
+        textView.onPasteFiles = { [weak coordinator] urls in coordinator?.parent.onPasteFiles(urls) }
         Task { @MainActor in coordinator.updateHeight() }
         return scrollView
     }
@@ -203,5 +220,44 @@ struct ComposerTextView: NSViewRepresentable {
             }
             textView.enclosingScrollView?.hasVerticalScroller = used > ComposerTextView.maximumHeight
         }
+    }
+}
+
+/// The composer's text view, which knows that a pasted picture is an attachment.
+///
+/// `readSelection(from:type:)` rather than overriding `paste(_:)`: it is the documented
+/// place to take a flavour off the pasteboard that the text system would otherwise ignore,
+/// and it covers dropping onto the field as well as pasting into it.
+private final class ComposerNSTextView: NSTextView {
+    var onPasteImage: ((NSImage) -> Void)?
+    var onPasteFiles: (([URL]) -> Void)?
+
+    /// Ours first, because the text system takes the first flavour it recognises. A
+    /// screenshot's pasteboard carries nothing else, but an image copied from a browser
+    /// also carries its URL as a string — and pasting that as text, when Messages would
+    /// have attached the picture, is the wrong end of the choice.
+    override var readablePasteboardTypes: [NSPasteboard.PasteboardType] {
+        [.fileURL, .png, .tiff] + super.readablePasteboardTypes
+    }
+
+    override func readSelection(from pboard: NSPasteboard, type: NSPasteboard.PasteboardType) -> Bool {
+        switch type {
+        case .fileURL:
+            let urls = (pboard.readObjects(forClasses: [NSURL.self]) as? [URL]) ?? []
+            if !urls.isEmpty {
+                onPasteFiles?(urls)
+                return true
+            }
+        case .png, .tiff:
+            if let image = NSImage(pasteboard: pboard) {
+                onPasteImage?(image)
+                return true
+            }
+        default:
+            break
+        }
+        // Not something we can attach after all — let the text system have it, rather than
+        // swallowing the paste and leaving the field empty.
+        return super.readSelection(from: pboard, type: type)
     }
 }

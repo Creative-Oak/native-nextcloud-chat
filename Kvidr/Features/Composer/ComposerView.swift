@@ -157,7 +157,15 @@ struct ComposerView: View {
                 onCancel: { cancelContext() },
                 onEditPrevious: { model.beginEditingLatestOwnMessage() },
                 onMoveSuggestion: { model.moveMentionHighlight(by: $0) },
-                onAcceptSuggestion: { model.acceptHighlightedMention() }
+                onAcceptSuggestion: { model.acceptHighlightedMention() },
+                onPasteImage: { image in
+                    guard model.attachments.canAttach else { return }
+                    model.attachments.enqueuePastedImage(image)
+                },
+                onPasteFiles: { urls in
+                    guard model.attachments.canAttach else { return }
+                    model.attachments.enqueue(urls: urls)
+                }
             )
             .frame(height: height)
             .overlay(alignment: .topLeading) {
