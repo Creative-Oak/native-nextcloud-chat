@@ -52,7 +52,10 @@ struct ComposerView: View {
                     Button("Photos…", systemImage: "photo") { isShowingPhotos = true }
                     Button("Files…", systemImage: "folder") { chooseFiles() }
                         .keyboardShortcut("a", modifiers: [.command, .shift])
-                    if model.capabilities.supportsPolls {
+                    // Not just the capability: Talk refuses a poll in anything that is not a
+                    // group or public conversation, so in a direct message the item would be
+                    // there only to be rejected.
+                    if model.capabilities.supportsPolls, model.conversation.type.allowsPolls {
                         Divider()
                         Button("Poll…", systemImage: "chart.bar.doc.horizontal") { isShowingNewPoll = true }
                     }

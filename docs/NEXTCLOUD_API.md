@@ -608,6 +608,17 @@ the trap below.
 There are also `/poll/{token}/drafts`, `/poll/{token}/draft/{pollId}` and
 `/poll/{token}/{pollId}/export/{format}`, which this project does not use.
 
+**Where a poll may exist.** `PollController::createPoll` answers 400 `room` for any
+conversation that is not a **group** (type 2) or **public** (type 3). A one-to-one, a note
+to self and the changelog cannot hold a poll, capability or no capability — so the UI has to
+ask the conversation's type as well as the capability, or it offers something the server
+will always refuse.
+
+**Refusals name the rule.** A 400 from any of these carries `ocs.data.error`, one of
+`room`, `question`, `options`, `draft`, `poll` — not in `meta.message`, where a client
+naturally looks. Limits behind them: a question is 1–32,000 bytes, and there must be at
+least two non-empty options whose JSON is under 60,000 bytes.
+
 **Constants.** `resultMode` 0 = *public*, results and who voted for what visible
 immediately; 1 = *hidden*, only vote counts, and only once the poll is closed. `status`
 0 = open, 1 = closed (2 exists for drafts). `maxVotes` is how many options one participant

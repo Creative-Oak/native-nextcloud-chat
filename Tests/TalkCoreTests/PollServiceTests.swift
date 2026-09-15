@@ -152,6 +152,42 @@ struct PollServiceTests {
         }
     }
 
+    @Test("A refusal says which rule it broke, not just that there was one")
+    func refusalsAreExplained() async throws {
+        // Talk answers 400 with `ocs.data.error`, a single word. That body cannot decode as
+        // a poll, which is exactly where the reason used to get thrown away.
+        let body = #"{"ocs":{"meta":{"status":"failure","statuscode":400,"message":""},"data":{"error":"room"}}}"#
+        let transport = StubTransport(json: body, status: 400)
+        let service = PollService(client: try client(transport))
+
+        await #expect(throws: TalkError.self) {
+            _ = try await service.create(
+                token: "tok", question: "Lunch?", options: ["Pizza", "Sushi"],
+                resultMode: .visible, maxVotes: 1
+            )
+        }
+
+        do {
+            _ = try await service.create(
+                token: "tok", question: "Lunch?", options: ["Pizza", "Sushi"],
+                resultMode: .visible, maxVotes: 1
+            )
+            Issue.record("expected a refusal")
+        } catch {
+            // Not the word "room", which is what the server actually said.
+            #expect(error.userMessage.contains("group and public conversations"))
+        }
+    }
+
+    @Test("Polls belong to group and public conversations only", arguments: [
+        (ConversationType.oneToOne, false), (.group, true), (.publicRoom, true)
+    ])
+    func whereAPollMayLive(_ input: (ConversationType, Bool)) {
+        // `PollController::createPoll` refuses anything else outright, so the + menu asks
+        // this before it offers the item rather than letting the server say no.
+        #expect(input.0.allowsPolls == input.1)
+    }
+
     @Test("A status the client doesn't know closes the poll rather than offering a vote")
     func unknownStatusIsClosed() async throws {
         let transport = StubTransport(json: ocsEnvelope(pollJSON(status: 99)))

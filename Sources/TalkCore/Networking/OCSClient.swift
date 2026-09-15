@@ -81,6 +81,13 @@ actor OCSClient {
         do {
             envelope = try JSONDecoder().decode(OCSEnvelope<T>.self, from: response.body)
         } catch {
+            // Talk says *why* it refused in `ocs.data.error` — "room", "options" — and that
+            // body cannot decode into `T`, so the envelope decode above is exactly where the
+            // reason gets lost. Recover it first, or every rejection reads "the server
+            // rejected the request" when the server said precisely what was wrong.
+            if !(200...299).contains(response.status), let reason = Self.failureReason(from: response.body) {
+                throw TalkError.from(status: response.status, ocsMessage: reason, headers: response.headers)
+            }
             // A non-envelope body on a failing status is far more likely to be an HTML
             // error page than a schema problem — report the status, not the decode.
             try check(status: response.status, headers: response.headers, body: response.body)
@@ -165,6 +172,23 @@ actor OCSClient {
     }
 
     /// Best-effort extraction of `ocs.meta.message` from an error body.
+    /// `ocs.data.error`, the machine-readable reason Talk attaches to a refusal.
+    static func failureReason(from body: Data) -> String? {
+        struct ErrorOnly: Decodable {
+            let error: String
+            init(from decoder: any Decoder) throws {
+                enum RootKey: String, CodingKey { case ocs }
+                enum InnerKey: String, CodingKey { case data }
+                enum DataKey: String, CodingKey { case error }
+                let root = try decoder.container(keyedBy: RootKey.self)
+                let inner = try root.nestedContainer(keyedBy: InnerKey.self, forKey: .ocs)
+                let data = try inner.nestedContainer(keyedBy: DataKey.self, forKey: .data)
+                error = try data.decode(String.self, forKey: .error)
+            }
+        }
+        return (try? JSONDecoder().decode(ErrorOnly.self, from: body))?.error
+    }
+
     private static func ocsMessage(from body: Data) -> String? {
         struct MessageOnly: Decodable {
             let message: String?

@@ -59,6 +59,20 @@ struct PollVote: Sendable, Equatable, Identifiable {
     var optionID: Int
 }
 
+extension ConversationType {
+    /// Whether Talk will accept a poll here.
+    ///
+    /// `PollController::createPoll` answers 400 `room` for anything that is not a group or a
+    /// public conversation — so a one-to-one, a note to self or the changelog cannot hold
+    /// one, capability or no capability.
+    var allowsPolls: Bool {
+        switch self {
+        case .group, .publicRoom: true
+        default: false
+        }
+    }
+}
+
 /// Talk's polls. Requires the `talk-polls` capability.
 ///
 /// See `docs/NEXTCLOUD_API.md` § 14 — in particular that `votes` comes back as a map keyed
@@ -89,8 +103,12 @@ actor PollService {
             form["options[\(index)]"] = option
         }
 
-        let response = try await client.send(OCSRequest.post(Endpoint.poll(token), form: form), as: PollDTO.self)
-        return try poll(from: response.value)
+        do {
+            let response = try await client.send(OCSRequest.post(Endpoint.poll(token), form: form), as: PollDTO.self)
+            return try poll(from: response.value)
+        } catch {
+            throw Self.explain(error)
+        }
     }
 
     func poll(token: String, pollID: Int) async throws(TalkError) -> Poll {
@@ -123,6 +141,30 @@ actor PollService {
     private func poll(from dto: PollDTO?) throws(TalkError) -> Poll {
         guard let dto else { throw .unexpectedResponse("The server sent a poll with nothing in it") }
         return dto.model
+    }
+
+    /// Turns Talk's one-word refusal into something worth showing someone.
+    ///
+    /// The reasons are `PollPropertyException::REASON_*`; on their own they reach the UI as
+    /// the word "room", which is worse than useless.
+    static func explain(_ error: TalkError) -> TalkError {
+        guard case .ocs(let status, let message) = error,
+              status == 400,
+              let message,
+              let sentence = reason(message)
+        else { return error }
+        return .ocs(status: status, message: sentence)
+    }
+
+    private static func reason(_ raw: String) -> String? {
+        switch raw {
+        case "room": "Polls can only be created in group and public conversations."
+        case "question": "A poll needs a question, and it can't be longer than 32,000 characters."
+        case "options": "A poll needs at least two options."
+        case "draft": "Only moderators can save a poll as a draft."
+        case "poll": "That poll no longer exists."
+        default: nil
+        }
     }
 }
 
