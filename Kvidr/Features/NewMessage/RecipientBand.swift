@@ -115,10 +115,18 @@ private struct ContactBrowser: View {
             if draft.isBrowsingContacts {
                 ProgressView().controlSize(.small).padding(24)
             } else if draft.contacts.isEmpty {
+                // Two different answers, and the difference matters: one is a setting you can
+                // change, the other is your server's policy and no amount of clicking here
+                // will move it.
                 ContentUnavailableView {
-                    Label("No Contacts to Show", systemImage: "person.2.slash")
+                    Label(
+                        draft.browsesContacts ? "No Contacts to Show" : "Suggestions Are Off",
+                        systemImage: draft.browsesContacts ? "person.2.slash" : "eye.slash"
+                    )
                 } description: {
-                    Text("This server may not list people until you search for them. Try typing a name in the To: field.")
+                    Text(draft.browsesContacts
+                         ? "This server may not list people until you search for them. Type a name in the To: field instead."
+                         : "Turn on “Suggest people before you type” in Settings, or type a name in the To: field.")
                 }
                 .frame(width: 280)
                 .padding(.vertical, 8)

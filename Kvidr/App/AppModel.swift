@@ -381,7 +381,12 @@ final class AppModel {
     /// and focuses the one already open.
     func newMessage() {
         guard let session else { return }
-        if draft == nil { draft = ConversationDraft(session: session) }
+        if draft == nil {
+            draft = ConversationDraft(
+                session: session,
+                browsesContacts: dependencies.preferences.browsesContacts
+            )
+        }
         selectedToken = ConversationDraftToken.value
         draft?.requestRecipientFocus()
     }

@@ -40,8 +40,6 @@ struct NewMessageView: View {
             Spacer(minLength: 0)
             composer
         }
-        // Hanging from the band rather than filling the pane: the matches belong under the
-        // field they came from, the way Messages drops them out of the To: field.
         // Under where you are typing rather than centred over the band: the matches belong
         // to the field they came from. Leading-aligned, inset past the "To:" label, which is
         // where the cursor sits before any chips are in the way.

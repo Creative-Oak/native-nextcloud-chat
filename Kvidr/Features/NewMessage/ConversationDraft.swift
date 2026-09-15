@@ -47,8 +47,14 @@ final class ConversationDraft {
     private let session: Session
     @ObservationIgnored private var searchTask: Task<Void, Never>?
 
-    init(session: Session) {
+    /// Whether to ask the server for a list of people before anything is typed. A
+    /// preference, because the request is broader than a search and not everyone wants their
+    /// client making it unprompted — see `Preferences.browsesContacts`.
+    let browsesContacts: Bool
+
+    init(session: Session, browsesContacts: Bool = true) {
         self.session = session
+        self.browsesContacts = browsesContacts
         self.attachments = AttachmentQueue(session: session)
     }
 
@@ -186,6 +192,11 @@ final class ConversationDraft {
     /// user enumeration turned off returns nothing here and looks exactly like a server with
     /// nobody on it. The browser says as much rather than showing an empty list.
     func browseContacts() async {
+        guard browsesContacts else {
+            // Nothing will be listed, so say so once rather than spinning at an empty list.
+            didBrowse = true
+            return
+        }
         guard !isBrowsingContacts, !didBrowse else { return }
         isBrowsingContacts = true
         defer {

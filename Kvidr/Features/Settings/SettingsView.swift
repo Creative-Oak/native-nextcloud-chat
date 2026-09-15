@@ -33,6 +33,13 @@ private struct GeneralSettings: View {
                      : "⌘Return sends the message.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+
+                Section("New Messages") {
+                    Toggle("Suggest people before you type", isOn: $preferences.browsesContacts)
+                    Text("Asks your server for a list of people when you start a new message, which fills the contacts browser and lets kvidr match initials like “hvr” locally. Some servers do not list people until you search for them, in which case this finds nothing either way.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
         .formStyle(.grouped)

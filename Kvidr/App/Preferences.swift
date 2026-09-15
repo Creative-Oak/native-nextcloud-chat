@@ -10,6 +10,7 @@ private enum Key {
     static let notificationPreviews = "notifications.previews"
     static let dockBadge = "notifications.dockBadge"
     static let sendOnReturn = "composer.sendOnReturn"
+    static let browseContacts = "newMessage.browseContacts"
     static let allowInsecureLocalServers = "advanced.allowInsecureLocalServers"
     static let developerMode = "advanced.developerMode"
     static let lastSelectedToken = "state.lastSelectedToken"
@@ -57,6 +58,17 @@ final class Preferences {
 
     /// Developer escape hatch for plain-HTTP servers on localhost and private networks.
     /// Never allows insecure connections to a public host.
+    /// Whether a new message asks the server for a list of people before you have typed
+    /// anything — which fills the contact browser behind the `+`, and the list the fuzzy
+    /// matching searches locally.
+    ///
+    /// On by default, and off is a real choice rather than a fallback: the request asks the
+    /// server for a page of everyone you may see, which is more than "find me Heine" and not
+    /// everyone wants their client doing it unprompted.
+    var browsesContacts: Bool {
+        didSet { defaults.set(browsesContacts, forKey: Key.browseContacts) }
+    }
+
     var allowsInsecureLocalServers: Bool {
         didSet { defaults.set(allowsInsecureLocalServers, forKey: Key.allowInsecureLocalServers) }
     }
@@ -90,6 +102,7 @@ final class Preferences {
             Key.notificationPreviews: true,
             Key.dockBadge: true,
             Key.sendOnReturn: true,
+            Key.browseContacts: true,
             Key.allowInsecureLocalServers: false,
             Key.developerMode: false
         ])
@@ -99,6 +112,7 @@ final class Preferences {
         showsNotificationPreviews = defaults.bool(forKey: Key.notificationPreviews)
         showsDockBadge = defaults.bool(forKey: Key.dockBadge)
         sendsOnReturn = defaults.bool(forKey: Key.sendOnReturn)
+        browsesContacts = defaults.bool(forKey: Key.browseContacts)
         allowsInsecureLocalServers = defaults.bool(forKey: Key.allowInsecureLocalServers)
         isDeveloperModeEnabled = defaults.bool(forKey: Key.developerMode)
         lastSelectedToken = defaults.string(forKey: Key.lastSelectedToken)
