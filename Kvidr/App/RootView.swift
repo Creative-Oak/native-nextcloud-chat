@@ -11,7 +11,7 @@ struct RootView: View {
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var composerFocused = false
     /// Owned here because the To: field is the top of the draft pane, above its content.
-    @FocusState private var recipientsFocused: Bool
+    @State private var recipientsFocused = false
     /// How tall a strip the window reserves for the toolbar. Measured, not assumed: it is the
     /// system's number and it moves with the toolbar style. The draft's To: band is placed
     /// into that strip, which is the only way to get it onto the traffic lights' line —

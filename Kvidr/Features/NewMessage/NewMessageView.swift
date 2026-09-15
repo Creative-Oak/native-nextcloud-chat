@@ -7,7 +7,7 @@ import SwiftUI
 struct NewMessageView: View {
     @Bindable var draft: ConversationDraft
     /// Owned by the window, because the To: band sits above this view's own content.
-    @FocusState.Binding var recipientsFocused: Bool
+    @Binding var recipientsFocused: Bool
     /// The strip the toolbar would have occupied, measured by the window.
     var titleBarHeight: CGFloat
     var onSent: (Conversation) -> Void

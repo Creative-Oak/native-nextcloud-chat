@@ -7,7 +7,9 @@ import SwiftUI
 /// row. See `RootView.detailToolbar`.
 struct RecipientBand: View {
     @Bindable var draft: ConversationDraft
-    @FocusState.Binding var isFocused: Bool
+    /// A plain binding, not `@FocusState`: focus has to reach an `NSTextField`, which a
+    /// `FocusState` cannot do.
+    @Binding var isFocused: Bool
 
     @State private var isBrowsingContacts = false
 
@@ -31,37 +33,28 @@ struct RecipientBand: View {
                     .glass(.chip)
                 }
 
-                TextField("", text: $draft.search, prompt: Text(draft.recipients.isEmpty ? "Name, group or team" : ""))
-                    .textFieldStyle(.plain)
-                    .frame(minWidth: 140)
-                    .focused($isFocused)
-                    // Backspace on an empty field takes the last chip back, as in Messages.
-                    .onKeyPress(.delete) {
-                        guard draft.search.isEmpty, !draft.recipients.isEmpty else { return .ignored }
+                RecipientTextField(
+                    text: $draft.search,
+                    isFocused: $isFocused,
+                    prompt: draft.recipients.isEmpty ? "Name, group or team" : "",
+                    onBackspaceIntoChips: {
+                        guard !draft.recipients.isEmpty else { return false }
                         draft.removeLastRecipient()
-                        return .handled
-                    }
-                    // The matches are a list you walk, not a set of things to aim at. Ignored
-                    // rather than swallowed when there are none, so the keys still do whatever
-                    // the field would have done with them.
-                    .onKeyPress(.upArrow) {
-                        guard !draft.results.isEmpty else { return .ignored }
-                        draft.moveHighlight(by: -1)
-                        return .handled
-                    }
-                    .onKeyPress(.downArrow) {
-                        guard !draft.results.isEmpty else { return .ignored }
-                        draft.moveHighlight(by: 1)
-                        return .handled
-                    }
-                    .onKeyPress(.return) {
-                        draft.acceptHighlighted() ? .handled : .ignored
-                    }
-                    .onKeyPress(.escape) {
-                        guard !draft.results.isEmpty else { return .ignored }
+                        return true
+                    },
+                    onMove: { delta in
+                        guard !draft.results.isEmpty else { return false }
+                        draft.moveHighlight(by: delta)
+                        return true
+                    },
+                    onAccept: { draft.acceptHighlighted() },
+                    onCancel: {
+                        guard !draft.results.isEmpty else { return false }
                         draft.clearSearch()
-                        return .handled
+                        return true
                     }
+                )
+                .frame(minWidth: 140, minHeight: 20)
             }
             // Takes the slack, so the band's chips stay left and the globe and + sit at the
             // trailing edge rather than everything bunching in the middle of a wide band.
