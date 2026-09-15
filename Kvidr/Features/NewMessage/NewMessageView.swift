@@ -119,6 +119,10 @@ struct NewMessageView: View {
         }
     }
 
+    /// Laid out like the conversation's own composer, because it is one: the plus outside on
+    /// the left, the send arrow *inside* the capsule at the right, and the emoji palette
+    /// outside on the other side. It had the arrow hanging off the end as a small bare button
+    /// and no smiley at all.
     private var field: some View {
         HStack(alignment: .bottom, spacing: 8) {
             if draft.attachments.canAttach {
@@ -128,27 +132,32 @@ struct NewMessageView: View {
                 AttachmentMenu(queue: draft.attachments, destination: draft.title)
             }
 
-            TextField("", text: $draft.text, prompt: Text("Message"), axis: .vertical)
-                .textFieldStyle(.plain)
-                .lineLimit(1...6)
-                .focused($isMessageFocused)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .frame(minHeight: GlassMetrics.control)
-                .glass(.field, cornerRadius: GlassMetrics.control / 2)
-                .onSubmit(send)
+            HStack(alignment: .bottom, spacing: 6) {
+                TextField("", text: $draft.text, prompt: Text("Message"), axis: .vertical)
+                    .textFieldStyle(.plain)
+                    .lineLimit(1...6)
+                    .focused($isMessageFocused)
+                    .onSubmit(send)
 
-            Button(action: send) {
-                Image(systemName: "arrow.up")
-                    .font(.system(size: 13, weight: .semibold))
-                    .frame(width: 16, height: 16)
+                Button(action: send) {
+                    Image(systemName: "arrow.up")
+                        .font(.system(size: 13, weight: .semibold))
+                        .frame(width: 16, height: 16)
+                }
+                .buttonStyle(.glassProminent)
+                .buttonBorderShape(.circle)
+                .tint(.accentColor)
+                .disabled(!draft.canSend)
+                .keyboardShortcut(.return, modifiers: .command)
+                .help("Send")
             }
-            .buttonStyle(.glassProminent)
-            .buttonBorderShape(.circle)
-            .tint(.accentColor)
-            .disabled(!draft.canSend)
-            .keyboardShortcut(.return, modifiers: .command)
-            .help("Send")
+            .padding(.leading, 12)
+            .padding(.trailing, 6)
+            .padding(.vertical, 5)
+            .frame(minHeight: GlassMetrics.control)
+            .glass(.field, cornerRadius: GlassMetrics.control / 2)
+
+            EmojiPaletteButton { isMessageFocused = true }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)

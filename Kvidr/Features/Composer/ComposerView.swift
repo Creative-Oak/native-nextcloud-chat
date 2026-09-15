@@ -66,19 +66,7 @@ struct ComposerView: View {
             // same thing Messages' smiley opens. The focus is moved first, and the
             // palette asked for on the next turn, so it lands in this field rather than
             // in whatever had focus a moment ago.
-            Button {
-                isFocused = true
-                Task { @MainActor in NSApplication.shared.orderFrontCharacterPalette(nil) }
-            } label: {
-                Image(systemName: "face.smiling")
-                    .font(.system(size: 17, weight: .regular))
-                    .frame(width: GlassMetrics.control, height: GlassMetrics.control)
-                    .contentShape(.circle)
-            }
-            .buttonStyle(.plain)
-            .glassCircle()
-            .help("Emoji")
-            .accessibilityLabel("Emoji")
+            EmojiPaletteButton { isFocused = true }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
