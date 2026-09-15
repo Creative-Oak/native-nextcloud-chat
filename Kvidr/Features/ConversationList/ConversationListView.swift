@@ -117,14 +117,23 @@ struct ConversationListView: View {
     }
 
     private func rows(_ conversations: [Conversation]) -> some View {
-        ForEach(conversations) { conversation in
+        ForEach(Array(conversations.enumerated()), id: \.element.id) { index, conversation in
+            // A row draws its separator at its own bottom, so the one that would land in the
+            // gap above a selected row belongs to the row before it — which has to be told.
+            let precedesSelection = conversations.indices.contains(index + 1)
+                && selection == conversations[index + 1].token
+
             // No tap gesture of any kind here, deliberately. A SwiftUI tap recogniser on
             // a List row consumes the mouse event before the table underneath can act on
             // it, so selection stops responding to a single click — and `simultaneous`
             // does not help, because the simultaneity is with other SwiftUI gestures,
             // not with the List's own handling. Selection is the List's job; Return from
             // the sidebar (below) is what moves focus on to the composer.
-            ConversationRow(conversation: conversation, isSelected: selection == conversation.token)
+            ConversationRow(
+                conversation: conversation,
+                isSelected: selection == conversation.token,
+                precedesSelection: precedesSelection
+            )
                 .tag(conversation.token)
                 .contextMenu { ConversationContextMenu(model: model, conversation: conversation) }
         }
@@ -267,6 +276,9 @@ private struct PinnedConversations: View {
 struct ConversationRow: View {
     let conversation: Conversation
     var isSelected = false
+    /// The row below this one is the selected one, so this row's separator would be drawn in
+    /// the gap above its highlight.
+    var precedesSelection = false
 
     /// The gutter the unread dot lives in, plus the avatar and the gap after it — the
     /// separator between rows starts where the text does, as it does in Messages.
@@ -337,7 +349,9 @@ struct ConversationRow: View {
         // The sidebar list draws no separators of its own. This one starts under the
         // text, not the avatar, and stands down while the row is highlighted.
         .overlay(alignment: .bottom) {
-            if !isSelected {
+            // Neither under a selected row nor over one: a separator resting against the
+            // highlight reads as a line drawn on it.
+            if !isSelected && !precedesSelection {
                 Divider().padding(.leading, Self.textInset)
             }
         }
