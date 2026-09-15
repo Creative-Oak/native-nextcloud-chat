@@ -34,7 +34,19 @@ extension ChatModel {
         }
 
         let text = trimmedDraft
-        guard !text.isEmpty, conversation.canPostMessages else { return }
+        guard conversation.canPostMessages else { return }
+
+        // With something staged, the words ride along as its caption rather than arriving as
+        // a message of their own — so sending a photo with nothing typed has to work too.
+        // See docs/plans/2026-09-15-attachments-photos-polls-design.md § 1.
+        if attachments.hasStaged {
+            attachments.send(caption: text, replyTo: replyingTo?.messageID)
+            draftText = ""
+            replyingTo = nil
+            return
+        }
+
+        guard !text.isEmpty else { return }
 
         let reference = ReferenceID.generate()
         let replyTo = replyingTo?.messageID

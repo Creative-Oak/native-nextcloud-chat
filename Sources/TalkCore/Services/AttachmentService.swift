@@ -6,10 +6,18 @@ struct FileTransfer: Sendable, Identifiable, Equatable {
         case queued
         /// 0…1 of the bytes sent.
         case uploading(Double)
-        /// Uploaded; now being shared into the conversation.
+        /// In the user's Nextcloud, and staged in the composer: everything is done except
+        /// putting it in the conversation, which waits for the send button.
+        case uploaded
+        /// Being shared into the conversation.
         case sharing
         case completed
         case failed(String)
+
+        /// Staged and waiting for you, rather than on its way anywhere.
+        var isStaged: Bool {
+            if case .uploaded = self { return true } else { return false }
+        }
 
         var isFinished: Bool {
             switch self {
@@ -22,6 +30,7 @@ struct FileTransfer: Sendable, Identifiable, Equatable {
             switch self {
             case .queued: 0
             case .uploading(let value): value * 0.9    // the share is the last tenth
+            case .uploaded: 0.9
             case .sharing: 0.95
             case .completed: 1
             case .failed: 0
@@ -34,9 +43,14 @@ struct FileTransfer: Sendable, Identifiable, Equatable {
     var fileName: String
     var byteCount: Int
     var state: State = .queued
-    /// Sent with the file so it arrives as one message with a caption.
+    /// Sent with the file so it arrives as one message with a caption. Filled in when the
+    /// message is sent, not when the file is attached: which file carries the words depends
+    /// on what else is staged beside it.
     var caption: String = ""
     var replyToMessageID: Int?
+    /// Where the upload put it, once it has been uploaded. The share step needs this, and
+    /// so does taking the file back out of the composer.
+    var remotePath: String?
 
     init(fileURL: URL, byteCount: Int, caption: String = "", replyToMessageID: Int? = nil) {
         self.id = UUID()
@@ -45,6 +59,30 @@ struct FileTransfer: Sendable, Identifiable, Equatable {
         self.byteCount = byteCount
         self.caption = caption
         self.replyToMessageID = replyToMessageID
+    }
+}
+
+extension FileTransfer {
+    /// Applies the message being sent to a batch of staged files, and answers which of them
+    /// were committed.
+    ///
+    /// A caption belongs to one share, so the first file still on its way carries the words
+    /// and the rest arrive bare — three photos and a sentence is three messages, not three
+    /// copies of the sentence. Files that have already finished are left alone: they belong
+    /// to a message that has been sent.
+    static func apply(
+        caption: String,
+        replyTo: Int?,
+        to transfers: inout [FileTransfer]
+    ) -> Set<UUID> {
+        let caption = caption.trimmingCharacters(in: .whitespacesAndNewlines)
+        var committed: Set<UUID> = []
+        for index in transfers.indices where !transfers[index].state.isFinished {
+            if committed.isEmpty { transfers[index].caption = caption }
+            transfers[index].replyToMessageID = replyTo
+            committed.insert(transfers[index].id)
+        }
+        return committed
     }
 }
 
@@ -83,12 +121,14 @@ actor AttachmentService {
     /// Talk's own default when the server doesn't specify one.
     static let defaultFolder = "/Talk"
 
-    /// Uploads and shares. `progress` is called on the upload phase.
-    func send(
+    /// Uploads a staged file and answers where it landed.
+    ///
+    /// Putting it *into* a conversation is `share(path:token:…)`, a separate step taken when
+    /// the message is actually sent — the two used to run back to back, which is what made a
+    /// dropped file send itself before anyone could type a word beside it.
+    func upload(
         _ transfer: FileTransfer,
-        to token: String,
         folder: String,
-        referenceID: String?,
         progress: @escaping @Sendable (Double) -> Void
     ) async throws(TalkError) -> String {
         let data: Data
@@ -97,16 +137,7 @@ actor AttachmentService {
         } catch {
             throw .unexpectedResponse("Couldn’t read \(transfer.fileName)")
         }
-
-        let remotePath = try await upload(data, fileName: transfer.fileName, folder: folder, progress: progress)
-        try await share(
-            path: remotePath,
-            token: token,
-            caption: transfer.caption,
-            replyTo: transfer.replyToMessageID,
-            referenceID: referenceID
-        )
-        return remotePath
+        return try await upload(data, fileName: transfer.fileName, folder: folder, progress: progress)
     }
 
     // MARK: - WebDAV
@@ -201,6 +232,26 @@ actor AttachmentService {
         }
 
         _ = try await client.send(OCSRequest.post(Endpoint.shares, form: form), as: EmptyResponse.self)
+    }
+
+    /// Removes a file from the user's Nextcloud.
+    ///
+    /// For a staged attachment taken back out of the composer: the bytes went up the moment
+    /// it was attached, so removing the row has to remove them too, or thinking better of a
+    /// file leaves it in the user's Files for good.
+    func delete(path: String) async throws(TalkError) {
+        let request = HTTPRequest(
+            method: .delete,
+            url: server.url(path: Endpoint.webDAV(userID: userID, path: path)),
+            headers: ["Authorization": credentials.authorizationHeaderValue],
+            body: nil,
+            timeout: 60
+        )
+        let response = try await transport.send(request)
+        // 404 counts: the file isn't there, which is what was asked for.
+        guard (200...299).contains(response.status) || response.status == 404 else {
+            throw TalkError.from(status: response.status, headers: response.headers)
+        }
     }
 }
 

@@ -51,7 +51,9 @@ private struct TransferRow: View {
                         .foregroundStyle(isFailed ? .red : .secondary)
                 }
 
-                if !transfer.state.isFinished {
+                // No bar for a staged file: it is not going anywhere until you send, and a
+                // bar stopped at nine tenths reads as something stuck.
+                if !transfer.state.isFinished && !transfer.state.isStaged {
                     ProgressView(value: transfer.state.fraction)
                         .progressViewStyle(.linear)
                         .controlSize(.small)
@@ -68,7 +70,7 @@ private struct TransferRow: View {
                 Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary)
             }
             .buttonStyle(.plain)
-            .help(transfer.state.isFinished ? "Remove" : "Cancel")
+            .help(transfer.state.isFinished || transfer.state.isStaged ? "Remove" : "Cancel")
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
@@ -83,6 +85,7 @@ private struct TransferRow: View {
         switch transfer.state {
         case .completed: "checkmark.circle.fill"
         case .failed: "exclamationmark.triangle.fill"
+        case .uploaded: "paperclip"
         default: "arrow.up.doc"
         }
     }
@@ -91,6 +94,7 @@ private struct TransferRow: View {
         switch transfer.state {
         case .queued: "Waiting"
         case .uploading(let fraction): "\(Int(fraction * 100))%"
+        case .uploaded: "Ready to send"
         case .sharing: "Sharing…"
         case .completed: "Sent"
         case .failed(let reason): reason

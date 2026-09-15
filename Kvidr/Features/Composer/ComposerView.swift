@@ -197,15 +197,14 @@ struct ComposerView: View {
         panel.allowsMultipleSelection = true
         panel.canChooseDirectories = false
         panel.canChooseFiles = true
-        panel.prompt = "Send"
+        panel.prompt = "Attach"
         panel.message = imagesOnly
-            ? "Choose images to send to \(model.conversation.displayName)"
-            : "Choose files to send to \(model.conversation.displayName)"
+            ? "Choose images to attach to \(model.conversation.displayName)"
+            : "Choose files to attach to \(model.conversation.displayName)"
         if imagesOnly { panel.allowedContentTypes = [.image] }
 
         guard panel.runModal() == .OK else { return }
-        model.attachments.enqueue(urls: panel.urls, replyTo: model.replyingTo?.messageID)
-        model.cancelReply()
+        model.attachments.enqueue(urls: panel.urls)
     }
 
     private func cancelContext() {

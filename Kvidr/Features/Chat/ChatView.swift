@@ -99,8 +99,7 @@ struct ChatView: View {
         // people aim, and aiming at a 30pt field with a file in hand is a chore.
         .dropDestination(for: URL.self) { urls, _ in
             guard model.attachments.canAttach, model.conversation.canPostMessages else { return false }
-            model.attachments.enqueue(urls: urls, replyTo: model.replyingTo?.messageID)
-            model.cancelReply()
+            model.attachments.enqueue(urls: urls)
             return true
         } isTargeted: { targeted in
             withAnimation(.smooth(duration: 0.15)) { model.attachments.setDropTargeted(targeted) }

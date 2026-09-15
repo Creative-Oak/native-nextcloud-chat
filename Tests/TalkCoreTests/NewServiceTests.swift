@@ -273,6 +273,88 @@ struct NewServiceTests {
         #expect(metadata?["replyTo"] as? Int == 41)
     }
 
+    @Test("Removing a staged file takes it out of the user's Nextcloud too")
+    func deleteStagedFile() async throws {
+        let transport = StubTransport(json: "", status: 204)
+        let service = AttachmentService(
+            server: try ServerAddress.parse("https://cloud.example.com"),
+            credentials: Credentials(loginName: "alice", appPassword: "pw"),
+            userID: "alice",
+            transport: transport,
+            client: try client(transport)
+        )
+
+        try await service.delete(path: "/Talk/report.pdf")
+
+        let request = try #require(transport.lastRequest)
+        #expect(request.method == .delete)
+        #expect(request.url.path == "/remote.php/dav/files/alice/Talk/report.pdf")
+    }
+
+    @Test("A staged file that is already gone counts as removed")
+    func deleteMissingFileIsNotAnError() async throws {
+        let transport = StubTransport(json: "", status: 404)
+        let service = AttachmentService(
+            server: try ServerAddress.parse("https://cloud.example.com"),
+            credentials: Credentials(loginName: "alice", appPassword: "pw"),
+            userID: "alice",
+            transport: transport,
+            client: try client(transport)
+        )
+
+        // The point of removing it was that it should not be there. It isn't.
+        try await service.delete(path: "/Talk/gone.pdf")
+    }
+
+    // MARK: - Staging
+
+    @Test("The words go on the first staged file, and the rest arrive bare")
+    func captionLandsOnTheFirstTransfer() {
+        var transfers = [
+            FileTransfer(fileURL: URL(fileURLWithPath: "/tmp/a.png"), byteCount: 1),
+            FileTransfer(fileURL: URL(fileURLWithPath: "/tmp/b.png"), byteCount: 1),
+            FileTransfer(fileURL: URL(fileURLWithPath: "/tmp/c.png"), byteCount: 1)
+        ]
+
+        let committed = FileTransfer.apply(caption: "  look at these  ", replyTo: 7, to: &transfers)
+
+        #expect(transfers[0].caption == "look at these")
+        #expect(transfers[1].caption.isEmpty)
+        #expect(transfers[2].caption.isEmpty)
+        // The reply is the message's, not one file's: all three belong to it.
+        #expect(transfers.allSatisfy { $0.replyToMessageID == 7 })
+        #expect(committed.count == 3)
+    }
+
+    @Test("A file from an already-sent message is left out of the next one")
+    func finishedTransfersAreNotRecommitted() {
+        var transfers = [
+            FileTransfer(fileURL: URL(fileURLWithPath: "/tmp/sent.png"), byteCount: 1),
+            FileTransfer(fileURL: URL(fileURLWithPath: "/tmp/staged.png"), byteCount: 1)
+        ]
+        transfers[0].state = .completed
+        transfers[0].caption = "the last thing I said"
+
+        let committed = FileTransfer.apply(caption: "and this", replyTo: nil, to: &transfers)
+
+        // The caption skips past the finished one rather than landing on it — otherwise the
+        // new message's words would be stamped onto a message already sent.
+        #expect(transfers[0].caption == "the last thing I said")
+        #expect(transfers[1].caption == "and this")
+        #expect(committed == [transfers[1].id])
+    }
+
+    @Test("A staged file rests at nine tenths, and is not finished")
+    func stagedTransferState() {
+        var transfer = FileTransfer(fileURL: URL(fileURLWithPath: "/tmp/a.png"), byteCount: 10)
+        transfer.state = .uploaded
+        #expect(transfer.state.isStaged)
+        // Not finished: it has not been anywhere near the conversation yet.
+        #expect(transfer.state.isFinished == false)
+        #expect(transfer.state.fraction == 0.9)
+        #expect(FileTransfer.State.sharing.isStaged == false)
+    }
+
     @Test("Transfer progress is monotonic and ends at 1")
     func transferProgress() {
         var transfer = FileTransfer(fileURL: URL(fileURLWithPath: "/tmp/a.png"), byteCount: 10)
