@@ -1083,6 +1083,9 @@ extension View {
     public func zIndex(_ value: Double) -> StubView { StubView() }
     public func keyboardShortcut(_ key: KeyEquivalent, modifiers: EventModifiers = .command) -> StubView { StubView() }
     public func keyboardShortcut(_ shortcut: KeyboardShortcut) -> StubView { StubView() }
+    /// The optional overload: a command in the registry may have no shortcut, and the
+    /// menus hand it straight over rather than branching at every call site.
+    public func keyboardShortcut(_ shortcut: KeyboardShortcut?) -> StubView { StubView() }
 
     public func onAppear(perform action: (() -> Void)? = nil) -> StubView { StubView() }
     public func onDisappear(perform action: (() -> Void)? = nil) -> StubView { StubView() }
