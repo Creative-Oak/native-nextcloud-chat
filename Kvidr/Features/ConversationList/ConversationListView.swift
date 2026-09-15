@@ -12,6 +12,8 @@ struct ConversationListView: View {
 
     var searchFocusRequest: Bool
     var onSearchFocusHandled: () -> Void
+    var draft: ConversationDraft?
+    var onDiscardDraft: () -> Void
 
     @FocusState private var isSearchFocused: Bool
 
@@ -20,17 +22,29 @@ struct ConversationListView: View {
         selection: Binding<String?>,
         composerFocused: Binding<Bool>,
         searchFocusRequest: Bool,
-        onSearchFocusHandled: @escaping () -> Void
+        onSearchFocusHandled: @escaping () -> Void,
+        draft: ConversationDraft? = nil,
+        onDiscardDraft: @escaping () -> Void = {}
     ) {
         self.model = model
         _selection = selection
         _composerFocused = composerFocused
         self.searchFocusRequest = searchFocusRequest
         self.onSearchFocusHandled = onSearchFocusHandled
+        self.draft = draft
+        self.onDiscardDraft = onDiscardDraft
     }
 
     var body: some View {
         List(selection: $selection) {
+            // Above everything, including the pinned faces: it is the thing you just asked
+            // for, and it leaves when you send or dismiss it.
+            if let draft {
+                DraftRow(draft: draft, onDiscard: onDiscardDraft)
+                    .tag(ConversationDraftToken.value)
+                    .listRowSeparator(.hidden)
+            }
+
             ForEach(model.sections) { group in
                 switch group.section {
                 // Favourites become the grid of faces at the top, the way Messages pins
@@ -335,5 +349,53 @@ struct ConversationRow: View {
         if conversation.unreadMention { parts.append("mentions you") }
         parts.append(preview)
         return parts.joined(separator: ", ")
+    }
+}
+
+/// The unsent conversation's row.
+///
+/// Its × throws away a local object: nothing has reached the server, so there is nothing to
+/// confirm and nothing to undo.
+private struct DraftRow: View {
+    @Bindable var draft: ConversationDraft
+    var onDiscard: () -> Void
+
+    @State private var isHovering = false
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "square.and.pencil")
+                .font(.system(size: 15))
+                .foregroundStyle(.secondary)
+                .frame(width: 36, height: 36)
+                .background(.quaternary.opacity(0.5), in: .circle)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(draft.title)
+                    .fontWeight(.semibold)
+                    .lineLimit(1)
+                if !draft.recipients.isEmpty {
+                    Text("Not sent yet")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+
+            Spacer(minLength: 0)
+
+            Button(action: onDiscard) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .bold))
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .opacity(isHovering ? 1 : 0)
+            .help("Discard this message")
+            .accessibilityLabel("Discard this message")
+        }
+        .padding(.vertical, 4)
+        .contentShape(.rect)
+        .onHover { isHovering = $0 }
     }
 }

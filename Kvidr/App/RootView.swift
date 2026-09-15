@@ -18,7 +18,6 @@ struct RootView: View {
     /// the inspector goes or the window grows — whoever hid it in the first place.
     @State private var didSidebarYieldToInspector = false
     @State private var contentWidth: CGFloat = 0
-    @State private var isShowingNewConversation = false
     @State private var conversationSettings: ConversationSettingsModel?
     @State private var messageSearch: MessageSearchModel?
     @Environment(\.openWindow) private var openWindow
@@ -73,7 +72,7 @@ struct RootView: View {
         context.canMarkUnread = app.chat?.capabilities.canMarkUnread == true
         context.isSidebarCompact = preferences.sidebarMode == .compact
         context.isSelectionFavorite = app.selectedToken.flatMap { app.conversationList?[$0]?.isFavorite } ?? false
-        context.newConversation = { isShowingNewConversation = true }
+        context.newConversation = { app.newMessage() }
         context.refresh = { app.refreshNow() }
         context.findConversation = requestSearchFocus
         context.findInConversation = { app.chat?.isSearching = true }
@@ -132,7 +131,7 @@ struct RootView: View {
 
     /// A conversation chosen in the palette: opened, and the cursor put in the message
     /// field — "⌘P, type, Return, type" is the whole flow. One that is new to the
-    /// index (just created for a person) goes in the way the New Conversation sheet's do.
+    /// index (just created for a person) goes in the way a draft's conversation does.
     private func openFromPalette(_ conversation: Conversation) {
         palette = nil
         if app.conversationList?[conversation.token] == nil {
@@ -209,7 +208,9 @@ struct RootView: View {
                 selection: $app.selectedToken,
                 composerFocused: $composerFocused,
                 searchFocusRequest: searchFocusRequest,
-                onSearchFocusHandled: { searchFocusRequest = false }
+                onSearchFocusHandled: { searchFocusRequest = false },
+                draft: app.draft,
+                onDiscardDraft: { app.discardDraft() }
             )
             // No sidebar toggle, as in Messages: the sidebar is not something you
             // fold away by hand. It goes only when the inspector needs its room in
@@ -241,7 +242,11 @@ struct RootView: View {
             // in with its own buttons on it and asks nothing of the toolbar.
             HStack(spacing: 0) {
                 Group {
-                    if let chat = app.chat {
+                    if app.isShowingDraft, let draft = app.draft {
+                        NewMessageView(draft: draft) { conversation in
+                            app.draftSent(conversation)
+                        }
+                    } else if let chat = app.chat {
                         ChatView(
                             model: chat,
                             composerFocused: $composerFocused,
@@ -311,14 +316,6 @@ struct RootView: View {
         .onChange(of: preferences.sidebarMode) { _, _ in reconcileColumns() }
         .sheet(item: $conversationSettings) { model in
             ConversationSettingsSheet(model: model)
-        }
-        .sheet(isPresented: $isShowingNewConversation) {
-            if let session = app.session {
-                NewConversationSheet(session: session) { conversation in
-                    isShowingNewConversation = false
-                    app.conversationCreated(conversation)
-                }
-            }
         }
         // Built fresh each time so the scope picker reflects whichever conversation is
         // open now, rather than the one that was open the first time it was used.
@@ -440,11 +437,11 @@ struct RootView: View {
         // where Messages keeps its compose button.
         ToolbarItem(placement: .navigation) {
             Button {
-                isShowingNewConversation = true
+                app.newMessage()
             } label: {
-                Label("New Conversation", systemImage: "square.and.pencil")
+                Label("New Message", systemImage: "square.and.pencil")
             }
-            .help("New Conversation (⌘N)")
+            .help("New Message (⌘N)")
         }
 
         // Beside compose, in a circle of its own. Neighbouring items of one placement

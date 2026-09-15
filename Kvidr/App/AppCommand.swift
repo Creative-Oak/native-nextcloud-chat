@@ -128,7 +128,7 @@ struct AppCommandRegistry {
 
         let commands: [AppCommand] = [
             AppCommand(
-                id: "conversation.new", title: "New Conversation…", aliases: ["start", "create", "group", "message someone"],
+                id: "conversation.new", title: "New Message", aliases: ["start", "create", "group", "new conversation", "message someone"],
                 symbolName: "square.and.pencil", shortcut: KeyboardShortcut("n", modifiers: .command), placement: .file,
                 isEnabled: live && c.canCreateConversations, disabledReason: c.hasSession ? "This server does not let you start conversations" : noSession,
                 perform: c.newConversation

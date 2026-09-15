@@ -28,14 +28,22 @@ final class AppModel {
     private(set) var chat: ChatModel?
     /// The third column's state, rebuilt when the conversation changes.
     private(set) var inspector: InspectorModel?
+    /// The unsent conversation, if there is one. One at a time, and in memory: an
+    /// unaddressed, unsent conversation is not data yet.
+    private(set) var draft: ConversationDraft?
 
     var selectedToken: String? {
         didSet {
             guard oldValue != selectedToken else { return }
-            dependencies.preferences.lastSelectedToken = selectedToken
+            // The draft is not a conversation and must not be restored as one next launch.
+            if !ConversationDraftToken.isDraft(selectedToken) {
+                dependencies.preferences.lastSelectedToken = selectedToken
+            }
             openSelectedConversation()
         }
     }
+
+    var isShowingDraft: Bool { ConversationDraftToken.isDraft(selectedToken) && draft != nil }
 
     /// Window/app activation, which gates read state. See `ReadStatePolicy`.
     var isApplicationActive = true { didSet { activationChanged() } }
@@ -347,12 +355,39 @@ final class AppModel {
         session?.capabilitySnapshot.canCreateConversations ?? false
     }
 
-    /// Called after the New Conversation sheet creates one: show it immediately rather than
+    /// Called once a conversation exists: show it immediately rather than
     /// waiting for the next sync to notice it exists.
     func conversationCreated(_ conversation: Conversation) {
         conversationList?.insert(conversation)
         selectedToken = conversation.token
         refreshNow()
+    }
+
+    // MARK: - New Message
+
+    /// ⌘N, the toolbar's compose button, and the palette's New Conversation.
+    ///
+    /// A second one does not make a second draft: there is one at a time, so this selects
+    /// and focuses the one already open.
+    func newMessage() {
+        guard let session else { return }
+        if draft == nil { draft = ConversationDraft(session: session) }
+        selectedToken = ConversationDraftToken.value
+    }
+
+    /// The × on the draft's row. Nothing reached the server, so nothing is deleted.
+    func discardDraft() {
+        draft = nil
+        guard ConversationDraftToken.isDraft(selectedToken) else { return }
+        // Back to whatever was open before, which is what the preference still remembers
+        // because the draft never wrote to it.
+        selectedToken = dependencies.preferences.lastSelectedToken
+    }
+
+    /// The draft became a real conversation: show it, and let the draft go.
+    func draftSent(_ conversation: Conversation) {
+        draft = nil
+        conversationCreated(conversation)
     }
 
     func refreshNow() {

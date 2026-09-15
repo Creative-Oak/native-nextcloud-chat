@@ -11,6 +11,9 @@ struct SidebarColumn: View {
     @Binding var composerFocused: Bool
     var searchFocusRequest: Bool
     var onSearchFocusHandled: () -> Void
+    /// The unsent conversation, which sits above the real ones.
+    var draft: ConversationDraft?
+    var onDiscardDraft: () -> Void
 
     var body: some View {
         if let list {
@@ -26,7 +29,9 @@ struct SidebarColumn: View {
                     selection: $selection,
                     composerFocused: $composerFocused,
                     searchFocusRequest: searchFocusRequest,
-                    onSearchFocusHandled: onSearchFocusHandled
+                    onSearchFocusHandled: onSearchFocusHandled,
+                    draft: draft,
+                    onDiscardDraft: onDiscardDraft
                 )
             }
         } else {
