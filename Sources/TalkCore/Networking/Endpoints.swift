@@ -36,6 +36,9 @@ enum Endpoint {
     static func mentions(_ token: String) -> String { "\(spreedV1)/chat/\(token)/mentions" }
     static func reaction(_ token: String, _ messageID: Int) -> String { "\(spreedV1)/reaction/\(token)/\(messageID)" }
 
+    static func poll(_ token: String) -> String { "\(spreedV1)/poll/\(token)" }
+    static func poll(_ token: String, _ pollID: Int) -> String { "\(spreedV1)/poll/\(token)/\(pollID)" }
+
     // Core
     static let autocomplete = "\(ocs)/core/autocomplete/get"
 
