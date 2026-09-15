@@ -1203,6 +1203,15 @@ public struct EventModifiers: OptionSet, Sendable {
 public struct KeyboardShortcut: Sendable {
     public static let defaultAction = KeyboardShortcut()
     public static let cancelAction = KeyboardShortcut()
+
+    public var key: KeyEquivalent = " "
+    public var modifiers: EventModifiers = .command
+
+    public init() {}
+    public init(_ key: KeyEquivalent, modifiers: EventModifiers = .command) {
+        self.key = key
+        self.modifiers = modifiers
+    }
 }
 
 public struct KeyPress: Sendable {
