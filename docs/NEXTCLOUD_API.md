@@ -593,6 +593,52 @@ serializes as an **object**. Those attributes are the only machine-readable part
 — `conversation`, `messageId`, `threadId`, `actorType`, `actorId`, `timestamp` — so an
 entry without them cannot be navigated to and is dropped.
 
+## 14. Polls — `/ocs/v2.php/apps/spreed/api/v1` (cap `talk-polls`)
+
+Verified against `spreed/openapi-full.json` on 15 September 2026, not the prose docs — see
+the trap below.
+
+| Method | Path | Body |
+| --- | --- | --- |
+| POST | `/poll/{token}` | `question`, `options[]`, `resultMode`, `maxVotes` — all required; `draft` (default false), `threadId` (default 0) |
+| GET | `/poll/{token}/{pollId}` | — |
+| POST | `/poll/{token}/{pollId}` | `optionIds[]` (optional, default `[]`) |
+| DELETE | `/poll/{token}/{pollId}` | — closes it |
+
+There are also `/poll/{token}/drafts`, `/poll/{token}/draft/{pollId}` and
+`/poll/{token}/{pollId}/export/{format}`, which this project does not use.
+
+**Constants.** `resultMode` 0 = *public*, results and who voted for what visible
+immediately; 1 = *hidden*, only vote counts, and only once the poll is closed. `status`
+0 = open, 1 = closed (2 exists for drafts). `maxVotes` is how many options one participant
+may pick, and **0 means unlimited**.
+
+Voting again replaces the previous vote, and `optionIds: []` retracts it.
+
+### The poll object
+
+| Field | Notes |
+| --- | --- |
+| **id**, **question**, **options[]** | `options` is an array of strings; an option's id is its index |
+| **actorType**, **actorId**, **actorDisplayName** | who created it |
+| **status**, **resultMode**, **maxVotes** | as above |
+| `votes` | *see the trap* |
+| `numVoters` | unique voters |
+| `votedSelf` | **array of option ids** this participant voted for — not a boolean |
+| `details` | array of `{actorType, actorId, actorDisplayName, optionId}`, **public closed polls only** |
+
+**Trap:** `votes` is not an array. It is a **map of `"option-" + optionId` → count** —
+`{"option-0": 3, "option-2": 1}` — and an option nobody voted for is absent rather than
+zero. The prose documentation lists it beside `options` as though the two were parallel
+arrays, which they are not.
+
+**Second trap:** `votes`, `numVoters` and `details` are *conditionally present*. The server
+sends them only once the actor has voted on a public poll, or the poll is closed (the
+creator and moderators see them sooner). A client that types them as non-optional will fail
+to decode an open poll it has not voted in — which is the first poll anyone ever sees.
+
+---
+
 ## 9. Things this project deliberately does not use
 
 - The **signaling** API (internal + external). Not documented as a stable client API,
