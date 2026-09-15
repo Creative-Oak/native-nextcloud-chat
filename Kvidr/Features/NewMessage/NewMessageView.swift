@@ -41,22 +41,25 @@ struct NewMessageView: View {
                     ContactRow(entry: entry, isChosen: draft.isRecipient(entry)) {
                         draft.toggle(entry)
                     }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 2)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
                     // The first match reads as the one Return would take, as it does in
                     // Messages, rather than every row looking equally likely.
                     .background {
                         if index == 0 {
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            // 16 less the 6 it is inset by: a rounded rectangle inside
+                            // another wants the difference, or the two curves sit at
+                            // different centres and the eye reads a double border.
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
                                 .fill(Color.accentColor.opacity(0.16))
-                                .padding(.horizontal, 4)
+                                .padding(.horizontal, 6)
                         }
                     }
                 }
             }
             .padding(.vertical, 6)
             .frame(maxWidth: 420)
-            .glass(.panel, cornerRadius: 14)
+            .glass(.panel, cornerRadius: 16)
             .shadow(color: .black.opacity(0.14), radius: 12, y: 4)
             .padding(.top, 8)
             .transition(.opacity.combined(with: .move(edge: .top)))

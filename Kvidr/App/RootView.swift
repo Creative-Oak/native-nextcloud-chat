@@ -12,6 +12,10 @@ struct RootView: View {
     @State private var composerFocused = false
     /// Owned here because the To: field lives in the toolbar, not in the detail pane.
     @FocusState private var recipientsFocused: Bool
+    /// How wide the conversation column is. A toolbar item sizes itself to its content and
+    /// ignores `maxWidth: .infinity`, so the To: band can only span the row by being told a
+    /// width — and this is the only place that knows one.
+    @State private var detailWidth: CGFloat = 480
     @State private var searchFocusRequest = false
     /// The command palette, while it is up. A model per showing: it starts empty.
     @State private var palette: CommandPaletteModel?
@@ -267,6 +271,7 @@ struct RootView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { detailWidth = $0 }
 
                 if isShowingInspector, let inspector = app.inspector {
                     InspectorView(
@@ -441,8 +446,10 @@ struct RootView: View {
         // these two stand down rather than crowding beside it.
         if app.isShowingDraft, let draft = app.draft {
             ToolbarItem(placement: .principal) {
+                // Less a margin at each end, so it stops short of the window's edges the
+                // way the composer does at the other end of the pane.
                 RecipientBand(draft: draft, isFocused: $recipientsFocused)
-                    .frame(minWidth: 280, maxWidth: .infinity)
+                    .frame(width: max(280, detailWidth - 24))
             }
             .sharedBackgroundVisibility(.hidden)
         } else {
