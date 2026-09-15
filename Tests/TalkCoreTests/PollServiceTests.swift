@@ -231,3 +231,33 @@ struct PollServiceTests {
         #expect(poll.status == .closed)
     }
 }
+
+@Suite("Poll messages")
+struct PollMessageTests {
+    private func poll(_ id: String = "7") -> RichObject {
+        RichObject(type: .talkPoll, id: id, name: "Lunch?")
+    }
+
+    @Test("A message that is only a poll draws its own container")
+    func soloPollSkipsTheBubble() {
+        let content = MessageContent(blocks: [.attachment(poll())], mentionsCurrentUser: false)
+        #expect(content.soloPoll?.id == "7")
+    }
+
+    @Test("A poll with something beside it still belongs in a bubble")
+    func pollWithTextKeepsTheBubble() {
+        let content = MessageContent(
+            blocks: [.paragraph([.text("what do you think")]), .attachment(poll())],
+            mentionsCurrentUser: false
+        )
+        // Otherwise the words would be left floating with no bubble of their own.
+        #expect(content.soloPoll == nil)
+    }
+
+    @Test("A lone file is not a poll")
+    func fileIsNotAPoll() {
+        let file = RichObject(type: .file, id: "3", name: "report.pdf")
+        let content = MessageContent(blocks: [.attachment(file)], mentionsCurrentUser: false)
+        #expect(content.soloPoll == nil)
+    }
+}

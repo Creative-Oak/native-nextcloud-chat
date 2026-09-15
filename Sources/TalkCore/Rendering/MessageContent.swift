@@ -77,6 +77,18 @@ struct MessageContent: Sendable, Hashable {
 
     static let empty = MessageContent(blocks: [], mentionsCurrentUser: false)
 
+    /// The poll this message is, when a poll is all it is.
+    ///
+    /// A poll draws its own container — capsules on the transcript, as Messages does — so
+    /// the bubble that would otherwise hold it is skipped. Only when the poll is the whole
+    /// message: a poll quoted beside text still belongs in one.
+    var soloPoll: RichObject? {
+        guard blocks.count == 1, case .attachment(let object) = blocks[0], object.type == .talkPoll else {
+            return nil
+        }
+        return object
+    }
+
     /// One-line projection for sidebar previews and notification bodies.
     var preview: String {
         blocks

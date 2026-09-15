@@ -73,7 +73,7 @@ private struct MessageBlockView: View {
             }
 
         case .attachment(let object):
-            AttachmentView(object: object)
+            AttachmentView(object: object, isFromMe: isFromMe)
         }
     }
 }
@@ -186,6 +186,7 @@ private struct CodeBlockView: View {
 /// client feel like a file browser.
 private struct AttachmentView: View {
     let object: RichObject
+    var isFromMe = false
 
     @Environment(\.openAttachment) private var openAttachment
 
@@ -193,7 +194,7 @@ private struct AttachmentView: View {
         // A poll is not a file to open: it is something to take part in, so it gets a card
         // that can be voted in rather than a row that opens a viewer.
         if object.type == .talkPoll, let pollID = Int(object.id) {
-            PollCard(pollID: pollID, question: object.name)
+            PollCard(pollID: pollID, question: object.name, isFromMe: isFromMe)
         } else if object.isImage && object.previewAvailable {
             InlineImageView(object: object)
                 .contextMenu { menu }

@@ -95,147 +95,156 @@ extension EnvironmentValues {
     }
 }
 
-/// A poll in the transcript: the question, its options, and what everyone chose.
+/// A poll in the transcript, drawn as Messages draws one: a stack of capsules whose widths
+/// are the result, rather than a card with a chart in it.
+///
+/// It has no container of its own — `MessageRow` skips the bubble for a message that is
+/// nothing but a poll, so these sit on the transcript the way Messages' do.
 struct PollCard: View {
     /// From the message's rich object — all it carries besides the question.
     let pollID: Int
     let question: String
+    var isFromMe = false
 
     @Environment(\.pollStore) private var store
+    /// Measured once here rather than per row: every capsule's width is a fraction of it.
+    @State private var available: CGFloat = 260
+
+    private var alignment: HorizontalAlignment { isFromMe ? .trailing : .leading }
+    private var frameAlignment: Alignment { isFromMe ? .trailing : .leading }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            header
+        VStack(alignment: alignment, spacing: 6) {
+            Text(question)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 4)
+                .padding(.bottom, 2)
 
             if let poll = store?.poll(pollID) {
                 ForEach(Array(poll.options.enumerated()), id: \.offset) { index, option in
-                    PollOptionRow(poll: poll, optionID: index, label: option) {
+                    PollOptionCapsule(
+                        poll: poll,
+                        optionID: index,
+                        label: option,
+                        width: width(for: poll, option: index)
+                    ) {
                         Task { await store?.toggle(option: index, on: pollID) }
                     }
                 }
                 footer(poll)
             } else if let message = store?.failures[pollID] {
-                Text(message)
-                    .font(.caption)
-                    .foregroundStyle(.red)
+                Text(message).font(.caption).foregroundStyle(.red)
             } else {
-                ProgressView().controlSize(.small)
+                ProgressView().controlSize(.small).padding(.vertical, 8)
             }
         }
-        .padding(12)
-        .frame(maxWidth: 340, alignment: .leading)
-        .background(.quaternary.opacity(0.4), in: .rect(cornerRadius: 10))
+        .frame(maxWidth: 320, alignment: frameAlignment)
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { available = $0 }
         .task { await store?.load(pollID) }
     }
 
-    private var header: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 6) {
-            Image(systemName: "chart.bar.doc.horizontal")
-                .foregroundStyle(.secondary)
-            // The question comes with the message, so it is on screen before the fetch
-            // lands — the card fills in around it rather than appearing from nothing.
-            Text(question)
-                .font(.headline)
-                .fixedSize(horizontal: false, vertical: true)
-        }
+    /// Capsules start at a little under two thirds and grow to the full width with their
+    /// share of the vote. That baseline is what keeps an unvoted poll from reading as a
+    /// column of empty bars, and what makes a leading option obvious at a glance.
+    private func width(for poll: Poll, option: Int) -> CGFloat {
+        let base = 0.62
+        guard poll.hasResults, let voters = poll.voterCount, voters > 0 else { return available * base }
+        let share = min(1, Double(poll.votes(for: option)) / Double(voters))
+        return available * (base + (1 - base) * share)
     }
 
     @ViewBuilder
     private func footer(_ poll: Poll) -> some View {
         HStack(spacing: 8) {
-            Text(summary(poll))
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            Spacer(minLength: 0)
-
             if store?.canClose(poll) == true {
                 Button("End Poll") { Task { await store?.close(pollID) } }
                     .buttonStyle(.link)
                     .font(.caption)
             }
+            Text(summary(poll))
+                .font(.caption)
+                .foregroundStyle(.tertiary)
         }
+        .padding(.horizontal, 4)
         .padding(.top, 2)
     }
 
     private func summary(_ poll: Poll) -> String {
         if poll.status == .closed {
             let voters = poll.voterCount ?? 0
-            return voters == 1 ? "Closed · 1 vote" : "Closed · \(voters) votes"
+            return voters == 1 ? "Ended · 1 vote" : "Ended · \(voters) votes"
         }
         if !poll.hasResults {
-            // The honest reading of a withheld result, rather than a row of zeroes that
+            // The honest reading of a withheld result, rather than a row of noughts that
             // looks like nobody has voted.
-            return poll.resultMode == .hiddenUntilClosed
-                ? "Results when the poll closes"
-                : "Vote to see the results"
+            return poll.resultMode == .hiddenUntilClosed ? "Results when it ends" : "Vote to see results"
         }
         let voters = poll.voterCount ?? 0
-        return voters == 1 ? "1 vote so far" : "\(voters) votes so far"
+        return voters == 1 ? "1 vote" : "\(voters) votes"
     }
 }
 
-/// One option: a checkable row that doubles as its own result bar.
-private struct PollOptionRow: View {
+/// One option: a capsule that is its own result bar.
+private struct PollOptionCapsule: View {
     let poll: Poll
     let optionID: Int
     let label: String
+    let width: CGFloat
     var onTap: () -> Void
 
     private var isChosen: Bool { poll.votedSelf.contains(optionID) }
     private var isVotable: Bool { poll.status == .open }
-
-    private var share: Double {
-        guard poll.hasResults, let total = poll.voterCount, total > 0 else { return 0 }
-        // Clamped: nothing should exceed the voter count, but a bar wider than its row is a
-        // worse way to find out that something did.
-        return min(1, Double(poll.votes(for: optionID)) / Double(total))
-    }
+    /// Filled when it has something to show for itself: your own vote, or votes you can see.
+    private var isFilled: Bool { isChosen || (poll.hasResults && poll.votes(for: optionID) > 0) }
 
     var body: some View {
         Button(action: onTap) {
             HStack(spacing: 8) {
-                Image(systemName: symbol)
-                    .foregroundStyle(isChosen ? Color.accentColor : .secondary)
-
                 Text(label)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .font(.body.weight(.semibold))
+                    .lineLimit(2)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                 if poll.hasResults {
                     Text("\(poll.votes(for: optionID))")
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(.secondary)
+                        .font(.subheadline.weight(.medium).monospacedDigit())
+                        .opacity(0.75)
                 }
+
+                mark
             }
-            .padding(.vertical, 6)
-            .padding(.horizontal, 8)
-            .background(alignment: .leading) {
-                // The bar is the row's own background rather than a separate track: a poll
-                // with results should read as a chart without turning into one.
-                if poll.hasResults {
-                    GeometryReader { proxy in
-                        Color.accentColor.opacity(0.14)
-                            .frame(width: proxy.size.width * share)
-                    }
-                }
-            }
-            .background(.quaternary.opacity(0.35))
-            .clipShape(.rect(cornerRadius: 7))
-            .contentShape(.rect)
+            .foregroundStyle(isFilled ? AnyShapeStyle(.white) : AnyShapeStyle(Color.accentColor))
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .frame(width: width, alignment: .leading)
+            .background(isFilled ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(Color.accentColor.opacity(0.15)))
+            .clipShape(.capsule)
+            .contentShape(.capsule)
         }
         .buttonStyle(.plain)
         .disabled(!isVotable)
+        .animation(.smooth(duration: 0.25), value: width)
         .accessibilityAddTraits(isChosen ? [.isButton, .isSelected] : .isButton)
         .accessibilityLabel(accessibilityLabel)
     }
 
-    private var symbol: String {
-        // A closed poll is a record, not a control, so it loses the affordance rather than
-        // showing an empty box nobody can tick.
-        if !isVotable { return isChosen ? "checkmark.circle.fill" : "circle.dotted" }
-        if poll.allowsMultipleAnswers { return isChosen ? "checkmark.square.fill" : "square" }
-        return isChosen ? "largecircle.fill.circle" : "circle"
+    /// The ring at the trailing edge, ticked when it is one of yours. Messages puts the
+    /// voters' faces here; Talk only says who voted once a public poll has closed, so a
+    /// ring that is honest about your own vote beats a row of faces that is often missing.
+    @ViewBuilder
+    private var mark: some View {
+        if isChosen {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 19))
+                .symbolRenderingMode(.palette)
+                .foregroundStyle(Color.accentColor, .white)
+        } else {
+            Circle()
+                .strokeBorder(isFilled ? AnyShapeStyle(.white.opacity(0.7)) : AnyShapeStyle(Color.accentColor.opacity(0.55)), lineWidth: 1.5)
+                .frame(width: 19, height: 19)
+        }
     }
 
     private var accessibilityLabel: String {

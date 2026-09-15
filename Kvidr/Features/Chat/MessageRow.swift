@@ -140,6 +140,10 @@ struct MessageRow: View {
     private var bubble: some View {
         if message.isDeleted || message.kind == .commentDeleted {
             content_
+        } else if content.soloPoll != nil {
+            // A poll is its own container. Inside a bubble its capsules sit on the accent
+            // fill and their tints fight it — in Messages the poll *is* the bubble.
+            content_
         } else {
             content_
                 .padding(.horizontal, 10)
