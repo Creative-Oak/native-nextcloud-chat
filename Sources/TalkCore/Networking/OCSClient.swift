@@ -200,7 +200,7 @@ actor OCSClient {
                 error = try data.decode(String.self, forKey: .error)
             }
         }
-        return (try? JSONDecoder().decode(ErrorOnly.self, from: body))?.error
+        return TalkError.sanitizedServerText((try? JSONDecoder().decode(ErrorOnly.self, from: body))?.error)
     }
 
     private static func ocsMessage(from body: Data) -> String? {
@@ -217,8 +217,10 @@ actor OCSClient {
             }
         }
         guard let decoded = try? JSONDecoder().decode(MessageOnly.self, from: body),
-              let message = decoded.message, !message.isEmpty, message != "OK"
+              let message = TalkError.sanitizedServerText(decoded.message), message != "OK"
         else { return nil }
+        // Bounded and stripped of control characters on the way in, so every error payload
+        // built from it is already safe to put on screen — see ``TalkError/quoting(_:)``.
         return message
     }
 

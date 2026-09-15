@@ -244,6 +244,10 @@ struct MessageContentParser: Sendable {
 
     // MARK: - Links
 
+    /// As many links as a menu can usefully offer. A message with more of them is a list
+    /// of links, and the menu is not where you read a list.
+    static let maximumLinksListed = 8
+
     /// The first bare `http(s)://` URL in a piece of text, Markdown or not.
     static func firstWebLink(in text: String) -> URL? {
         webLinks(in: text, limit: 1).first
@@ -255,7 +259,7 @@ struct MessageContentParser: Sendable {
     ///
     /// One loop, so the URL a preview card is fetched for and the URL the menu offers to
     /// copy are found the same way and can never disagree about where a message points.
-    static func webLinks(in text: String, limit: Int = maximumLinksListed) -> [URL] {
+    static func webLinks(in text: String, limit: Int = MessageContentParser.maximumLinksListed) -> [URL] {
         var found: [URL] = []
         var remainder = Substring(text)
 
@@ -276,10 +280,6 @@ struct MessageContentParser: Sendable {
         }
         return found
     }
-
-    /// As many links as a menu can usefully offer. A message with more of them is a list
-    /// of links, and the menu is not where you read a list.
-    static let maximumLinksListed = 8
 
     /// Finds bare `http(s)://` URLs in plain text so they become real links.
     ///

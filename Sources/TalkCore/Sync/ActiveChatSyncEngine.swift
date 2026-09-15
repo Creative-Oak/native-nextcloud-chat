@@ -192,16 +192,22 @@ actor ActiveChatSyncEngine {
             return false
 
         case .notFound:
-            Log.sync.notice("Conversation \(token) is gone")
+            // The token stays out of the log: it is a capability, and this log line is public.
+            Log.sync.notice("The conversation being synced no longer exists")
             continuation.yield(.failed(.notFound))
             return false
 
         case .sessionExpired:
             // 412 means the room session died. Re-join without force so another client of
             // this user (the web app, the phone) isn't kicked out from under them.
-            Log.sync.info("Chat session expired for \(token); re-joining")
+            //
+            // The attempt counter moves here as it does everywhere else. Without it the
+            // backoff below is `delay(forAttempt: 0)`, which is zero, so a server that
+            // answers every poll with 412 holds the client in a poll-and-join loop with no
+            // pause at all — and silently, because this branch never reports `.reconnecting`.
+            Log.sync.info("Chat session expired; re-joining")
+            attempt += 1
             _ = try? await conversations.join(token: token, force: false)
-            return true
 
         case .offline:
             continuation.yield(.state(.offline))

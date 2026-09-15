@@ -222,6 +222,11 @@ final class AppModel {
             await dependencies.store.deleteAccount(id: account.id)
         }
 
+        // Dropping the loader leaves the files. Their names are the user ids and room
+        // tokens this account could see, so the cache outlines the account's contacts and
+        // conversations for anyone who reads the directory afterwards — on a shared or
+        // handed-on Mac, after the person signed out precisely so it wouldn't.
+        await avatarLoader?.purge()
         avatarLoader = nil
         previewLoader = nil
         conversationList = nil
