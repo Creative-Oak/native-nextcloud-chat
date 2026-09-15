@@ -525,11 +525,19 @@ struct RootView: View {
         .sharedBackgroundVisibility(.hidden)
     }
 
-    /// The distance between the close and Edit items that lands close ten points in
-    /// from the panel's top-left corner, matching Edit's inset from the window's edge:
-    /// the panel's width, less the two items, the toolbar's spacing around the gap,
-    /// and that inset. Measured, not derived; the toolbar's own spacing is its secret.
-    private static let inspectorControlGap: CGFloat = inspectorWidth - 32 - editWidth - 4 * 8 + 2
+    /// The distance between the close and Edit items that holds close
+    /// `inspectorControlInset` in from the panel's leading edge: the panel's width, less
+    /// the two items, the toolbar's spacing around the gap, and the inset itself.
+    /// Measured, not derived; the toolbar's own spacing is its secret.
+    private static let inspectorControlGap: CGFloat =
+        inspectorWidth - closeWidth - editWidth - 4 * 8 + 20 - inspectorControlInset
+    /// How far close sits in from the panel's leading edge. The toolbar band centres its
+    /// items vertically rather than letting anything inset them, which leaves close about
+    /// twelve points below the window's top edge; the leading inset is matched to that, so
+    /// the button reads as sitting in a corner rather than pushed in from one.
+    private static let inspectorControlInset: CGFloat = 12
+    /// The close button's circle.
+    private static let closeWidth: CGFloat = 32
     /// The Edit capsule's width.
     private static let editWidth: CGFloat = 50
 }
