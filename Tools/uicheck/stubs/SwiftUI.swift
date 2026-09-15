@@ -524,6 +524,7 @@ public struct GlassEffectTransition: Sendable {
 
     public func font(_ font: Font?) -> Text { self }
     public func foregroundStyle(_ style: some ShapeStyle) -> Text { self }
+    public func foregroundStyle(_ primary: some ShapeStyle, _ secondary: some ShapeStyle) -> Text { self }
     public func bold() -> Text { self }
     public func italic(_ isActive: Bool = true) -> Text { self }
     public func monospacedDigit() -> Text { self }
@@ -1007,6 +1008,11 @@ extension View {
 
     public func font(_ font: Font?) -> StubView { StubView() }
     public func foregroundStyle(_ style: some ShapeStyle) -> StubView { StubView() }
+    /// The palette overloads: a multicolour symbol takes one style per layer, and the
+    /// second and third are written as leading-dot members, so they need a typed position
+    /// to infer from.
+    public func foregroundStyle(_ primary: some ShapeStyle, _ secondary: some ShapeStyle) -> StubView { StubView() }
+    public func foregroundStyle(_ primary: some ShapeStyle, _ secondary: some ShapeStyle, _ tertiary: some ShapeStyle) -> StubView { StubView() }
     public func foregroundColor(_ color: Color?) -> StubView { StubView() }
     public func tint(_ color: Color?) -> StubView { StubView() }
     public func opacity(_ value: Double) -> StubView { StubView() }
