@@ -98,6 +98,7 @@ extension EnvironmentValues {
 struct InlineImageView: View {
     let object: RichObject
     var maximumWidth: CGFloat = 320
+    var maximumHeight: CGFloat = 280
     /// Rounder than a thumbnail in a row, because with no bubble around it the picture is
     /// the shape the eye reads.
     var cornerRadius: CGFloat = 16
@@ -112,8 +113,12 @@ struct InlineImageView: View {
             if let image {
                 Image(nsImage: image)
                     .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(maxWidth: maximumWidth, maxHeight: 280)
+                    // An exact frame, not `maxWidth`/`maxHeight`: those leave the container
+                    // at its limit with the picture fitted inside, and the rounded border
+                    // below then draws a box around the picture instead of round it. Inside
+                    // a bubble the gap was accent on accent and invisible; bare on the
+                    // transcript it is the first thing you see.
+                    .frame(width: size(of: image).width, height: size(of: image).height)
                     .clipShape(.rect(cornerRadius: cornerRadius, style: .continuous))
                     .overlay {
                         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
@@ -146,8 +151,23 @@ struct InlineImageView: View {
         guard let width = object.width, let height = object.height, width > 0, height > 0 else {
             return CGSize(width: 220, height: 150)
         }
-        let scale = min(maximumWidth / CGFloat(width), 280 / CGFloat(height), 1)
-        return CGSize(width: CGFloat(width) * scale, height: CGFloat(height) * scale)
+        return fitted(CGSize(width: CGFloat(width), height: CGFloat(height)))
+    }
+
+    /// The picture's own size, which is what the container should be. The server's `width`
+    /// and `height` are a hint for the placeholder; once the bytes are here, the bytes know.
+    private func size(of image: NSImage) -> CGSize {
+        fitted(image.size)
+    }
+
+    /// Scaled down to fit the limits, never up: a small picture blown out to fill the width
+    /// is worse than a small picture.
+    private func fitted(_ size: CGSize) -> CGSize {
+        guard size.width > 0, size.height > 0 else {
+            return CGSize(width: 220, height: 150)
+        }
+        let scale = min(maximumWidth / size.width, maximumHeight / size.height, 1)
+        return CGSize(width: (size.width * scale).rounded(), height: (size.height * scale).rounded())
     }
 
     private func load() async {
