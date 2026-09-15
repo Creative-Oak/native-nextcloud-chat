@@ -14,6 +14,13 @@ struct NewMessageView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            // Full width less a margin at each end, the way the composer sits at the other
+            // end of the pane. The toolbar above it is empty while a draft is open, so this
+            // is the top of the window in everything but name.
+            RecipientBand(draft: draft, isFocused: $recipientsFocused)
+                .padding(.horizontal, 12)
+                .padding(.top, 8)
+
             Spacer(minLength: 0)
 
             if let error = draft.error, draft.results.isEmpty {
@@ -26,9 +33,11 @@ struct NewMessageView: View {
             Spacer(minLength: 0)
             composer
         }
-        // Hanging from the top rather than filling the pane: the matches belong under the
-        // band they came from, the way Messages drops them out of the To: field.
-        .overlay(alignment: .top) { suggestions }
+        // Hanging from the band rather than filling the pane: the matches belong under the
+        // field they came from, the way Messages drops them out of the To: field.
+        .overlay(alignment: .top) {
+            suggestions.padding(.top, GlassMetrics.control + 12)
+        }
         .navigationTitle(draft.title)
         .onAppear { recipientsFocused = true }
     }

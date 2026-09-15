@@ -42,6 +42,9 @@ struct RecipientBand: View {
                         return .handled
                     }
             }
+            // Takes the slack, so the band's chips stay left and the globe and + sit at the
+            // trailing edge rather than everything bunching in the middle of a wide band.
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             if draft.isSearching { ProgressView().controlSize(.small) }
 
@@ -80,7 +83,7 @@ struct RecipientBand: View {
         .padding(.leading, 14)
         .padding(.trailing, 6)
         .padding(.vertical, 6)
-        .frame(minHeight: GlassMetrics.control)
+        .frame(maxWidth: .infinity, minHeight: GlassMetrics.control)
         .glass(.field, cornerRadius: GlassMetrics.control / 2)
     }
 }
