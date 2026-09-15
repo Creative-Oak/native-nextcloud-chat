@@ -12,6 +12,7 @@ struct ComposerView: View {
     @State private var height: CGFloat = ComposerTextView.minimumHeight
     @State private var isShowingPhotos = false
     @State private var pickedPhotos: [PhotosPickerItem] = []
+    @State private var isShowingNewPoll = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -51,6 +52,10 @@ struct ComposerView: View {
                     Button("Photos…", systemImage: "photo") { isShowingPhotos = true }
                     Button("Files…", systemImage: "folder") { chooseFiles() }
                         .keyboardShortcut("a", modifiers: [.command, .shift])
+                    if model.capabilities.supportsPolls {
+                        Divider()
+                        Button("Poll…", systemImage: "chart.bar.doc.horizontal") { isShowingNewPoll = true }
+                    }
                 } label: {
                     Image(systemName: "plus")
                         .font(.system(size: 17, weight: .medium))
@@ -105,6 +110,12 @@ struct ComposerView: View {
             guard !picked.isEmpty else { return }
             pickedPhotos = []
             Task { await stage(picked) }
+        }
+        .sheet(isPresented: $isShowingNewPoll) {
+            NewPollSheet(session: model.session, token: model.conversation.token) {
+                // Nothing to insert here: creating a poll posts the message itself, and the
+                // sync loop brings it back like anyone else's.
+            }
         }
     }
 

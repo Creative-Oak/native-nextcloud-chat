@@ -190,7 +190,11 @@ private struct AttachmentView: View {
     @Environment(\.openAttachment) private var openAttachment
 
     var body: some View {
-        if object.isImage && object.previewAvailable {
+        // A poll is not a file to open: it is something to take part in, so it gets a card
+        // that can be voted in rather than a row that opens a viewer.
+        if object.type == .talkPoll, let pollID = Int(object.id) {
+            PollCard(pollID: pollID, question: object.name)
+        } else if object.isImage && object.previewAvailable {
             InlineImageView(object: object)
                 .contextMenu { menu }
         } else {

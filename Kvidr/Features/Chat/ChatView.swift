@@ -22,6 +22,8 @@ struct ChatView: View {
     @State private var didInitialScroll = false
     @State private var highlightClearTask: Task<Void, Never>?
     @State private var viewingAttachment: RichObject?
+    /// One per conversation, so two cards for the same poll agree and fetch once.
+    @State private var pollStore: PollStore?
     /// Suppresses per-row hover work while the transcript is moving.
     @State private var isScrolling = false
     /// The message whose reactions are floating above it, if any.
@@ -126,6 +128,12 @@ struct ChatView: View {
         .animation(.smooth(duration: 0.2), value: model.isSearching)
         .environment(\.openAttachment) { object in
             withAnimation(.smooth(duration: 0.2)) { viewingAttachment = object }
+        }
+        .environment(\.pollStore, pollStore)
+        .task(id: model.conversation.token) {
+            let store = PollStore(session: model.session, token: model.conversation.token)
+            store.isModerator = model.conversation.isModerator
+            pollStore = store
         }
     }
 

@@ -19,6 +19,7 @@ struct Session: Sendable {
     let sharedItems: SharedItemsService
     let attachments: AttachmentService
     let messageSearch: MessageSearchService
+    let polls: PollService
 
     let conversationSync: ConversationSyncEngine
     let chatSync: ActiveChatSyncEngine
@@ -40,6 +41,7 @@ struct Session: Sendable {
         directory = DirectoryService(client: client)
         sharedItems = SharedItemsService(client: client)
         messageSearch = MessageSearchService(client: client)
+        polls = PollService(client: client)
         attachments = AttachmentService(
             server: account.server,
             credentials: credentials,
