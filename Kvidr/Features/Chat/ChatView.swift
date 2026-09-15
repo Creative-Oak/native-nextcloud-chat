@@ -101,7 +101,13 @@ struct ChatView: View {
         // people aim, and aiming at a 30pt field with a file in hand is a chore.
         .dropDestination(for: URL.self) { urls, _ in
             guard model.attachments.canAttach, model.conversation.canPostMessages else { return false }
-            model.attachments.enqueue(urls: urls)
+            // `URL.self` matches `public.url` as well as `public.file-url`, so a hyperlink
+            // dragged out of the transcript or a browser arrives here indistinguishable
+            // from a dragged document. The queue refuses those; saying so here as well
+            // means the drag is reported as declined rather than silently swallowed.
+            let files = urls.filter(\.isLocalFile)
+            guard !files.isEmpty else { return false }
+            model.attachments.enqueue(urls: files)
             return true
         } isTargeted: { targeted in
             withAnimation(.smooth(duration: 0.15)) { model.attachments.setDropTargeted(targeted) }

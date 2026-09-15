@@ -48,6 +48,19 @@ struct LoginView: View {
                         .frame(maxWidth: 340)
                         .transition(.opacity)
                 }
+
+                // Sign-out is best effort and never blocks, so this is the one place the
+                // user finds out that the app password they asked to be rid of may still
+                // be live. It is not an error about what they are doing now, hence the
+                // quieter treatment.
+                if let warning = app.signOutWarning {
+                    Text(warning)
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: 340)
+                        .transition(.opacity)
+                }
             }
             .frame(maxWidth: 380)
             .padding(.horizontal, 36)
@@ -134,6 +147,7 @@ final class LoginModel {
 
     func begin() {
         error = nil
+        app.dismissSignOutWarning()
         task?.cancel()
 
         let allowInsecure = app.dependencies.preferences.allowsInsecureLocalServers
@@ -161,6 +175,10 @@ final class LoginModel {
                 NSWorkspace.shared.open(flow.loginURL)
 
                 let result = try await authentication.completeLogin(flow)
+                // Cancel, or a second attempt against a different server, replaces
+                // `session`. Without this a flow that completed a moment too late would
+                // still sign the app in — at the address the user had just backed out of.
+                guard !Task.isCancelled, self.session == flow else { return }
                 self.phase = .finishing
                 await self.app.signedIn(account: result.account)
             } catch let failure as TalkError {

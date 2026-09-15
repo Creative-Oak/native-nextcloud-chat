@@ -107,13 +107,20 @@ actor AuthenticationService {
               let pollEndpoint = URL(string: dto.poll.endpoint)
         else { throw .unexpectedResponse("login/v2 returned an unusable URL") }
 
-        try validate(url: loginURL, purpose: "login")
-        try validate(url: pollEndpoint, purpose: "poll")
-
-        if pollEndpoint.host() != server.url.host() {
-            // Legitimate when overwrite.cli.url points elsewhere, but worth a breadcrumb.
-            Log.auth.warning("Login flow poll host differs from the entered server host")
-        }
+        // Both URLs are server-supplied strings, and both are acted on with the user's
+        // trust behind them: the login URL goes to the default browser, the poll endpoint
+        // receives a token that is about to become an app password. A server that can name
+        // a *different* origin for either one can broker someone else's login flow through
+        // us — the user sees their real Nextcloud in the browser and approves it, and the
+        // credential that comes back belongs to that server, not this one.
+        //
+        // A server whose overwrite.cli.url points elsewhere used to be the reason this was
+        // only a warning. It isn't a good enough one: nothing distinguishes that server
+        // from a relay standing in front of one, and a user on such an install can simply
+        // type the overwritten address instead, which is the address their server believes
+        // it lives at anyway.
+        try validate(url: loginURL, purpose: "login", matches: server)
+        try validate(url: pollEndpoint, purpose: "poll", matches: server)
 
         Log.auth.info("Started login flow for \(server.host)")
         return LoginFlowSession(
@@ -151,6 +158,14 @@ actor AuthenticationService {
             }
             guard !dto.appPassword.isEmpty, !dto.loginName.isEmpty else {
                 throw .unexpectedResponse("login/v2 poll returned empty credentials")
+            }
+            // The response names the server the password was minted for. We don't use it
+            // as an address — see `finishLogin` — but we do hold it to the origin the user
+            // typed, so a credential issued somewhere else is refused rather than stored.
+            guard let claimed = URL(string: dto.server),
+                  Self.isSameOrigin(claimed, as: session.server)
+            else {
+                throw .unexpectedResponse("login/v2 poll returned credentials for another server")
             }
             return Credentials(loginName: dto.loginName, appPassword: dto.appPassword)
         case 404:
@@ -198,8 +213,11 @@ actor AuthenticationService {
         session: LoginFlowSession,
         credentials: Credentials
     ) async throws(TalkError) -> AuthenticatedAccount {
-        // The poll response's `server` is authoritative — it reflects overwrite.cli.url,
-        // which is the URL the server believes it lives at.
+        // The address the user typed is the one the credential is used against. The poll
+        // response's own `server` field is never adopted in its place — a server that could
+        // redirect us here would be aiming an app password the user approved for one origin
+        // at another. It is checked against this origin in ``poll(_:)`` instead, so by the
+        // time we get here the two are known to agree.
         let server = session.server
         let client = OCSClient(server: server, credentials: credentials, transport: transport)
 
@@ -221,6 +239,11 @@ actor AuthenticationService {
             capabilities: talk,
             talkHash: user.headers.talkHash ?? capabilities.headers.talkHash
         )
+
+        // Cancel has to mean cancel. Everything above this line is recoverable — a flow
+        // the user backed out of leaves an app password they can revoke — but storing it
+        // signs the app in behind them, at the very server they were trying to get away from.
+        if Task.isCancelled { throw .cancelled }
 
         do {
             try credentialStore.store(credentials, for: account.id)
@@ -248,30 +271,112 @@ actor AuthenticationService {
 
     /// Removes the account: revokes the app password server-side (best effort — a revoked
     /// or unreachable server must not block sign-out) and deletes the keychain item.
-    func signOut(account: Account) async {
-        if let credentials = try? credentialStore.credentials(for: account.id) {
+    ///
+    /// Still never throws: being unable to reach the server must not leave the user stuck
+    /// signed in. But it reports what it actually managed, because the alternative is
+    /// telling someone their access was revoked while a working app password is still
+    /// sitting on the server, or in their keychain with no account left to point at it.
+    func signOut(account: Account) async -> SignOutOutcome {
+        var outcome = SignOutOutcome()
+
+        // Deliberately not `try?`: that flattened "the keychain wouldn’t open" into
+        // "nothing was stored", and the two want opposite answers — the first means a live
+        // credential is probably still here and the user needs to hear about it.
+        var credentials: Credentials? = nil
+        do {
+            credentials = try credentialStore.credentials(for: account.id)
+            // Nothing stored is nothing of ours left to revoke.
+            outcome.revokedOnServer = credentials == nil
+        } catch {
+            Log.auth.error("Couldn’t read the app password to revoke it; it may still be live")
+        }
+
+        if let credentials {
             let client = OCSClient(server: account.server, credentials: credentials, transport: transport)
             do {
                 _ = try await client.send(OCSRequest.delete(Endpoint.appPassword), as: EmptyResponse.self)
+                outcome.revokedOnServer = true
                 Log.auth.info("Revoked app password for \(account.userID)")
             } catch {
                 Log.auth.warning("Couldn’t revoke the app password server-side; removing it locally anyway")
             }
         }
+
         do {
             try credentialStore.remove(for: account.id)
+            outcome.removedLocally = true
         } catch {
             Log.auth.error("Failed to delete keychain item for account")
         }
+
+        return outcome
     }
 
-    private func validate(url: URL, purpose: String) throws(TalkError) {
+    private func validate(url: URL, purpose: String, matches server: ServerAddress) throws(TalkError) {
+        // Scheme first, so an http:// URL still reports the transport problem rather than
+        // the origin one — it is the more useful thing to tell someone.
+        try validateScheme(url: url, purpose: purpose)
+        guard Self.isSameOrigin(url, as: server) else {
+            // The host the server named is deliberately not repeated back: it is attacker
+            // text, and this message reaches the log.
+            throw .unexpectedResponse("login/v2 \(purpose) URL is not on \(server.host)")
+        }
+    }
+
+    private func validateScheme(url: URL, purpose: String) throws(TalkError) {
         guard let scheme = url.scheme?.lowercased() else {
             throw .unexpectedResponse("login/v2 \(purpose) URL has no scheme")
         }
         if scheme == "https" { return }
         if scheme == "http", isInsecureHTTPAllowed(), ServerAddress.isLocalHost(url.host() ?? "") { return }
         throw .insecureServer(host: url.host() ?? purpose)
+    }
+
+    /// Same scheme, host and port — the web’s own definition of an origin. Path is
+    /// deliberately not compared: Nextcloud can live in a subdirectory, and the login and
+    /// poll URLs sit at different paths under it by design.
+    static func isSameOrigin(_ url: URL, as server: ServerAddress) -> Bool {
+        guard let candidate = origin(of: url), let expected = origin(of: server.url) else { return false }
+        return candidate == expected
+    }
+
+    /// `nil` for anything without both a scheme and a host, which is then never equal to
+    /// anything — a URL we can’t pin down an origin for is not one we can trust.
+    private static func origin(of url: URL) -> String? {
+        guard let scheme = url.scheme?.lowercased(),
+              let host = url.host()?.lowercased(), !host.isEmpty
+        else { return nil }
+        // Spelling the default out, so https://host and https://host:443 are one origin.
+        let port = url.port ?? (scheme == "https" ? 443 : 80)
+        return "\(scheme)://\(host):\(port)"
+    }
+}
+
+/// What ``AuthenticationService/signOut(account:)`` managed to do.
+///
+/// Sign-out is best effort by design, so the parts that didn’t happen have to travel back
+/// to the UI: the Settings copy promises the app’s access is revoked, and an app password
+/// that outlives the account it belonged to is one nothing will ever try to clean up again.
+struct SignOutOutcome: Sendable, Equatable {
+    /// The app password is dead on the server — either we revoked it, or there was none
+    /// stored to revoke.
+    var revokedOnServer = false
+    /// The keychain item is gone.
+    var removedLocally = false
+
+    var isClean: Bool { revokedOnServer && removedLocally }
+
+    /// Short, calm and actionable, in the register of ``TalkError/userMessage``. `nil` when
+    /// there is nothing the user needs to do.
+    var warning: String? {
+        var parts: [String] = []
+        if !revokedOnServer {
+            parts.append("kvidr couldn’t revoke its own access on the server — remove this device under Security in your Nextcloud settings.")
+        }
+        if !removedLocally {
+            parts.append("The saved app password couldn’t be deleted from your keychain — remove the kvidr item in Keychain Access.")
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " ")
     }
 }
 

@@ -75,7 +75,10 @@ struct AttachmentMenu: View {
             }
         }
         guard !urls.isEmpty else { return }
-        queue.enqueue(urls: urls)
+        // As scratch files: each one is a copy the app made on the way out of the picker,
+        // so the queue owns it and clears it away again. A file chosen in the open panel
+        // below is the user's own and goes in by the other door.
+        queue.enqueue(scratchFiles: urls)
     }
 
     /// An open panel rather than a custom picker, because the system one already knows about
@@ -104,9 +107,10 @@ struct PickedPhoto: Transferable {
     static var transferRepresentation: some TransferRepresentation {
         FileRepresentation(importedContentType: .item) { received in
             // The received file is deleted as soon as this returns, so it is copied out —
-            // into a directory of its own, since two picks can share a name.
-            let directory = URL.temporaryDirectory.appending(path: UUID().uuidString)
-            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            // into a directory of its own, since two picks can share a name, and under
+            // ``AttachmentScratch`` so the copy can be told from a file the user chose and
+            // cleared away once it has been uploaded.
+            let directory = try AttachmentScratch.makeItemDirectory()
             let destination = directory.appending(path: received.file.lastPathComponent)
             try FileManager.default.copyItem(at: received.file, to: destination)
             return PickedPhoto(url: destination)

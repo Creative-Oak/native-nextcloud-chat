@@ -525,7 +525,7 @@ private struct SharedItemRow: View {
                     .foregroundStyle(.secondary)
                     .frame(width: 18)
                 VStack(alignment: .leading, spacing: 0) {
-                    Text(object?.name ?? "Attachment")
+                    Text(object?.displayName ?? "Attachment")
                         .font(.system(size: 13))
                         .lineLimit(1)
                         .truncationMode(.middle)
@@ -541,7 +541,7 @@ private struct SharedItemRow: View {
         .help("Show in conversation")
         .contextMenu {
             if let link = object?.link {
-                Button("Open in Nextcloud") { NSWorkspace.shared.open(link) }
+                Button("Open in Nextcloud") { MessageLink.open(link) }
                 Button("Copy Link") {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(link.absoluteString, forType: .string)

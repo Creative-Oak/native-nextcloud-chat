@@ -58,10 +58,26 @@ struct InlineText: View {
                         }
                     }
                 }
+                .help(hoveredDestination)
         } else {
             text
                 .textSelection(.enabled)
         }
+    }
+
+    /// Where the link under the pointer actually goes.
+    ///
+    /// A link here has no underline and its label is whatever the sender typed, so without
+    /// this there is nothing at all to tell `[cloud.acme.example](https://evil.tld)` from
+    /// the page it claims to be — not a status bar, not a menu item, not the label. The
+    /// frames the renderer records for the cursor already say which run the pointer is
+    /// over; this is the same answer, in words. ``LinkPreviewCard`` has shown its
+    /// destination like this all along, and an inline link is the one that needs it most.
+    private var hoveredDestination: String {
+        guard let url = hovered?.url else { return "" }
+        let text = url.absoluteString
+        // A tooltip that runs off the edge of the screen shows nobody anything.
+        return text.count > 180 ? String(text.prefix(180)) + "…" : text
     }
 
     /// The pointing hand over the link run itself, and the arrow back once off it — set
@@ -72,27 +88,52 @@ struct InlineText: View {
         (overLink ? NSCursor.pointingHand : NSCursor.arrow).set()
     }
 
-    /// The paragraph, run by run, with each link run tagged for the renderer. Built by
-    /// concatenation because a marker attribute can only be attached to a `Text`, not to
-    /// a run of an `AttributedString`.
+    /// A paragraph is a paragraph. Each run below wraps the whole accumulated result, so
+    /// the tree is as deep as the paragraph has runs, and SwiftUI walks it recursively to
+    /// resolve it, again to lay it out, and again to draw the invisible twin. Four
+    /// thousand emphasis runs fit inside Talk's message limit; past this many the message
+    /// is a shape rather than a sentence, and the tail is drawn as one plain run instead.
+    /// Every word is still there — only the emphasis on the end of it is lost.
+    private static let maximumRuns = 512
+
+    /// The paragraph, run by run, with each link run tagged with its destination for the
+    /// renderer. Built by concatenation because a marker attribute can only be attached to
+    /// a `Text`, not to a run of an `AttributedString`.
     private static func text(from attributed: AttributedString) -> Text {
         var result = Text(verbatim: "")
+        var remaining = maximumRuns
+        var tail: AttributedString.Index?
+
         for run in attributed.runs {
+            guard remaining > 0 else {
+                tail = run.range.lowerBound
+                break
+            }
+            remaining -= 1
             let piece = Text(AttributedString(attributed[run.range]))
-            let tagged = run.link == nil ? piece : piece.customAttribute(LinkRun())
+            let tagged = run.link.map { piece.customAttribute(LinkRun(url: $0)) } ?? piece
             // Interpolation is how two `Text`s are joined now; `+` is deprecated.
             result = Text("\(result)\(tagged)")
+        }
+
+        if let tail {
+            let rest = Text(verbatim: String(attributed[tail..<attributed.endIndex].characters))
+            result = Text("\(result)\(rest)")
         }
         return result
     }
 }
 
-/// Marks a run as a link, so the renderer can tell it from the words around it.
-private struct LinkRun: TextAttribute {}
+/// Marks a run as a link and carries where it goes, so the renderer can tell it from the
+/// words around it and the view can say what it found.
+private struct LinkRun: TextAttribute {
+    let url: URL
+}
 
-/// Where one link run landed.
+/// Where one link run landed, and what it points at.
 private struct LinkRunFrame: Equatable {
     var rect: CGRect
+    var url: URL
 }
 
 /// The frames the renderer found, shared with the view. A lock rather than a `@State`
@@ -116,9 +157,9 @@ private struct LinkRunRecorder: TextRenderer {
         var found: [LinkRunFrame] = []
         for line in layout {
             for run in line {
-                if run[LinkRun.self] != nil {
+                if let link = run[LinkRun.self] {
                     let bounds = run.typographicBounds
-                    found.append(LinkRunFrame(rect: bounds.rect))
+                    found.append(LinkRunFrame(rect: bounds.rect, url: link.url))
                 }
                 context.draw(run)
             }

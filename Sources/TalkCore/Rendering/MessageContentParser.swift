@@ -17,6 +17,11 @@ struct MessageContentParser: Sendable {
     /// the per-message flag and we honour it exactly.
     let markdownEnabled: Bool
 
+    /// A message is a message. A server that hangs ten thousand files off one is not
+    /// describing a share, and the transcript — which draws these blocks eagerly, and asks
+    /// the server for a thumbnail of each — should not try to draw it.
+    static let maximumTrailingAttachments = 16
+
     init(currentUserID: String, markdownEnabled: Bool = true) {
         self.currentUserID = currentUserID
         self.markdownEnabled = markdownEnabled
@@ -76,10 +81,15 @@ struct MessageContentParser: Sendable {
         }
 
         // Attachments referenced alongside text (a file with a caption) get their own card
-        // after the words, which is how Talk itself presents a captioned share.
+        // after the words, which is how Talk itself presents a captioned share. The cap is
+        // applied after the filter, so a map padded out with ten thousand parameters that
+        // are not attachments cannot spend the budget on the way past.
         let referenced = Self.referencedKeys(in: text)
-        for (key, object) in parameters.sorted(by: { $0.key < $1.key })
-        where !referenced.contains(key) && Self.isAttachment(object) {
+        let trailing = parameters
+            .sorted { $0.key < $1.key }
+            .filter { !referenced.contains($0.key) && Self.isAttachment($0.value) }
+            .prefix(Self.maximumTrailingAttachments)
+        for (_, object) in trailing {
             blocks.append(.attachment(object))
         }
 
@@ -136,10 +146,11 @@ struct MessageContentParser: Sendable {
             if isSystem { return (.text(object.name), false) }
             return (.mention(Mention(kind: .everyone, id: object.id, label: object.name, isCurrentUser: false)), true)
         case .highlight:
-            if let link = object.link { return (.link(url: link, label: object.name), false) }
-            return (.text(object.name), false)
+            // `link` is already only ever a web link — see ``RichObject/link``.
+            if let link = object.link { return (.link(url: link, label: object.displayName), false) }
+            return (.text(object.displayName), false)
         case .openGraph, .deckCard:
-            if let link = object.link { return (.link(url: link, label: object.name), false) }
+            if let link = object.link { return (.link(url: link, label: object.displayName), false) }
             return (.object(object), false)
         case .file, .talkAttachment, .talkPoll, .geoLocation:
             return (.object(object), false)
@@ -233,11 +244,22 @@ struct MessageContentParser: Sendable {
 
     // MARK: - Links
 
-    /// The first bare `http(s)://` URL in a piece of text, Markdown or not. Sentence
-    /// punctuation and a closing Markdown bracket after it are not part of it.
+    /// The first bare `http(s)://` URL in a piece of text, Markdown or not.
     static func firstWebLink(in text: String) -> URL? {
+        webLinks(in: text, limit: 1).first
+    }
+
+    /// Every bare `http(s)://` URL in a piece of text, Markdown or not, in the order they
+    /// appear. Sentence punctuation and a closing Markdown bracket after one are not part
+    /// of it.
+    ///
+    /// One loop, so the URL a preview card is fetched for and the URL the menu offers to
+    /// copy are found the same way and can never disagree about where a message points.
+    static func webLinks(in text: String, limit: Int = maximumLinksListed) -> [URL] {
+        var found: [URL] = []
         var remainder = Substring(text)
-        while let range = remainder.range(of: "http", options: .caseInsensitive) {
+
+        while found.count < limit, let range = remainder.range(of: "http", options: .caseInsensitive) {
             let candidate = remainder[range.lowerBound...]
             guard candidate.hasPrefix("http://") || candidate.hasPrefix("https://") else {
                 let skipTo = remainder.index(range.lowerBound, offsetBy: 4, limitedBy: remainder.endIndex) ?? remainder.endIndex
@@ -249,11 +271,15 @@ struct MessageContentParser: Sendable {
             while let last = urlText.last, ".,;:!?]".contains(last) {
                 urlText = urlText.dropLast()
             }
-            if let url = URL(string: String(urlText)), url.isWebLink { return url }
+            if let url = URL(string: String(urlText)), url.isWebLink { found.append(url) }
             remainder = remainder[urlText.endIndex...]
         }
-        return nil
+        return found
     }
+
+    /// As many links as a menu can usefully offer. A message with more of them is a list
+    /// of links, and the menu is not where you read a list.
+    static let maximumLinksListed = 8
 
     /// Finds bare `http(s)://` URLs in plain text so they become real links.
     ///
@@ -284,7 +310,7 @@ struct MessageContentParser: Sendable {
             let prefix = remainder[remainder.startIndex..<range.lowerBound]
             if !prefix.isEmpty { nodes.append(.text(String(prefix))) }
 
-            if let url = URL(string: String(urlText)), url.host() != nil {
+            if let url = URL(string: String(urlText)), url.isWebLink {
                 nodes.append(.link(url: url, label: String(urlText)))
             } else {
                 nodes.append(.text(String(urlText)))

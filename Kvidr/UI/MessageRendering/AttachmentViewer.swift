@@ -53,7 +53,7 @@ struct AttachmentViewer: View {
         GlassEffectContainer(spacing: GlassSpacing.distinct) {
             HStack(spacing: 10) {
                 VStack(alignment: .leading, spacing: 0) {
-                    Text(object.name)
+                    Text(object.displayName)
                         .lineLimit(1)
                         .truncationMode(.middle)
                     if let size = object.size {
@@ -78,7 +78,7 @@ struct AttachmentViewer: View {
 
                 if let link = object.link {
                     Button {
-                        NSWorkspace.shared.open(link)
+                        MessageLink.open(link)
                     } label: {
                         Label("Open in Nextcloud", systemImage: "arrow.up.forward.app")
                             .labelStyle(.iconOnly)
@@ -108,7 +108,10 @@ struct AttachmentViewer: View {
         defer { isSaving = false }
 
         let panel = NSSavePanel()
-        panel.nameFieldStringValue = object.name
+        // The prefill is a server-chosen name, and the panel is the last place the user
+        // reads it before it becomes a file: a name that reverses itself in the field is
+        // not the name that ends up on disk.
+        panel.nameFieldStringValue = object.displayName
         panel.canCreateDirectories = true
         guard panel.runModal() == .OK, let url = panel.url else { return }
 

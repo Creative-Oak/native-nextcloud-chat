@@ -11,6 +11,11 @@ import Security
 ///   bundle, such as a Linux test run.
 /// - `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` keeps the secret on this Mac:
 ///   it is a per-device credential and has no business syncing anywhere.
+/// - Every query sets `kSecUseDataProtectionKeychain`, which is what makes the line above
+///   true: without it these are items in the legacy file keychain, where `kSecAttrAccessible`
+///   is ignored and reach is decided by a per-item ACL rather than by our signing identity.
+///   Items written by a build that predates this key are in the other keychain and simply
+///   will not be found — that costs one re-login, which is the right price.
 /// - Nothing else in the app is allowed to read or write these items.
 struct KeychainStore: CredentialStore {
     let service: String
@@ -44,14 +49,19 @@ struct KeychainStore: CredentialStore {
             StoredCredentials(loginName: credentials.loginName, appPassword: credentials.appPassword)
         )
 
-        let query = baseQuery(accountID: accountID)
-        let attributes: [String: Any] = [kSecValueData as String: payload]
+        // Always add, never update. `SecItemUpdate` writes the data into whichever item
+        // already occupies this service/account pair and leaves its attributes — including
+        // its access control — exactly as they were, and the pair is entirely predictable
+        // (bundle id, then server URL and login name). A process running as the same user
+        // could therefore park an item there first and have us fill it with the app
+        // password. Deleting first means the item the secret lands in is always one this
+        // call just created, with the accessibility set below.
+        //
+        // A delete that fails is thrown rather than swallowed: the alternative is adding a
+        // second item beside the squatted one, or silently leaving the old secret in place.
+        try remove(for: accountID)
 
-        let updateStatus = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
-        if updateStatus == errSecSuccess { return }
-        guard updateStatus == errSecItemNotFound else { throw KeychainError.unexpectedStatus(updateStatus) }
-
-        var insert = query
+        var insert = baseQuery(accountID: accountID)
         insert[kSecValueData as String] = payload
         insert[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
         let addStatus = SecItemAdd(insert as CFDictionary, nil)
@@ -70,7 +80,10 @@ struct KeychainStore: CredentialStore {
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: accountID,
-            kSecAttrSynchronizable as String: false
+            kSecAttrSynchronizable as String: false,
+            // Has to be on the read, the write and the delete alike: an item added with it
+            // is invisible to a lookup without it, and the other way round.
+            kSecUseDataProtectionKeychain as String: true
         ]
     }
 

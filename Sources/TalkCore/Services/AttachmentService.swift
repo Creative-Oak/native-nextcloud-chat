@@ -51,6 +51,15 @@ struct FileTransfer: Sendable, Identifiable, Equatable {
     /// Where the upload put it, once it has been uploaded. The share step needs this, and
     /// so does taking the file back out of the composer.
     var remotePath: String?
+    /// Set only when the app wrote this file itself — a pasted image, or the copy made on
+    /// the way out of the Photos picker — and naming the directory it was written into.
+    ///
+    /// Nil for a file the user chose, which is theirs and is never touched. Ownership is
+    /// recorded rather than guessed at from the path: people are handed real files out of
+    /// the temporary directory all the time (an attachment opened from Mail, a file dragged
+    /// out of an archive), and a cleanup that goes by where a file happens to live deletes
+    /// the original the moment one of those is attached.
+    var temporaryItem: URL?
 
     init(fileURL: URL, byteCount: Int, caption: String = "", replyToMessageID: Int? = nil) {
         self.id = UUID()
@@ -131,6 +140,16 @@ actor AttachmentService {
         folder: String,
         progress: @escaping @Sendable (Double) -> Void
     ) async throws(TalkError) -> String {
+        // The guard is what makes the read below safe, so it sits directly on top of it.
+        // `Data(contentsOf:)` reads whatever kind of URL it is handed: given `https://…` it
+        // performs a blocking, untimed, unbounded GET on this actor and answers with the
+        // body — which would then be uploaded to the user’s Nextcloud and shared into a
+        // conversation. Staging refuses anything that is not a local file too, but a second
+        // place to stage from is one edit away, and the read is here.
+        guard transfer.fileURL.isLocalFile else {
+            throw .unexpectedResponse("Only files on this Mac can be attached")
+        }
+
         let data: Data
         do {
             data = try Data(contentsOf: transfer.fileURL)
@@ -312,5 +331,38 @@ extension AttachmentService {
             return try await download(path: path)
         }
         throw .unexpectedResponse("That file has no path to download from")
+    }
+}
+
+// MARK: - The two questions the upload path asks about a URL
+
+extension URL {
+    /// A file on this Mac — not merely something spelled like one.
+    ///
+    /// A drop and a paste both arrive as a plain `URL`, and `public.url` matches a hyperlink
+    /// as readily as a file, so by the time the composer sees one there is nothing left to
+    /// tell a dragged web link from a dragged document except this.
+    var isLocalFile: Bool {
+        guard isFileURL else { return false }
+        // `file://somewhere.example/share/secrets` is a file URL as well, and names another
+        // machine’s disk rather than this one’s.
+        guard let host = host(), !host.isEmpty else { return true }
+        return host.caseInsensitiveCompare("localhost") == .orderedSame
+    }
+
+    /// Whether this URL names something inside `directory`.
+    ///
+    /// Compared component by component, on standardised and symlink-resolved paths. A string
+    /// prefix is the tempting version and the wrong one: `/tmp/scratchX` has `/tmp/scratch`
+    /// as a prefix, so a cleanup written that way reaches into the directory next door — and
+    /// a path carrying `..` prefixes whatever you like while pointing somewhere else.
+    func isContained(in directory: URL) -> Bool {
+        guard isFileURL, directory.isFileURL else { return false }
+        let container = directory.standardizedFileURL.resolvingSymlinksInPath().pathComponents
+        let candidate = standardizedFileURL.resolvingSymlinksInPath().pathComponents
+        // Strictly inside: a directory does not contain itself, and deleting the container is
+        // never what a per-item cleanup meant.
+        guard candidate.count > container.count else { return false }
+        return Array(candidate.prefix(container.count)) == container
     }
 }

@@ -27,7 +27,7 @@ struct LinkPreviewCard: View {
 
     private func card(_ preview: LinkPreview) -> some View {
         Button {
-            NSWorkspace.shared.open(preview.url)
+            MessageLink.open(preview.url)
         } label: {
             VStack(alignment: .leading, spacing: 0) {
                 if let image = preview.image {
@@ -64,7 +64,7 @@ struct LinkPreviewCard: View {
         .buttonStyle(.plain)
         .help(preview.url.absoluteString)
         .contextMenu {
-            Button("Open Link") { NSWorkspace.shared.open(preview.url) }
+            Button("Open Link") { MessageLink.open(preview.url) }
             Button("Copy Link") {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(preview.url.absoluteString, forType: .string)
@@ -74,6 +74,10 @@ struct LinkPreviewCard: View {
     }
 
     private func load() async {
+        // A card is fetched the moment the row appears, from this machine, at an address
+        // the sender chose — see ``Foundation/URL/isPreviewableWebLink``. The loader
+        // refuses the same addresses; asking here too keeps the log quiet about them.
+        guard url.isPreviewableWebLink else { return }
         guard let loader else {
             Log.ui.warning("Link preview for \(url.host() ?? url.absoluteString): no loader in the environment")
             return

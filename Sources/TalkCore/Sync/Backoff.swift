@@ -26,8 +26,17 @@ struct Backoff: Sendable, Equatable {
     }
 
     /// The delay to actually use, honouring anything the server told us.
+    ///
+    /// The server's suggestion is honoured, not obeyed: `Retry-After` is a number a hostile
+    /// or broken server picks, and taking it literally means a `0` spins this loop as fast
+    /// as the socket allows and a `999999999` parks sync for thirty years. It is clamped
+    /// into the same range our own schedule lives in, which is what ``maximum`` was always
+    /// documented to be.
     func delay(forAttempt attempt: Int, after error: TalkError) -> TimeInterval {
-        if let suggested = error.suggestedRetryDelay { return suggested }
+        if let suggested = error.suggestedRetryDelay {
+            guard suggested.isFinite else { return maximum }
+            return min(max(suggested, base), maximum)
+        }
         return delay(forAttempt: attempt)
     }
 }

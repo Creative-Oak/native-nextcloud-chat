@@ -77,7 +77,19 @@ struct RichObject: Sendable, Hashable, Codable {
 
     // Typed accessors for the keys this app actually reads.
     var server: String? { attributes["server"] }
-    var link: URL? { attributes["link"].flatMap(URL.init(string:)) }
+
+    /// Where this object lives — and only ever somewhere a browser goes.
+    ///
+    /// A rich object comes off the wire, so `link` is a string the server picked, and
+    /// every reader of this property either opens it or makes it clickable under a label
+    /// the server also picked. Three of those readers say "Open in Nextcloud" while they
+    /// do it. So a destination this app would not open is not a link at all, and the
+    /// affordance never appears: validating here rather than at each sink is what keeps a
+    /// sixth sink, added later, safe by default.
+    var link: URL? {
+        guard let url = attributes["link"].flatMap(URL.init(string:)), url.isWebLink else { return nil }
+        return url
+    }
     var path: String? { attributes["path"] }
     var mimeType: String? { attributes["mimetype"] }
     var size: Int? { attributes["size"].flatMap(Int.init) }
@@ -90,6 +102,11 @@ struct RichObject: Sendable, Hashable, Codable {
     var callType: String? { attributes["call-type"] }
     var boardName: String? { attributes["boardname"] }
     var stackName: String? { attributes["stackname"] }
+
+    /// The name as it is shown. A name is server text and is read as a claim — whose file
+    /// this is, who is being addressed — so the characters that could reorder or hide the
+    /// words around it are not part of it. See ``Swift/String/withoutInvisibleMarks``.
+    var displayName: String { name.withoutInvisibleMarks }
 
     var isImage: Bool { mimeType?.hasPrefix("image/") ?? false }
     var isVideo: Bool { mimeType?.hasPrefix("video/") ?? false }
