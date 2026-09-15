@@ -21,7 +21,7 @@ struct MessageSearchSheet: View {
             footer
         }
         .frame(width: 620, height: 520)
-        .glassSheet()
+
         .task {
             isFieldFocused = true
             await model.checkAvailability()
@@ -192,7 +192,7 @@ struct MessageSearchSheet: View {
                 .keyboardShortcut(.cancelAction)
             Button("Go to Message", action: open)
                 .keyboardShortcut(.defaultAction)
-                .buttonStyle(.glassProminent)
+
                 .disabled(model.highlightedHit == nil)
         }
         .padding(12)

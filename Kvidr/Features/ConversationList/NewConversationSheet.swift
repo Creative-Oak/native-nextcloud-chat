@@ -45,8 +45,6 @@ struct NewConversationSheet: View {
             footer
         }
         .frame(width: 460, height: 520)
-        .glassSheet()
-        .background(.regularMaterial)
     }
 
     private var header: some View {
@@ -101,7 +99,9 @@ struct NewConversationSheet: View {
                     .textFieldStyle(.plain)
                 if model.isSearching { ProgressView().controlSize(.small) }
             }
-            .sheetField()
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .glass(.floating, cornerRadius: 8)
 
             if !model.selected.isEmpty {
                 selectedChips
@@ -180,7 +180,8 @@ struct NewConversationSheet: View {
                     if let conversation = await model.create() { onCreated(conversation) }
                 }
             }
-            .buttonStyle(.glassProminent)
+            // No explicit style: `defaultAction` is what makes AppKit draw the window's
+            // default button, and it draws it the way every other Mac dialog does.
             .keyboardShortcut(.defaultAction)
             .disabled(!model.canCreate || model.isCreating)
         }

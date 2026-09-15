@@ -95,7 +95,7 @@ struct ConversationSettingsSheet: View {
                 Button(model.isSaving ? "Saving…" : "Save") {
                     Task { if await model.save() { dismiss() } }
                 }
-                .buttonStyle(.glassProminent)
+
                 .keyboardShortcut(.defaultAction)
                 .disabled(!model.hasChanges || model.isSaving)
             }
@@ -103,8 +103,6 @@ struct ConversationSettingsSheet: View {
             .padding(.vertical, 12)
         }
         .frame(width: 460, height: 520)
-        .glassSheet()
-        .background(.regularMaterial)
         .confirmationDialog("Delete this conversation?", isPresented: $model.isConfirmingDelete) {
             Button("Delete for Everyone", role: .destructive) {
                 Task { if await model.delete() { dismiss() } }
