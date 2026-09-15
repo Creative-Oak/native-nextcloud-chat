@@ -1,4 +1,5 @@
 import AppKit
+import PhotosUI
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -9,6 +10,8 @@ struct ComposerView: View {
 
     @Environment(\.preferences) private var preferences
     @State private var height: CGFloat = ComposerTextView.minimumHeight
+    @State private var isShowingPhotos = false
+    @State private var pickedPhotos: [PhotosPickerItem] = []
 
     var body: some View {
         VStack(spacing: 0) {
@@ -45,8 +48,8 @@ struct ComposerView: View {
         HStack(alignment: .bottom, spacing: 8) {
             if model.attachments.canAttach {
                 Menu {
-                    Button("Photos…", systemImage: "photo") { choose(imagesOnly: true) }
-                    Button("Files…", systemImage: "folder") { choose(imagesOnly: false) }
+                    Button("Photos…", systemImage: "photo") { isShowingPhotos = true }
+                    Button("Files…", systemImage: "folder") { chooseFiles() }
                         .keyboardShortcut("a", modifiers: [.command, .shift])
                 } label: {
                     Image(systemName: "plus")
@@ -87,6 +90,42 @@ struct ComposerView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
+        // Apple's own picker, out of process: the user chooses inside it and only the chosen
+        // items cross over, so a sandboxed app needs no library permission, no usage string
+        // and no entitlement to send one photo. `PHPhotoLibrary` would want all three, and
+        // would ask for the whole library to do it.
+        .photosPicker(
+            isPresented: $isShowingPhotos,
+            selection: $pickedPhotos,
+            maxSelectionCount: nil,
+            // Messages' Fotos shows both, and the menu item would be a lie otherwise.
+            matching: .any(of: [.images, .videos])
+        )
+        .onChange(of: pickedPhotos) { _, picked in
+            guard !picked.isEmpty else { return }
+            pickedPhotos = []
+            Task { await stage(picked) }
+        }
+    }
+
+    /// Copies what Photos handed over into the queue.
+    ///
+    /// Originals, unconverted — HEIC included. Nextcloud renders previews server-side, so a
+    /// recipient sees the picture whatever they are on; re-encoding everyone's photos a
+    /// generation down to save the rare case of someone downloading the original on an old
+    /// system is a bad trade.
+    private func stage(_ items: [PhotosPickerItem]) async {
+        var urls: [URL] = []
+        for item in items {
+            do {
+                guard let picked = try await item.loadTransferable(type: PickedPhoto.self) else { continue }
+                urls.append(picked.url)
+            } catch {
+                Log.chat.warning("Couldn’t read a photo from the picker: \(error.localizedDescription)")
+            }
+        }
+        guard !urls.isEmpty else { return }
+        model.attachments.enqueue(urls: urls)
     }
 
     /// Text, character count and send, all inside one glass capsule — the field is a
@@ -189,19 +228,16 @@ struct ComposerView: View {
         }
     }
 
-    /// An open panel rather than a custom picker, because the system one already knows
-    /// about tags, recents, iCloud and everything else. `imagesOnly` is the only thing
-    /// separating the two menu items — there is no second picker to maintain.
-    private func choose(imagesOnly: Bool) {
+    /// An open panel rather than a custom picker, because the system one already knows about
+    /// tags, recents, iCloud and everything else. Photos has its own picker now, so this one
+    /// no longer filters to images.
+    private func chooseFiles() {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = true
         panel.canChooseDirectories = false
         panel.canChooseFiles = true
         panel.prompt = "Attach"
-        panel.message = imagesOnly
-            ? "Choose images to attach to \(model.conversation.displayName)"
-            : "Choose files to attach to \(model.conversation.displayName)"
-        if imagesOnly { panel.allowedContentTypes = [.image] }
+        panel.message = "Choose files to attach to \(model.conversation.displayName)"
 
         guard panel.runModal() == .OK else { return }
         model.attachments.enqueue(urls: panel.urls)
@@ -271,5 +307,26 @@ extension EnvironmentValues {
     var preferences: Preferences? {
         get { self[PreferencesKey.self] }
         set { self[PreferencesKey.self] = newValue }
+    }
+}
+
+/// A picked photo or video, copied to a file on the way out of Photos.
+///
+/// A `FileRepresentation` rather than `loadTransferable(type: Data.self)`: the `Data` route
+/// holds a four-gigabyte video in memory before a byte of it is uploaded, and the upload
+/// path wants a file anyway.
+private struct PickedPhoto: Transferable {
+    let url: URL
+
+    static var transferRepresentation: some TransferRepresentation {
+        FileRepresentation(importedContentType: .item) { received in
+            // The received file is deleted as soon as this returns, so it is copied out —
+            // into a directory of its own, since two picks can share a name.
+            let directory = URL.temporaryDirectory.appending(path: UUID().uuidString)
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            let destination = directory.appending(path: received.file.lastPathComponent)
+            try FileManager.default.copyItem(at: received.file, to: destination)
+            return PickedPhoto(url: destination)
+        }
     }
 }
