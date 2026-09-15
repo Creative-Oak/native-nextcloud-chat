@@ -55,7 +55,7 @@ struct KeyboardShortcutsWindow: View {
 
     private static let groups: [ShortcutGroup] = [
         ShortcutGroup(title: "Getting around", shortcuts: [
-            Shortcut(description: "Go to conversation", keys: "⌘K"),
+            Shortcut(description: "Go to anything — conversations, people, messages, commands", keys: "⌘P ⌘K"),
             Shortcut(description: "Find a conversation", keys: "⌘F"),
             Shortcut(description: "Search messages on the server", keys: "⇧⌘F"),
             Shortcut(description: "Next / previous conversation", keys: "⌥⌘↓ ⌥⌘↑"),

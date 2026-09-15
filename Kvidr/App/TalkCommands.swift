@@ -1,186 +1,37 @@
-import AppKit
 import SwiftUI
 
-/// The menu bar.
+/// The menu bar, rendered from the command registry — see `AppCommand`.
 ///
-/// Every item here is a real command with a real shortcut. Items that depend on a
+/// Every item is a real command with a real shortcut. Items that depend on a
 /// capability the server doesn't have are disabled rather than hidden, so the menu's shape
-/// stays stable and discoverable.
+/// stays stable and discoverable; with no window key, the registry's placeholder keeps
+/// every item in its place, disabled.
 struct TalkCommands: Commands {
-    @FocusedValue(\.appModel) private var app
-    @FocusedValue(\.composerFocusRequest) private var focusComposer
-    @FocusedValue(\.searchFocusRequest) private var focusSearch
-    @FocusedValue(\.quickSwitcherRequest) private var showQuickSwitcher
-    @FocusedValue(\.newConversationRequest) private var newConversation
-    @FocusedValue(\.messageSearchRequest) private var searchMessages
-    @FocusedValue(\.inspectorToggle) private var toggleInspector
-    @FocusedValue(\.sidebarModeToggle) private var toggleSidebarMode
-    @Environment(\.openWindow) private var openWindow
+    @FocusedValue(\.appCommands) private var registry
 
     var body: some Commands {
         // Replaces the default "New Window" — a second window on a messaging app is rarely
         // what anyone wants, and ⌘N should start a conversation.
-        CommandGroup(replacing: .newItem) {
-            Button("New Conversation…") { newConversation?() }
-                .keyboardShortcut("n", modifiers: .command)
-                .disabled(app?.canCreateConversations != true)
-        }
+        CommandGroup(replacing: .newItem) { items(.file) }
+        CommandGroup(after: .newItem) { items(.refresh) }
+        CommandGroup(replacing: .textEditing) { items(.find) }
+        // Where Show/Hide Sidebar would be, had this app one.
+        CommandGroup(after: .sidebar) { items(.sidebar) }
+        CommandMenu("Conversation") { items(.conversation) }
+        CommandGroup(replacing: .help) { items(.help) }
+    }
 
-        CommandGroup(after: .newItem) {
-            Button("Refresh Conversations") { app?.refreshNow() }
-                .keyboardShortcut("r", modifiers: .command)
-                .disabled(app?.session == nil)
-        }
-
-        CommandGroup(replacing: .textEditing) {
-            Button("Find Conversation…") { focusSearch?() }
-                .keyboardShortcut("f", modifiers: .command)
-                .disabled(app?.session == nil)
-
-            Button("Find in Conversation…") {
-                app?.chat?.isSearching = true
-            }
-            .keyboardShortcut("f", modifiers: [.command, .option])
-            .disabled(app?.chat == nil)
-
-            // Distinct from Find in Conversation: that one searches what is loaded and
-            // answers instantly, this one asks the server and can reach anything.
-            Button("Search Messages…") { searchMessages?() }
-                .keyboardShortcut("f", modifiers: [.command, .shift])
-                .disabled(app?.session == nil)
-        }
-
-        // Where Show/Hide Sidebar would be, had this app one: the sidebar does not hide,
-        // it folds down to a column of faces, and this is the keyboard's way to do that.
-        CommandGroup(after: .sidebar) {
-            Button(isSidebarCompact ? "Use Full Sidebar" : "Use Compact Sidebar") { toggleSidebarMode?() }
-                .keyboardShortcut("s", modifiers: [.command, .control])
-                .disabled(app?.session == nil)
-        }
-
-        CommandMenu("Conversation") {
-            Button("Next Conversation") { app?.selectRelative(offset: 1) }
-                .keyboardShortcut(.downArrow, modifiers: [.command, .option])
-            Button("Previous Conversation") { app?.selectRelative(offset: -1) }
-                .keyboardShortcut(.upArrow, modifiers: [.command, .option])
-            Button("Next Unread") { app?.selectNextUnread() }
-                .keyboardShortcut("]", modifiers: [.command, .shift])
-
-            Divider()
-
-            Button("Go to Conversation…") { showQuickSwitcher?() }
-                .keyboardShortcut("k", modifiers: .command)
-                .disabled(app?.session == nil)
-
-            Button("Focus Message Field") { focusComposer?() }
-                .keyboardShortcut("k", modifiers: [.command, .shift])
-
-            Button("Reply to Last Message") { app?.chat?.replyToLatest() }
-                .keyboardShortcut("r", modifiers: [.command, .shift])
-                .disabled(app?.chat == nil)
-
-            Button("Edit Last Message") { app?.chat?.beginEditingLatestOwnMessage() }
-                .keyboardShortcut(.upArrow, modifiers: .command)
-                .disabled(app?.chat?.capabilities.canEditMessages != true)
-
-            Divider()
-
-            Button("Mark as Unread") { app?.markSelectedUnread() }
-                .keyboardShortcut("u", modifiers: [.command, .shift])
-                .disabled(app?.chat?.capabilities.canMarkUnread != true)
-
-            Button(isSelectedFavorite ? "Remove from Favourites" : "Add to Favourites") {
-                app?.toggleFavoriteOnSelection()
-            }
-            .keyboardShortcut("d", modifiers: [.command, .shift])
-            .disabled(app?.selectedToken == nil)
-
-            Divider()
-
-            Button("Show Conversation Details") { toggleInspector?() }
-                .keyboardShortcut("i", modifiers: [.command, .option])
-                .disabled(app?.chat == nil)
-
-            Button("Open in Nextcloud") { app?.openSelectionInBrowser() }
-                .disabled(app?.selectedToken == nil)
-        }
-
-        CommandGroup(replacing: .help) {
-            Button("Keyboard Shortcuts") { openWindow(id: TalkWindow.keyboardShortcuts) }
-                .keyboardShortcut("/", modifiers: .command)
-
-            Divider()
-
-            Button("Nextcloud Talk Documentation") {
-                if let url = URL(string: "https://nextcloud-talk.readthedocs.io/en/latest/") {
-                    NSWorkspace.shared.open(url)
-                }
+    @ViewBuilder
+    private func items(_ placement: AppCommand.Placement) -> some View {
+        // Settings has its own menu item under the app menu; it is in the registry for
+        // the palette, not for a second entry here.
+        ForEach((registry ?? .placeholder).commands(in: placement).filter { $0.id != "app.settings" }) { command in
+            Button(command.title, action: command.perform)
+                .keyboardShortcut(command.shortcut)
+                .disabled(!command.isEnabled)
+            if command.endsGroup {
+                Divider()
             }
         }
-    }
-
-    private var isSidebarCompact: Bool {
-        app?.dependencies.preferences.sidebarMode == .compact
-    }
-
-    private var isSelectedFavorite: Bool {
-        guard let app, let token = app.selectedToken else { return false }
-        return app.conversationList?[token]?.isFavorite ?? false
-    }
-}
-
-// MARK: - Focused values
-//
-// The menu bar is outside the view hierarchy, so commands reach the current window's state
-// through focused values rather than a global singleton.
-
-private struct AppModelFocusedKey: FocusedValueKey { typealias Value = AppModel }
-private struct ComposerFocusKey: FocusedValueKey { typealias Value = () -> Void }
-private struct SearchFocusKey: FocusedValueKey { typealias Value = () -> Void }
-private struct QuickSwitcherKey: FocusedValueKey { typealias Value = () -> Void }
-private struct NewConversationKey: FocusedValueKey { typealias Value = () -> Void }
-private struct MessageSearchKey: FocusedValueKey { typealias Value = () -> Void }
-private struct InspectorToggleKey: FocusedValueKey { typealias Value = () -> Void }
-private struct SidebarModeToggleKey: FocusedValueKey { typealias Value = () -> Void }
-
-extension FocusedValues {
-    var appModel: AppModel? {
-        get { self[AppModelFocusedKey.self] }
-        set { self[AppModelFocusedKey.self] = newValue }
-    }
-
-    var composerFocusRequest: (() -> Void)? {
-        get { self[ComposerFocusKey.self] }
-        set { self[ComposerFocusKey.self] = newValue }
-    }
-
-    var searchFocusRequest: (() -> Void)? {
-        get { self[SearchFocusKey.self] }
-        set { self[SearchFocusKey.self] = newValue }
-    }
-
-    var quickSwitcherRequest: (() -> Void)? {
-        get { self[QuickSwitcherKey.self] }
-        set { self[QuickSwitcherKey.self] = newValue }
-    }
-
-    var newConversationRequest: (() -> Void)? {
-        get { self[NewConversationKey.self] }
-        set { self[NewConversationKey.self] = newValue }
-    }
-
-    var messageSearchRequest: (() -> Void)? {
-        get { self[MessageSearchKey.self] }
-        set { self[MessageSearchKey.self] = newValue }
-    }
-
-    var inspectorToggle: (() -> Void)? {
-        get { self[InspectorToggleKey.self] }
-        set { self[InspectorToggleKey.self] = newValue }
-    }
-
-    var sidebarModeToggle: (() -> Void)? {
-        get { self[SidebarModeToggleKey.self] }
-        set { self[SidebarModeToggleKey.self] = newValue }
     }
 }

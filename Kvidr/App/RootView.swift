@@ -11,7 +11,8 @@ struct RootView: View {
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var composerFocused = false
     @State private var searchFocusRequest = false
-    @State private var isShowingQuickSwitcher = false
+    /// The command palette, while it is up. A model per showing: it starts empty.
+    @State private var palette: CommandPaletteModel?
     @State private var isShowingInspector = false
     /// Set once the sidebar has given way to the inspector, so it is brought back when
     /// the inspector goes or the window grows — whoever hid it in the first place.
@@ -20,6 +21,7 @@ struct RootView: View {
     @State private var isShowingNewConversation = false
     @State private var conversationSettings: ConversationSettingsModel?
     @State private var messageSearch: MessageSearchModel?
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         @Bindable var app = app
@@ -55,12 +57,47 @@ struct RootView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification)) { _ in
             app.isWindowKey = false
         }
-        .overlay { quickSwitcher }
-        .focusedSceneValue(\.appModel, app)
-        .focusedSceneValue(\.composerFocusRequest, { composerFocused = true })
-        .focusedSceneValue(\.searchFocusRequest, requestSearchFocus)
-        .focusedSceneValue(\.quickSwitcherRequest, { isShowingQuickSwitcher = true })
-        .focusedSceneValue(\.sidebarModeToggle, toggleSidebarMode)
+        .overlay { paletteOverlay }
+        .focusedSceneValue(\.appCommands, commands)
+    }
+
+    /// Everything the menu bar and the palette can do, from the window's state right
+    /// now. Rebuilt with the body, so state-dependent titles follow along.
+    private var commands: AppCommandRegistry {
+        var context = AppCommandRegistry.Context()
+        context.hasSession = app.session != nil
+        context.hasChat = app.chat != nil
+        context.hasSelection = app.selectedToken != nil
+        context.canCreateConversations = app.canCreateConversations
+        context.canEditMessages = app.chat?.capabilities.canEditMessages == true
+        context.canMarkUnread = app.chat?.capabilities.canMarkUnread == true
+        context.isSidebarCompact = preferences.sidebarMode == .compact
+        context.isSelectionFavorite = app.selectedToken.flatMap { app.conversationList?[$0]?.isFavorite } ?? false
+        context.newConversation = { isShowingNewConversation = true }
+        context.refresh = { app.refreshNow() }
+        context.findConversation = requestSearchFocus
+        context.findInConversation = { app.chat?.isSearching = true }
+        context.searchMessages = { startMessageSearch() }
+        context.toggleSidebar = toggleSidebarMode
+        context.nextConversation = { app.selectRelative(offset: 1) }
+        context.previousConversation = { app.selectRelative(offset: -1) }
+        context.nextUnread = { app.selectNextUnread() }
+        context.openPalette = openPalette
+        context.focusComposer = { composerFocused = true }
+        context.replyToLatest = { app.chat?.replyToLatest() }
+        context.editLatest = { app.chat?.beginEditingLatestOwnMessage() }
+        context.markUnread = { app.markSelectedUnread() }
+        context.toggleFavorite = { app.toggleFavoriteOnSelection() }
+        context.toggleInspector = toggleInspector
+        context.openInBrowser = { app.openSelectionInBrowser() }
+        context.showKeyboardShortcuts = { openWindow(id: TalkWindow.keyboardShortcuts) }
+        context.openDocumentation = {
+            if let url = URL(string: "https://nextcloud-talk.readthedocs.io/en/latest/") {
+                NSWorkspace.shared.open(url)
+            }
+        }
+        context.openSettings = { NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil) }
+        return .make(context)
     }
 
     /// Straight from the model rather than the environment: the environment's copy is
@@ -80,27 +117,81 @@ struct RootView: View {
         withAnimation(.smooth(duration: 0.2)) { preferences.sidebarMode.toggle() }
     }
 
-    @ViewBuilder
-    private var quickSwitcher: some View {
-        if isShowingQuickSwitcher, let list = app.conversationList {
-            ZStack(alignment: .top) {
-                // A click anywhere outside dismisses, the way Spotlight does.
-                Color.black.opacity(0.001)
-                    .contentShape(.rect)
-                    .onTapGesture { isShowingQuickSwitcher = false }
-
-                QuickSwitcher(
-                    conversations: list.index.visibleConversations,
-                    onPick: { conversation in
-                        isShowingQuickSwitcher = false
-                        app.selectedToken = conversation.token
-                    },
-                    onCancel: { isShowingQuickSwitcher = false }
-                )
-                .padding(.top, 80)
-            }
-            .transition(.opacity)
+    /// ⌘P: up, and ⌘P again puts it away, as Spotlight's does.
+    private func openPalette() {
+        if palette != nil {
+            palette = nil
+            return
         }
+        palette = CommandPaletteModel(
+            session: app.session,
+            conversations: { app.conversationList?.index.visibleConversations ?? [] },
+            commands: { commands }
+        )
+    }
+
+    /// A conversation chosen in the palette: opened, and the cursor put in the message
+    /// field — "⌘P, type, Return, type" is the whole flow. One that is new to the
+    /// index (just created for a person) goes in the way the New Conversation sheet's do.
+    private func openFromPalette(_ conversation: Conversation) {
+        palette = nil
+        if app.conversationList?[conversation.token] == nil {
+            app.conversationCreated(conversation)
+        } else {
+            app.selectedToken = conversation.token
+        }
+        focusComposerOnceOpen()
+    }
+
+    /// The conversation's view is created by the selection and is not there yet on the
+    /// same turn; the focus request waits for it.
+    private func focusComposerOnceOpen() {
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(80))
+            composerFocused = true
+        }
+    }
+
+    private var paletteOverlay: some View {
+        // The `if let` inside one container with the animation on it: the palette's
+        // coming and going is then one scale-and-fade, short and driven from here,
+        // whichever path put it up or took it down.
+        ZStack {
+            if let palette {
+                paletteScene(palette)
+            }
+        }
+        .animation(.snappy(duration: 0.15), value: palette == nil)
+    }
+
+    private func paletteScene(_ palette: CommandPaletteModel) -> some View {
+            GeometryReader { geometry in
+                ZStack(alignment: .top) {
+                    // A click anywhere outside dismisses, the way Spotlight does — and
+                    // nothing more: the window behind stays exactly as it was.
+                    Color.black.opacity(0.001)
+                        .contentShape(.rect)
+                        .onTapGesture { self.palette = nil }
+
+                    CommandPaletteView(
+                        model: palette,
+                        maxPanelHeight: geometry.size.height * 0.6,
+                        onOpenConversation: openFromPalette,
+                        onOpenMessage: { hit in
+                            self.palette = nil
+                            app.open(hit)
+                            focusComposerOnceOpen()
+                        },
+                        onSeeAllMessages: { term in
+                            self.palette = nil
+                            startMessageSearch(term: term)
+                        },
+                        onDismiss: { self.palette = nil }
+                    )
+                    .padding(.top, geometry.size.height * 0.18)
+                    .transition(.scale(scale: 0.96, anchor: .top).combined(with: .opacity))
+                }
+            }
     }
 
     @ViewBuilder
@@ -241,9 +332,6 @@ struct RootView: View {
                 onClose: { messageSearch = nil }
             )
         }
-        .focusedSceneValue(\.newConversationRequest, { isShowingNewConversation = true })
-        .focusedSceneValue(\.messageSearchRequest, { startMessageSearch() })
-        .focusedSceneValue(\.inspectorToggle, toggleInspector)
     }
 
     /// Messages' panel width, near enough. Fixed: the panel is a card, not a column.
@@ -327,13 +415,20 @@ struct RootView: View {
         }
     }
 
-    private func startMessageSearch() {
+    /// With a `term`, from the palette's "See all results": the sheet opens already
+    /// searching everywhere for it.
+    private func startMessageSearch(term: String? = nil) {
         guard let session = app.session else { return }
-        messageSearch = MessageSearchModel(
+        let model = MessageSearchModel(
             session: session,
             currentToken: app.chat?.token,
             currentConversationName: app.chat?.conversation.displayName
         )
+        if let term {
+            model.scope = .everywhere
+            model.term = term
+        }
+        messageSearch = model
     }
 
     /// The conversation column's share of the toolbar: compose and search at its leading
@@ -357,12 +452,10 @@ struct RootView: View {
         // opts out of the sharing is drawn bare, and an invisible item between them
         // is given the toolbar's minimum width, so neither of those would do.)
         ToolbarItem(placement: .automatic) {
-            Button {
-                isShowingQuickSwitcher = true
-            } label: {
-                Label("Go to Conversation", systemImage: "magnifyingglass")
+            Button(action: openPalette) {
+                Label("Go to Anything", systemImage: "magnifyingglass")
             }
-            .help("Go to Conversation (⌘K)")
+            .help("Go to Anything (⌘P)")
         }
 
         // Conditional rather than an item that is sometimes empty: an empty item still
