@@ -140,6 +140,45 @@ target is compiled by CI on a macOS runner. Anything not yet green on CI is mark
 - **Not yet run against a real server.** Every request shape is verified against the
   documentation and against fixtures, but no live Nextcloud has answered one of them.
 
+## Backlog — deferred on purpose
+
+Things decided against for now, with the reason, so the decision can be revisited rather than
+rediscovered. Not bugs and not gaps: each of these works as built.
+
+- **Photos go up as HEIC, unconverted.** Nextcloud renders previews server-side, so a
+  recipient *sees* the picture whatever they are on — but someone on Windows or an older
+  Android who downloads the original may get a file they cannot open. Converting costs a
+  generation of quality and a re-encode, so the original wins by default. The escape is a
+  setting, and unlike the contacts one it needs real work behind it: an ImageIO re-encode on
+  the way out, not a toggle. Worth doing if anyone reports an unopenable photo.
+- **The message cache grows without bound.** Rows go when an account signs out, a conversation
+  disappears, or a message is deleted — but nothing prunes by age or count, and paging back
+  through history deepens the cache permanently. Fine at chat-message sizes; unbounded by
+  omission rather than by decision.
+- **The cache is plain SQLite.** The app password is in the Keychain and the README is
+  emphatic about it, but message *content* sits unencrypted in the container, readable from a
+  disk or a backup of one. Whether FileVault is enough is a decision worth making deliberately,
+  given how carefully the credentials were handled.
+- **The models live in the app target.** `ChatModel`, `ConversationListModel`,
+  `InspectorModel`, `ConversationDraft` and `PollStore` are `@Observable` and nearly
+  platform-free, but they sit in `Kvidr/` beside AppKit. Extracting them into a shared layer is
+  low-risk and useful on its own — and it is the difference between "could this be an iOS app?"
+  being a question and being an estimate. `TalkCore` itself is already 7,400 lines with no
+  AppKit in it at all.
+- **Image Playground and Genmoji.** Apple APIs that produce an image, which would feed the
+  attachment tray like any other. Cheap once staging exists, gated on Apple Intelligence, and
+  they only make more pictures — so they were cut from the attachments design rather than
+  built.
+- **Poll counts are not live.** Nobody else's vote says anything on the wire and this project
+  does not use the signaling API (§ 9), so a card reads on appear and after its own actions.
+  The alternative is a timer per visible poll, which is worse.
+- **The recipient dropdown is inset by a fixed 44pt**, which is where the cursor sits before
+  any chips are in the way. Add two recipients and the cursor moves right while the panel does
+  not. Measuring the caret would fix it.
+- **A very wide panorama becomes a thin strip.** Images cap at 420×520, so 3:1 lands at
+  420×140. It is honestly that shape; letting width exceed the cap for extreme ratios would be
+  the fix if panoramas turn out to be common.
+
 ## Discovered work (append as found)
 
 - Unified search types `attributes` as an array of strings, but the server builds it as a
