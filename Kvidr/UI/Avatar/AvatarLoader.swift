@@ -177,8 +177,10 @@ private actor AvatarDiskCache {
     private var hasPrepared = false
 
     init() {
-        root = URL.cachesDirectory.appending(path: "app.kvidr.mac/Avatars", directoryHint: .isDirectory)
-        directory = root.appending(path: Self.formatVersion, directoryHint: .isDirectory)
+        let root = URL.cachesDirectory.appending(path: "app.kvidr.mac/Avatars", directoryHint: .isDirectory)
+        let directory = root.appending(path: Self.formatVersion, directoryHint: .isDirectory)
+        self.root = root
+        self.directory = directory
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     }
 

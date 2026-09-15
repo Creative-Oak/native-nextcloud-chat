@@ -144,9 +144,10 @@ actor AttachmentService {
         // `Data(contentsOf:)` reads whatever kind of URL it is handed: given `https://…` it
         // performs a blocking, untimed, unbounded GET on this actor and answers with the
         // body — which would then be uploaded to the user’s Nextcloud and shared into a
-        // conversation. Staging refuses anything that is not a local file too, but a second
-        // place to stage from is one edit away, and the read is here.
-        guard transfer.fileURL.isLocalFile else {
+        // conversation. Given a named pipe it blocks on this actor until the app is quit.
+        // Staging refuses both too, but a second place to stage from is one edit away, and
+        // the read is here.
+        guard transfer.fileURL.isAttachableFile else {
             throw .unexpectedResponse("Only files on this Mac can be attached")
         }
 
@@ -340,7 +341,7 @@ extension AttachmentService {
     }
 }
 
-// MARK: - The two questions the upload path asks about a URL
+// MARK: - The questions the upload path asks about a URL
 
 extension URL {
     /// A file on this Mac — not merely something spelled like one.
@@ -354,6 +355,34 @@ extension URL {
         // machine’s disk rather than this one’s.
         guard let host = host(), !host.isEmpty else { return true }
         return host.caseInsensitiveCompare("localhost") == .orderedSame
+    }
+
+    /// A file this app may actually read: spelled like a local file, *and* a regular file
+    /// when asked.
+    ///
+    /// ``isLocalFile`` only reads the URL. That is enough to keep a hyperlink out, and not
+    /// enough to keep out the things a path can name besides a document. A named pipe is the
+    /// one that matters: `Data(contentsOf:)` on a FIFO nobody ever writes to blocks inside
+    /// the `AttachmentService` actor and never returns, so every later upload, share, delete
+    /// and preview in that session waits behind it forever — one dragged path, and the rest
+    /// of the app's file handling is gone until it is quit. A character device is the same
+    /// read with a different ending: `/dev/zero` answers, and keeps answering.
+    ///
+    /// Regular files only, therefore, which also subsumes the directory check staging used
+    /// to make on its own.
+    ///
+    /// What this deliberately does *not* refuse is a file on a mounted volume. `/Volumes/…`
+    /// on an SMB or NFS share is another machine's disk reached through a path, and reading
+    /// it is a network fetch with this process's latency at the other end's mercy — but the
+    /// user mounted it and the user picked the file, and refusing to attach from a work share
+    /// would break something people legitimately do all day. The residual risk is a stall
+    /// rather than a disclosure: a wedged mount hangs this actor exactly as a FIFO would, and
+    /// the only real answer to that is to stream the upload from the file URL under a
+    /// timeout, which is a change to the transport rather than to this predicate.
+    var isAttachableFile: Bool {
+        guard isLocalFile else { return false }
+        let values = try? resourceValues(forKeys: [.isRegularFileKey])
+        return values?.isRegularFile == true
     }
 
     /// Whether this URL names something inside `directory`.

@@ -17,6 +17,9 @@ import Observation
 final class AttachmentQueue {
     private(set) var transfers: [FileTransfer] = []
     private(set) var isDropTargeted = false
+    /// Files that arrived on the pasteboard and are waiting to be acknowledged — see
+    /// ``enqueue(pastedFiles:)``. Not transfers yet, on purpose.
+    private(set) var pendingPastedFiles: [URL] = []
 
     private let session: Session
     /// Nil in a draft: uploading needs no conversation, only sharing does, so files can go
@@ -75,6 +78,41 @@ final class AttachmentQueue {
     /// the user's, which is what decides whether they may be deleted afterwards.
     func enqueue(scratchFiles urls: [URL]) {
         stage(urls) { $0.deletingLastPathComponent() }
+    }
+
+    /// Files named by the pasteboard, which are not attached until the user says so.
+    ///
+    /// Everything else staged here was pointed at: dragged from Finder, picked in a panel,
+    /// chosen in Photos. A paste is not. `⌘V` in a text field means "put what I copied here",
+    /// and what is on the general pasteboard is not necessarily what the person doing the
+    /// pasting copied — any process running as the user can put a `public.file-url` there,
+    /// and the composer would read it, upload it and, once the message was sent, hand it to
+    /// whoever is on the other end of the conversation. One keystroke, one arbitrary readable
+    /// file, and the only feedback a filename in a caption that appears after the bytes have
+    /// already gone.
+    ///
+    /// So these are held, and the composer asks. They are not transfers and are not in
+    /// ``transfers``, which is what makes it certain the pump cannot reach them: there is
+    /// nothing for it to find.
+    ///
+    /// A pasted *image* is not held (``enqueuePastedImage(_:)``): those bytes are the ones
+    /// the pasteboard is carrying, not a file somewhere else on the disk that it merely names.
+    func enqueue(pastedFiles urls: [URL]) {
+        guard !urls.isEmpty else { return }
+        pendingPastedFiles.append(contentsOf: urls)
+    }
+
+    /// Attaches what a paste offered, now that it has been read and accepted.
+    func confirmPastedFiles() {
+        let urls = pendingPastedFiles
+        pendingPastedFiles = []
+        stage(urls) { _ in nil }
+    }
+
+    /// Forgets what a paste offered. Nothing was read and nothing was uploaded, so there is
+    /// nothing else to undo.
+    func discardPastedFiles() {
+        pendingPastedFiles = []
     }
 
     /// An image pasted from the clipboard — written to a temporary file first, because the
@@ -302,14 +340,16 @@ final class AttachmentQueue {
         // `public.file-url`, so a hyperlink dragged out of the transcript or a browser
         // arrives here looking exactly like a dragged document — and the upload path reads
         // whatever URL it is given, which would make the app fetch that link from inside
-        // the user's network and post the answer into their Nextcloud. Only local files.
-        guard url.isLocalFile else { return nil }
+        // the user's network and post the answer into their Nextcloud.
+        //
+        // A regular file, then, and nothing else a path can name: not a hyperlink, and not
+        // a pipe or a device either, whose read never finishes. Folders fall out of the same
+        // test — they would need a recursive upload, which is not what dragging a folder into
+        // a chat usually means, so it is refused rather than half-done.
+        guard url.isAttachableFile else { return nil }
 
-        let values = try? url.resourceValues(forKeys: [.fileSizeKey, .isDirectoryKey])
-        // Folders would need a recursive upload; that is not what dragging a folder into a
-        // chat usually means, so it's refused rather than half-done.
-        if values?.isDirectory == true { return nil }
-        return FileTransfer(fileURL: url, byteCount: values?.fileSize ?? 0)
+        let size = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0
+        return FileTransfer(fileURL: url, byteCount: size)
     }
 
     // MARK: - The app's own temporary files
