@@ -1,22 +1,31 @@
 import SwiftUI
 
-/// One row of the compact sidebar: the face, and the unread dot on it. The name is the
-/// tooltip, and what VoiceOver reads.
+/// One row of the compact sidebar: the face with the unread dot on it, and the name
+/// beneath, cut to the column's width as Messages cuts it. The full name is the tooltip,
+/// and what VoiceOver reads.
 struct CompactConversationRow: View {
     let conversation: Conversation
     var isSelected = false
 
     var body: some View {
-        AvatarView(conversation: conversation, size: SidebarMode.compactAvatarSize)
-            .overlay(alignment: .topTrailing) {
-                if conversation.hasUnread {
-                    UnreadDot(isSelected: isSelected)
+        VStack(spacing: 3) {
+            AvatarView(conversation: conversation, size: SidebarMode.compactAvatarSize)
+                .overlay(alignment: .topTrailing) {
+                    if conversation.hasUnread {
+                        UnreadDot(isSelected: isSelected)
+                    }
                 }
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 4)
-            .contentShape(.rect)
-            .help(conversation.displayName)
+            Text(conversation.displayName)
+                .font(.system(size: 11, weight: isSelected ? .semibold : .regular))
+                .foregroundStyle(isSelected ? .white : .primary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .padding(.horizontal, 4)
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: SidebarMode.compactRowHeight)
+        .contentShape(.rect)
+        .help(conversation.displayName)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(accessibilityLabel)
     }

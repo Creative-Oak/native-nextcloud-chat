@@ -120,25 +120,28 @@ struct RootView: View {
                 searchFocusRequest: searchFocusRequest,
                 onSearchFocusHandled: { searchFocusRequest = false }
             )
-            // Pinned: one width, no range. Measured on macOS 26: a single width sets the
-            // split view item's minimum and maximum thickness to that number, the column
-            // sits there from the first layout, and changing the number moves it — with
-            // nothing for AppKit's autosaved divider position to override, since there is
-            // nowhere else the column may be. A range (`min:ideal:max:`) is what let the
-            // divider drag anywhere and the saved position win the next launch: the
-            // `ideal` counts only the first time, and after that the column goes to
-            // wherever it was last dragged, clamped. What a drag of the divider does now
-            // is choose between the two widths — see `SidebarDividerTracker`.
+            // No sidebar toggle, as in Messages: the sidebar is not something you
+            // fold away by hand. It goes only when the inspector needs its room in
+            // a narrow window, and comes back on its own — see `reconcileColumns`.
+            // The toggle is the sidebar column's item, so the removal goes here; on
+            // the split view itself it did nothing. And it goes *before* the width:
+            // measured on macOS 26.6, `toolbar(removing:)` applied after
+            // `navigationSplitViewColumnWidth` cancels it — the split view item keeps
+            // AppKit's defaults, a 140pt minimum and no maximum, and the autosaved
+            // divider position wins the next launch. Ahead of it, the width holds.
+            .toolbar(removing: .sidebarToggle)
+            // Pinned: one width, no range. The split view item's minimum and maximum
+            // thickness are both this number, so the column sits here from the first
+            // layout, moves when the number does, and there is nowhere for the saved
+            // divider position to put it. A range (`min:ideal:max:`) is what let the
+            // divider drag anywhere and the saved position win: `ideal` counts only the
+            // first time. What a drag of the divider does now is choose between the two
+            // widths — see `SidebarDividerTracker`, which also keeps the item from
+            // collapsing, so a drag cannot take the column to nothing.
             .navigationSplitViewColumnWidth(preferences.sidebarMode.width)
             .background {
                 SidebarDividerTracker(mode: $preferences.sidebarMode)
             }
-            // No sidebar toggle, as in Messages: the sidebar is not something you
-            // fold away by hand. It goes only when the inspector needs its room in
-            // a narrow window, and comes back on its own — see `reconcileColumns`.
-            // The toggle is the sidebar column's item, so the removal goes here;
-            // on the split view itself it did nothing.
-            .toolbar(removing: .sidebarToggle)
         } detail: {
             // The inspector is a panel inside this column, not a column of its own. A
             // column brings a section of the toolbar with it, and the toolbar lays its
@@ -199,7 +202,17 @@ struct RootView: View {
             reconcileColumns()
         }
         .onChange(of: isShowingInspector) { _, _ in reconcileColumns() }
-        .onChange(of: columnVisibility) { _, _ in reconcileColumns() }
+        .onChange(of: columnVisibility) { _, visibility in
+            // The sidebar hides only for the inspector. Its split view item cannot be
+            // collapsed by hand — see `SidebarDividerTracker` — but should AppKit ever
+            // report it gone for another reason, it is put back rather than left with
+            // no way to bring it up: there is no toggle, and ⌃⌘S changes the width.
+            if visibility == .detailOnly && !isSidebarYieldingToInspector {
+                withoutColumnAnimation { columnVisibility = .all }
+            } else {
+                reconcileColumns()
+            }
+        }
         .onChange(of: preferences.sidebarMode) { _, _ in reconcileColumns() }
         .sheet(item: $conversationSettings) { model in
             ConversationSettingsSheet(model: model)

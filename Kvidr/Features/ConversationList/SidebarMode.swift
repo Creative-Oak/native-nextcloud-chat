@@ -14,14 +14,22 @@ enum SidebarMode: String, CaseIterable, Sendable {
 
     var width: CGFloat {
         switch self {
-        case .compact: 72
+        case .compact: 94
         case .standard: 280
         }
     }
 
-    /// The face in a compact row. Sized so the row is the sidebar's own selection
-    /// highlight with a little air around it, at `compact`'s width.
-    static let compactAvatarSize: CGFloat = 38
+    // The compact column is Messages', measured: a 94pt column of faces on an 80pt pitch,
+    // each with its name beneath and its selection highlight close to a square.
+
+    /// The face in a compact row, with room under it for the name.
+    static let compactAvatarSize: CGFloat = 36
+
+    /// A compact row's height — the selection highlight's.
+    static let compactRowHeight: CGFloat = 72
+
+    /// The air between compact rows, split above and below each as its list row insets.
+    static let compactRowSpacing: CGFloat = 8
 
     /// Which width a divider dragged to `width` is nearer to. The halfway point, no
     /// hysteresis: the switch is visible enough to be its own feedback.

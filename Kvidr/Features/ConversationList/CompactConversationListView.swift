@@ -19,7 +19,7 @@ struct CompactConversationListView: View {
                     ForEach(group.items) { conversation in
                         CompactConversationRow(conversation: conversation, isSelected: selection == conversation.token)
                             .tag(conversation.token)
-                            .listRowInsets(EdgeInsets())
+                            .listRowInsets(EdgeInsets(top: SidebarMode.compactRowSpacing / 2, leading: 0, bottom: SidebarMode.compactRowSpacing / 2, trailing: 0))
                             .contextMenu { ConversationContextMenu(model: model, conversation: conversation) }
                     }
                 }
