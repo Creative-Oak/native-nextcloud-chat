@@ -124,8 +124,8 @@ enum MessageAttributedString {
             return text
 
         case .link(let url, let label):
-            // No standing underline: links get one while the pointer is over them,
-            // which `InlineText` draws.
+            // No underline, as in Messages: the pointer becomes the hand over a link
+            // instead, which `InlineText` arranges.
             var text = AttributedString(label)
             text.link = url
             if isFromMe { text.foregroundColor = .white }

@@ -1,16 +1,17 @@
+import AppKit
 import SwiftUI
 import Synchronization
 
-/// A paragraph of inline runs, as one selectable `Text`, with links that underline under
-/// the pointer — the one under the pointer, not every link in the paragraph, the way
-/// Messages does it.
+/// A paragraph of inline runs, as one selectable `Text`, whose links show the pointing
+/// hand under the pointer — and nothing else: no underline, ever, the way Messages does
+/// it.
 ///
 /// A `Text` gives nothing away about where its runs ended up, and the one API that does,
 /// a text renderer, is bypassed the moment selection is enabled: SwiftUI hands the
 /// drawing to its selection overlay and never calls the renderer. So the visible text is
 /// left alone, and an invisible twin of it — same runs, same width, therefore the same
 /// layout — is drawn behind it with a renderer that does nothing but note where the link
-/// runs landed. The pointer is checked against those, and the underline is an overlay.
+/// runs landed. The pointer is checked against those, and that decides the cursor.
 struct InlineText: View {
     let nodes: [InlineNode]
     let isFromMe: Bool
@@ -39,15 +40,6 @@ struct InlineText: View {
                         .allowsHitTesting(false)
                         .accessibilityHidden(true)
                 }
-                .overlay(alignment: .topLeading) {
-                    if let hovered {
-                        Rectangle()
-                            .fill(isFromMe ? Color.white : Color.accentColor)
-                            .frame(width: hovered.rect.width, height: 1)
-                            .offset(x: hovered.rect.minX, y: hovered.baseline + 1.5)
-                            .allowsHitTesting(false)
-                    }
-                }
                 .onContinuousHover(coordinateSpace: .local) { phase in
                     switch phase {
                     case .active(let point):
@@ -55,15 +47,29 @@ struct InlineText: View {
                         // re-evaluate every paragraph they pass through.
                         guard !isScrolling else { return }
                         let hit = frames.current.first { $0.rect.contains(point) }
-                        if hit != hovered { hovered = hit }
+                        if hit != hovered {
+                            hovered = hit
+                            setCursor(overLink: hit != nil)
+                        }
                     case .ended:
-                        hovered = nil
+                        if hovered != nil {
+                            hovered = nil
+                            setCursor(overLink: false)
+                        }
                     }
                 }
         } else {
             text
                 .textSelection(.enabled)
         }
+    }
+
+    /// The pointing hand over the link run itself, and the arrow back once off it — set
+    /// outright, since the selectable text underneath has an I-beam of its own that a
+    /// pointer style does not get past. Only on the change, so a still pointer is not
+    /// fought over on every move.
+    private func setCursor(overLink: Bool) {
+        (overLink ? NSCursor.pointingHand : NSCursor.arrow).set()
     }
 
     /// The paragraph, run by run, with each link run tagged for the renderer. Built by
@@ -84,10 +90,9 @@ struct InlineText: View {
 /// Marks a run as a link, so the renderer can tell it from the words around it.
 private struct LinkRun: TextAttribute {}
 
-/// Where one link run landed: its box, and the baseline the underline sits under.
+/// Where one link run landed.
 private struct LinkRunFrame: Equatable {
     var rect: CGRect
-    var baseline: CGFloat
 }
 
 /// The frames the renderer found, shared with the view. A lock rather than a `@State`
@@ -113,7 +118,7 @@ private struct LinkRunRecorder: TextRenderer {
             for run in line {
                 if run[LinkRun.self] != nil {
                     let bounds = run.typographicBounds
-                    found.append(LinkRunFrame(rect: bounds.rect, baseline: bounds.rect.minY + bounds.ascent))
+                    found.append(LinkRunFrame(rect: bounds.rect))
                 }
                 context.draw(run)
             }
