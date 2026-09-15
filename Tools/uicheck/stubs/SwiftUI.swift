@@ -1177,8 +1177,12 @@ public struct SearchFieldPlacement: Sendable {
 }
 
 public struct KeyEquivalent: Sendable, Hashable, ExpressibleByExtendedGraphemeClusterLiteral {
-    public init(_ character: Character) {}
-    public init(extendedGraphemeClusterLiteral value: Character) {}
+    /// Stored, not discarded: the command registry renders a shortcut for the menus and
+    /// the palette by reading it back.
+    public let character: Character
+
+    public init(_ character: Character) { self.character = character }
+    public init(extendedGraphemeClusterLiteral value: Character) { self.character = value }
     public static let upArrow = KeyEquivalent("\u{F700}")
     public static let downArrow = KeyEquivalent("\u{F701}")
     public static let leftArrow = KeyEquivalent("\u{F702}")
