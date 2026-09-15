@@ -18,12 +18,15 @@ struct NewMessageView: View {
         VStack(spacing: 0) {
             // On the traffic lights' line, not under it. The pane has taken the strip the
             // toolbar reserves — the compose and search buttons stand down while a draft is
-            // open, so nothing else wants it — and the band is centred in it, full width less
-            // a margin at each end the way the composer sits at the other end of the pane.
+            // open, so nothing else wants it — and the band is centred in it.
+            //
+            // The same inset on every side, and derived rather than chosen: what centres the
+            // band vertically is the strip's spare height halved, so the sides take that too
+            // and the band sits as far from the window's edges as from its top. Two numbers
+            // picked separately is what made it look inset more at the sides than above.
             RecipientBand(draft: draft, isFocused: $recipientsFocused)
-                .padding(.horizontal, 12)
-                .padding(.top, max(6, (titleBarHeight - GlassMetrics.control) / 2))
-                .padding(.bottom, 6)
+                .padding(.horizontal, bandInset)
+                .padding(.vertical, bandInset)
 
             Spacer(minLength: 0)
 
@@ -44,6 +47,11 @@ struct NewMessageView: View {
         }
         .navigationTitle(draft.title)
         .onAppear { recipientsFocused = true }
+    }
+
+    /// The band's margin, which is whatever centring it in the toolbar's strip asks for.
+    private var bandInset: CGFloat {
+        max(6, (titleBarHeight - GlassMetrics.control) / 2)
     }
 
     @ViewBuilder
