@@ -105,7 +105,7 @@ struct CacheKeyTests {
 
     @Test("Truncation on its own is what this is not")
     func longIdentifiersSharingAPrefixStayApart() {
-        // The R4-5 collision, one size up: two ids that agree for the first fifty characters
+        // The R4-5 collision, one size up: two ids that agree for their first thirty characters
         // and differ after it. A key that only kept a prefix would merge them and hand one
         // account the other's face again.
         let first = String(repeating: "u", count: 30) + "alpha" + String(repeating: "z", count: 30)
@@ -133,7 +133,7 @@ struct CacheKeyTests {
     @Test("A bounded key is still filename-safe, and still joins unambiguously")
     func boundedKeysStaySafe() {
         let key = CacheKey.fileName(String(repeating: "../etc/passwd:", count: 30))
-        #expect(key.allSatisfy { $0.isHexDigit && !$0.isUppercase || $0 == "x" })
+        #expect(key.allSatisfy { ($0.isHexDigit && !$0.isUppercase) || $0 == "x" })
         #expect(!key.contains("/"))
         #expect(!key.contains("."))
         // The avatar cache splits `room-<token>-<version>-<size>` on `-`, so no key may

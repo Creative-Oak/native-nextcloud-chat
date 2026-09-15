@@ -387,8 +387,10 @@ extension URL {
         // Not every Foundation answers that key — this module builds on Linux too — and a
         // predicate that has to fail closed must not fail closed on everything. Asking the
         // file system for the item's type directly is the same question in older words.
-        let attributes = try? FileManager.default.attributesOfItem(atPath: resolvingSymlinksInPath().path)
-        return (attributes?[.type] as? FileAttributeType) == .typeRegular
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: resolvingSymlinksInPath().path),
+              let type = attributes[.type] as? FileAttributeType
+        else { return false }
+        return type == .typeRegular
     }
 
     /// Whether this URL names something inside `directory`.
