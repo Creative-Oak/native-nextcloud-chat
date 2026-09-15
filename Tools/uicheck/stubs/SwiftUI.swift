@@ -100,6 +100,28 @@ public struct OptionalContent<C: View>: View {
     }
 }
 
+/// A binding to a collection is itself a collection, of bindings to its elements — which is
+/// how `ForEach($items)` and `$items.indices` are written. Without the conformance the
+/// dynamic-member lookup above answers `.indices` instead, with a `Binding<Range<Int>>` that
+/// `ForEach` cannot take, and the call site reads as wrong when it is right.
+extension Binding: Sequence, Collection, BidirectionalCollection, RandomAccessCollection
+where Value: MutableCollection & RandomAccessCollection {
+    public typealias Element = Binding<Value.Element>
+    public typealias Index = Value.Index
+    public typealias Indices = Value.Indices
+
+    public var startIndex: Value.Index { wrappedValue.startIndex }
+    public var endIndex: Value.Index { wrappedValue.endIndex }
+    public var indices: Value.Indices { wrappedValue.indices }
+    public func index(after i: Value.Index) -> Value.Index { wrappedValue.index(after: i) }
+    public func index(before i: Value.Index) -> Value.Index { wrappedValue.index(before: i) }
+
+    public subscript(position: Value.Index) -> Binding<Value.Element> {
+        let value = wrappedValue[position]
+        return Binding<Value.Element>(get: { value }, set: { _ in })
+    }
+}
+
 @dynamicMemberLookup @propertyWrapper public struct Bindable<Value: AnyObject> {
     public var wrappedValue: Value
     public init(wrappedValue: Value) { self.wrappedValue = wrappedValue }
