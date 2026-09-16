@@ -105,7 +105,13 @@ struct ChatView: View {
             // dragged out of the transcript or a browser arrives here indistinguishable
             // from a dragged document. The queue refuses those; saying so here as well
             // means the drag is reported as declined rather than silently swallowed.
-            let files = urls.filter(\.isAttachableFile)
+            //
+            // Only what the URL itself says, though: this runs on the main thread and must
+            // answer now, and asking the file system anything about a file on a wedged
+            // network mount doesn't return. A folder is spelled with a trailing slash, so it
+            // is still declined here; anything subtler (a pipe, a device) is refused by the
+            // queue, which asks off the main thread and under a deadline.
+            let files = urls.filter { $0.isLocalFile && !$0.hasDirectoryPath }
             guard !files.isEmpty else { return false }
             model.attachments.enqueue(urls: files)
             return true

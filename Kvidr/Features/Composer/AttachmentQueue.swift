@@ -30,6 +30,9 @@ final class AttachmentQueue {
     /// — see ``adopt(token:)``.
     private var token: String?
     @ObservationIgnored private var pump: Task<Void, Never>?
+    /// The batch of files still being looked at before they become transfers — see
+    /// ``stage(_:temporaryItem:)``.
+    @ObservationIgnored private var staging: Task<Void, Never>?
     /// The transfers the send button has committed. Everything else is still just staged,
     /// however far up it has got.
     @ObservationIgnored private var committed: Set<UUID> = []
@@ -143,17 +146,29 @@ final class AttachmentQueue {
 
     /// - Parameter temporaryItem: what the app made for this URL and must clear away again,
     ///   or nil when the file is the user's own.
-    private func stage(_ urls: [URL], temporaryItem: (URL) -> URL?) {
-        for url in urls {
-            guard var transfer = Self.makeTransfer(for: url) else {
-                // Refused, so no transfer will ever clean up after it — do it here instead.
-                if let item = temporaryItem(url) { Self.discard(item) }
-                continue
+    ///
+    /// Asynchronous, because finding out what a URL names is a trip to the file system, and
+    /// on a network mount whose server has gone that trip never comes back. It is made
+    /// through ``FileInspection``, off the main actor and under a deadline, so a wedged
+    /// share costs a row in the tray rather than the app. Batches are chained so files still
+    /// land in the order they were given.
+    private func stage(_ urls: [URL], temporaryItem: @escaping (URL) -> URL?) {
+        let previous = staging
+        staging = Task { [weak self] in
+            await previous?.value
+            for url in urls {
+                let inspection = await Self.inspect(url)
+                guard let self else { return }
+                guard var transfer = Self.makeTransfer(for: url, inspection: inspection) else {
+                    // Refused, so no transfer will ever clean up after it — do it here instead.
+                    if let item = temporaryItem(url) { Self.discard(item) }
+                    continue
+                }
+                transfer.temporaryItem = temporaryItem(url)
+                self.transfers.append(transfer)
+                self.start()
             }
-            transfer.temporaryItem = temporaryItem(url)
-            transfers.append(transfer)
         }
-        start()
     }
 
     // MARK: - Sending
@@ -338,7 +353,14 @@ final class AttachmentQueue {
         change(&transfers[index])
     }
 
-    private static func makeTransfer(for url: URL) -> FileTransfer? {
+    /// Asks what a URL names without letting the answer hold up the main actor. A hyperlink
+    /// is refused on its spelling alone, before anything is asked of the file system.
+    private static func inspect(_ url: URL) async -> FileInspection {
+        guard url.isLocalFile else { return .notAttachable }
+        return await FileInspection.inspect(url)
+    }
+
+    private static func makeTransfer(for url: URL, inspection: FileInspection) -> FileTransfer? {
         // The door. `.dropDestination(for: URL.self)` matches `public.url`, not just
         // `public.file-url`, so a hyperlink dragged out of the transcript or a browser
         // arrives here looking exactly like a dragged document — and the upload path reads
@@ -349,10 +371,18 @@ final class AttachmentQueue {
         // a pipe or a device either, whose read never finishes. Folders fall out of the same
         // test — they would need a recursive upload, which is not what dragging a folder into
         // a chat usually means, so it is refused rather than half-done.
-        guard url.isAttachableFile else { return nil }
-
-        let size = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0
-        return FileTransfer(fileURL: url, byteCount: size)
+        switch inspection {
+        case .regularFile(let size):
+            return FileTransfer(fileURL: url, byteCount: size ?? 0)
+        case .notAttachable:
+            return nil
+        case .notAnswering:
+            // Shown rather than dropped: the user chose this file and should hear why it
+            // isn't going. Retrying asks again, so a share that comes back just works.
+            var transfer = FileTransfer(fileURL: url, byteCount: 0)
+            transfer.state = .failed("The disk it’s on isn’t answering")
+            return transfer
+        }
     }
 
     // MARK: - The app's own temporary files
