@@ -268,6 +268,11 @@ final class ChatModel {
 
     func dismissUnreachableMessage() { unreachableMessageID = nil }
 
+    /// The conversation in the Nextcloud web UI.
+    var webURL: URL {
+        session.account.server.url(path: "/index.php/call/\(token)")
+    }
+
     /// Where the Nextcloud web UI shows one message. The fragment is the anchor Talk's own
     /// search results use.
     func webURL(forMessage messageID: Int) -> URL {

@@ -171,6 +171,10 @@ struct Conversation: Sendable, Hashable, Identifiable, Codable {
 
     var hasUnread: Bool { unreadMessages > 0 }
 
+    /// A call someone is in right now has video in it. Talk's `callFlag` is a bitmask of what
+    /// the people in the call have on: 1 joined, 2 audio, 4 video, 8 dialled in by phone.
+    var isVideoCall: Bool { hasCall && callFlag & 4 != 0 }
+
     /// The lobby hides the conversation's content from non-moderators until it opens.
     var isLobbyBlocking: Bool { lobbyState == 1 && !isModerator }
 

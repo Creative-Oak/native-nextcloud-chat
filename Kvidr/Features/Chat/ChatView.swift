@@ -17,6 +17,9 @@ struct ChatView: View {
     /// Keeps the frosted band over the header up whether or not the pointer is there —
     /// while the sidebar has given way to the inspector, as Messages does.
     var isHeaderAlwaysFrosted = false
+    /// The conversation as the sidebar last synced it. `model.conversation` is the snapshot
+    /// the conversation opened with, and a call starting or ending doesn't reach it.
+    var liveConversation: Conversation?
 
     @State private var highlightedMessageID: Int?
     @State private var didInitialScroll = false
@@ -56,11 +59,18 @@ struct ChatView: View {
                         RevealingBar()
                             .padding(.top, ConversationHeader.depthBelowToolbar + 10)
                             .transition(.opacity)
+                    } else if let live = liveConversation, live.hasCall {
+                        CallInProgressBar(conversation: live) {
+                            NSWorkspace.shared.open(model.webURL)
+                        }
+                        .padding(.top, ConversationHeader.depthBelowToolbar + 10)
+                        .transition(.move(edge: .top).combined(with: .opacity))
                     }
                 }
                 .animation(.smooth(duration: 0.25), value: model.lastError)
                 .animation(.smooth(duration: 0.25), value: model.unreachableMessageID)
                 .animation(.smooth(duration: 0.25), value: model.isRevealing)
+                .animation(.smooth(duration: 0.25), value: liveConversation?.hasCall)
                 // An inset rather than another row in the stack: the composer floats over
                 // the transcript the way Messages' does, and the scroll view still knows
                 // not to hide the newest message behind it.

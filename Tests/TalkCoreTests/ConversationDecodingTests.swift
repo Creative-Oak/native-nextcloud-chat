@@ -91,6 +91,20 @@ struct ConversationDecodingTests {
         #expect(room.unreadMentionDirect)
     }
 
+    @Test("A running call is carried, and whether it has video")
+    func ongoingCall() throws {
+        let rooms = try conversations()
+        #expect(!rooms[0].hasCall)
+        #expect(rooms[1].hasCall)
+        #expect(!rooms[1].isVideoCall)   // callFlag 3: joined, with audio
+
+        var video = rooms[1]
+        video.callFlag = 7
+        #expect(video.isVideoCall)
+        video.hasCall = false
+        #expect(!video.isVideoCall)      // a stale flag is not a call
+    }
+
     @Test("Sidebar order: favourites first, then most recent")
     func sidebarOrdering() throws {
         let sorted = try conversations().sorted(by: Conversation.sidebarSort)

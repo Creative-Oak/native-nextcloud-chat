@@ -219,6 +219,11 @@ private struct PinnedConversations: View {
                                     UnreadDot(isSelected: isSelected)
                                 }
                             }
+                            .overlay(alignment: .bottomTrailing) {
+                                if conversation.hasCall {
+                                    CallBadge(conversation: conversation, isSelected: isSelected)
+                                }
+                            }
                         Text(Self.title(for: conversation))
                             .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
                             .foregroundStyle(isSelected ? .white : .primary)
@@ -261,9 +266,10 @@ private struct PinnedConversations: View {
     }
 
     private func label(for conversation: Conversation) -> String {
-        conversation.hasUnread
-            ? "\(conversation.displayName), \(conversation.unreadMessages) unread"
-            : conversation.displayName
+        var parts = [conversation.displayName]
+        if conversation.hasUnread { parts.append("\(conversation.unreadMessages) unread") }
+        if conversation.hasCall { parts.append("call in progress") }
+        return parts.joined(separator: ", ")
     }
 }
 
@@ -303,6 +309,10 @@ struct ConversationRow: View {
                             .truncationMode(.tail)
 
                         Spacer(minLength: 4)
+
+                        if conversation.hasCall {
+                            CallSymbol(conversation: conversation, size: 11)
+                        }
 
                         Text(timestamp)
                             .font(.system(size: 12))
@@ -376,6 +386,7 @@ struct ConversationRow: View {
         var parts = [conversation.displayName]
         if conversation.unreadMessages > 0 { parts.append("\(conversation.unreadMessages) unread") }
         if conversation.unreadMention { parts.append("mentions you") }
+        if conversation.hasCall { parts.append("call in progress") }
         parts.append(preview)
         return parts.joined(separator: ", ")
     }

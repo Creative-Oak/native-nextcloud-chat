@@ -6,6 +6,11 @@ struct ConversationContextMenu: View {
     let conversation: Conversation
 
     var body: some View {
+        if conversation.hasCall {
+            Button("Join Call in Browser") { model.openInBrowser(conversation) }
+            Divider()
+        }
+
         Button(conversation.isFavorite ? "Remove from Favourites" : "Add to Favourites") {
             model.toggleFavorite(conversation)
         }

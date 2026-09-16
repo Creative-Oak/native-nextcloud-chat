@@ -15,6 +15,11 @@ struct CompactConversationRow: View {
                         UnreadDot(isSelected: isSelected)
                     }
                 }
+                .overlay(alignment: .bottomTrailing) {
+                    if conversation.hasCall {
+                        CallBadge(conversation: conversation, isSelected: isSelected)
+                    }
+                }
             Text(conversation.displayName)
                 .font(.system(size: 11, weight: isSelected ? .semibold : .regular))
                 .foregroundStyle(isSelected ? .white : .primary)
@@ -34,6 +39,7 @@ struct CompactConversationRow: View {
         var parts = [conversation.displayName]
         if conversation.unreadMessages > 0 { parts.append("\(conversation.unreadMessages) unread") }
         if conversation.unreadMention { parts.append("mentions you") }
+        if conversation.hasCall { parts.append("call in progress") }
         return parts.joined(separator: ", ")
     }
 }

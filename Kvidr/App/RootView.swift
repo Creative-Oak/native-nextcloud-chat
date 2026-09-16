@@ -268,7 +268,8 @@ struct RootView: View {
                         ChatView(
                             model: chat,
                             composerFocused: $composerFocused,
-                            isHeaderAlwaysFrosted: isSidebarYieldingToInspector
+                            isHeaderAlwaysFrosted: isSidebarYieldingToInspector,
+                            liveConversation: app.conversationList?[chat.token]
                         )
                             // A fresh view per conversation: no state bleeds between them.
                             .id(chat.token)
