@@ -920,6 +920,8 @@ public struct ScrollEdgeEffectStyle: Sendable {
     public init(@ViewBuilder content: () -> Content, @ViewBuilder header: () -> Parent) where Footer == EmptyView {}
     public init(@ViewBuilder content: () -> Content) where Parent == EmptyView, Footer == EmptyView {}
     public init(_ title: String, @ViewBuilder content: () -> Content) where Parent == Text, Footer == EmptyView {}
+    public init(@ViewBuilder content: () -> Content, @ViewBuilder footer: () -> Footer) where Parent == EmptyView {}
+    public init(_ title: String, @ViewBuilder content: () -> Content, @ViewBuilder footer: () -> Footer) where Parent == Text {}
     public var body: StubView { StubView() }
 }
 
