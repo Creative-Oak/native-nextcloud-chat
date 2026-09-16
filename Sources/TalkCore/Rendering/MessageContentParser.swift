@@ -17,6 +17,11 @@ struct MessageContentParser: Sendable {
     /// the per-message flag and we honour it exactly.
     let markdownEnabled: Bool
 
+    /// A message is a message. A server that hangs ten thousand files off one is not
+    /// describing a share, and the transcript — which draws these blocks eagerly, and asks
+    /// the server for a thumbnail of each — should not try to draw it.
+    static let maximumTrailingAttachments = 16
+
     init(currentUserID: String, markdownEnabled: Bool = true) {
         self.currentUserID = currentUserID
         self.markdownEnabled = markdownEnabled
@@ -76,10 +81,15 @@ struct MessageContentParser: Sendable {
         }
 
         // Attachments referenced alongside text (a file with a caption) get their own card
-        // after the words, which is how Talk itself presents a captioned share.
+        // after the words, which is how Talk itself presents a captioned share. The cap is
+        // applied after the filter, so a map padded out with ten thousand parameters that
+        // are not attachments cannot spend the budget on the way past.
         let referenced = Self.referencedKeys(in: text)
-        for (key, object) in parameters.sorted(by: { $0.key < $1.key })
-        where !referenced.contains(key) && Self.isAttachment(object) {
+        let trailing = parameters
+            .sorted { $0.key < $1.key }
+            .filter { !referenced.contains($0.key) && Self.isAttachment($0.value) }
+            .prefix(Self.maximumTrailingAttachments)
+        for (_, object) in trailing {
             blocks.append(.attachment(object))
         }
 
@@ -136,10 +146,11 @@ struct MessageContentParser: Sendable {
             if isSystem { return (.text(object.name), false) }
             return (.mention(Mention(kind: .everyone, id: object.id, label: object.name, isCurrentUser: false)), true)
         case .highlight:
-            if let link = object.link { return (.link(url: link, label: object.name), false) }
-            return (.text(object.name), false)
+            // `link` is already only ever a web link — see ``RichObject/link``.
+            if let link = object.link { return (.link(url: link, label: object.displayName), false) }
+            return (.text(object.displayName), false)
         case .openGraph, .deckCard:
-            if let link = object.link { return (.link(url: link, label: object.name), false) }
+            if let link = object.link { return (.link(url: link, label: object.displayName), false) }
             return (.object(object), false)
         case .file, .talkAttachment, .talkPoll, .geoLocation:
             return (.object(object), false)
@@ -233,11 +244,33 @@ struct MessageContentParser: Sendable {
 
     // MARK: - Links
 
-    /// The first bare `http(s)://` URL in a piece of text, Markdown or not. Sentence
-    /// punctuation and a closing Markdown bracket after it are not part of it.
+    /// As many links as a menu can usefully offer. A message with more of them is a list
+    /// of links, and the menu is not where you read a list.
+    static let maximumLinksListed = 8
+
+    /// The first bare `http(s)://` URL in a piece of text, Markdown or not.
     static func firstWebLink(in text: String) -> URL? {
-        var remainder = Substring(text)
-        while let range = remainder.range(of: "http", options: .caseInsensitive) {
+        webLinks(in: text, limit: 1).first
+    }
+
+    /// Every bare `http(s)://` URL in a piece of text, Markdown or not, in the order they
+    /// appear. Sentence punctuation and a closing Markdown bracket after one are not part
+    /// of it, and neither is anything inside a code span.
+    ///
+    /// One loop, so the URL a preview card is fetched for and the URL the menu offers to
+    /// copy are found the same way and can never disagree about where a message points.
+    static func webLinks(in text: String, limit: Int = MessageContentParser.maximumLinksListed) -> [URL] {
+        var found: [URL] = []
+        for span in outsideCodeSpans(text) where found.count < limit {
+            collectWebLinks(in: span, into: &found, limit: limit)
+        }
+        return found
+    }
+
+    private static func collectWebLinks(in text: Substring, into found: inout [URL], limit: Int) {
+        var remainder = text
+
+        while found.count < limit, let range = remainder.range(of: "http", options: .caseInsensitive) {
             let candidate = remainder[range.lowerBound...]
             guard candidate.hasPrefix("http://") || candidate.hasPrefix("https://") else {
                 let skipTo = remainder.index(range.lowerBound, offsetBy: 4, limitedBy: remainder.endIndex) ?? remainder.endIndex
@@ -249,8 +282,74 @@ struct MessageContentParser: Sendable {
             while let last = urlText.last, ".,;:!?]".contains(last) {
                 urlText = urlText.dropLast()
             }
-            if let url = URL(string: String(urlText)), url.isWebLink { return url }
+            if let url = URL(string: String(urlText)), url.isWebLink { found.append(url) }
             remainder = remainder[urlText.endIndex...]
+        }
+    }
+
+    /// The pieces of `text` that are not inside an inline code span, in order.
+    ///
+    /// A URL someone wrote in backticks is a URL they chose to show rather than to offer:
+    /// it renders monospaced and unclickable. It must not be fetched either — a preview
+    /// card would reach out to that address from the reader's machine the moment the
+    /// message scrolled into view, which is the one thing quoting it as text was meant to
+    /// avoid. Fenced blocks never reach here, ``splitBlocks(_:allowMarkdown:)`` having
+    /// already made them their own ``MessageBlock/code``; this is the inline case.
+    ///
+    /// CommonMark's rule and no more of it: a run of *n* backticks opens a span that the
+    /// next run of exactly *n* closes. A run with no partner is ordinary text, so the scan
+    /// steps over it rather than swallowing the rest of the message — which also keeps a
+    /// lone backtick from hiding a link. Every branch of both loops moves an index
+    /// strictly forward, so a message cannot be written that makes this one spin.
+    static func outsideCodeSpans(_ text: String) -> [Substring] {
+        guard text.contains(where: { $0 == "`" }) else { return [text[...]] }
+
+        var spans: [Substring] = []
+        var plainStart = text.startIndex
+        var index = text.startIndex
+
+        while index < text.endIndex {
+            guard text[index] == "`" else {
+                index = text.index(after: index)
+                continue
+            }
+            let openingEnd = endOfBacktickRun(in: text, from: index)
+            let length = text.distance(from: index, to: openingEnd)
+
+            guard let closingEnd = endOfClosingRun(in: text, from: openingEnd, length: length) else {
+                // Nothing closes it, so the backticks are just characters. Carry on past
+                // them; the text they opened stays in the span being built.
+                index = openingEnd
+                continue
+            }
+            spans.append(text[plainStart..<index])
+            plainStart = closingEnd
+            index = closingEnd
+        }
+        spans.append(text[plainStart...])
+        return spans
+    }
+
+    /// One past the last backtick of the run starting at `start`, which must be a backtick.
+    private static func endOfBacktickRun(in text: String, from start: String.Index) -> String.Index {
+        var end = start
+        while end < text.endIndex, text[end] == "`" { end = text.index(after: end) }
+        return end
+    }
+
+    /// One past the end of the first backtick run of exactly `length` at or after `start`.
+    private static func endOfClosingRun(in text: String, from start: String.Index, length: Int) -> String.Index? {
+        var index = start
+        while index < text.endIndex {
+            guard text[index] == "`" else {
+                index = text.index(after: index)
+                continue
+            }
+            let end = endOfBacktickRun(in: text, from: index)
+            if text.distance(from: index, to: end) == length { return end }
+            // A longer or shorter run cannot close this one, and cannot open a nested span
+            // either — resume after it rather than inside it.
+            index = end
         }
         return nil
     }
@@ -284,7 +383,7 @@ struct MessageContentParser: Sendable {
             let prefix = remainder[remainder.startIndex..<range.lowerBound]
             if !prefix.isEmpty { nodes.append(.text(String(prefix))) }
 
-            if let url = URL(string: String(urlText)), url.host() != nil {
+            if let url = URL(string: String(urlText)), url.isWebLink {
                 nodes.append(.link(url: url, label: String(urlText)))
             } else {
                 nodes.append(.text(String(urlText)))

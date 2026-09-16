@@ -100,6 +100,28 @@ public struct OptionalContent<C: View>: View {
     }
 }
 
+/// A binding to a collection is itself a collection, of bindings to its elements — which is
+/// how `ForEach($items)` and `$items.indices` are written. Without the conformance the
+/// dynamic-member lookup above answers `.indices` instead, with a `Binding<Range<Int>>` that
+/// `ForEach` cannot take, and the call site reads as wrong when it is right.
+extension Binding: Sequence, Collection, BidirectionalCollection, RandomAccessCollection
+where Value: MutableCollection & RandomAccessCollection {
+    public typealias Element = Binding<Value.Element>
+    public typealias Index = Value.Index
+    public typealias Indices = Value.Indices
+
+    public var startIndex: Value.Index { wrappedValue.startIndex }
+    public var endIndex: Value.Index { wrappedValue.endIndex }
+    public var indices: Value.Indices { wrappedValue.indices }
+    public func index(after i: Value.Index) -> Value.Index { wrappedValue.index(after: i) }
+    public func index(before i: Value.Index) -> Value.Index { wrappedValue.index(before: i) }
+
+    public subscript(position: Value.Index) -> Binding<Value.Element> {
+        let value = wrappedValue[position]
+        return Binding<Value.Element>(get: { value }, set: { _ in })
+    }
+}
+
 @dynamicMemberLookup @propertyWrapper public struct Bindable<Value: AnyObject> {
     public var wrappedValue: Value
     public init(wrappedValue: Value) { self.wrappedValue = wrappedValue }
@@ -524,7 +546,9 @@ public struct GlassEffectTransition: Sendable {
 
     public func font(_ font: Font?) -> Text { self }
     public func foregroundStyle(_ style: some ShapeStyle) -> Text { self }
+    public func foregroundStyle(_ primary: some ShapeStyle, _ secondary: some ShapeStyle) -> Text { self }
     public func bold() -> Text { self }
+    public func fontWeight(_ weight: Font.Weight?) -> Text { self }
     public func italic(_ isActive: Bool = true) -> Text { self }
     public func monospacedDigit() -> Text { self }
     public func strikethrough(_ isActive: Bool = true) -> Text { self }
@@ -684,6 +708,13 @@ public struct TextFieldStyleShim: Sendable {
     public static let plain = TextFieldStyleShim()
     public static let roundedBorder = TextFieldStyleShim()
     public static let squareBorder = TextFieldStyleShim()
+}
+
+public struct ToggleStyleShim: Sendable {
+    public static let automatic = ToggleStyleShim()
+    public static let button = ToggleStyleShim()
+    public static let `switch` = ToggleStyleShim()
+    public static let checkbox = ToggleStyleShim()
 }
 
 public struct ListStyleShim: Sendable {
@@ -897,6 +928,8 @@ public struct ScrollEdgeEffectStyle: Sendable {
     public init(@ViewBuilder content: () -> Content, @ViewBuilder header: () -> Parent) where Footer == EmptyView {}
     public init(@ViewBuilder content: () -> Content) where Parent == EmptyView, Footer == EmptyView {}
     public init(_ title: String, @ViewBuilder content: () -> Content) where Parent == Text, Footer == EmptyView {}
+    public init(@ViewBuilder content: () -> Content, @ViewBuilder footer: () -> Footer) where Parent == EmptyView {}
+    public init(_ title: String, @ViewBuilder content: () -> Content, @ViewBuilder footer: () -> Footer) where Parent == Text {}
     public var body: StubView { StubView() }
 }
 
@@ -904,6 +937,12 @@ public struct ScrollEdgeEffectStyle: Sendable {
     public init(@ViewBuilder content: () -> Content) where SelectionValue == Never {}
     public init(selection: Binding<SelectionValue?>, @ViewBuilder content: () -> Content) {}
     public init(selection: Binding<Set<SelectionValue>>, @ViewBuilder content: () -> Content) {}
+    /// The row-per-element form. Real SwiftUI asks the element to be `Identifiable`; the
+    /// stub does not need to, and saying so here would only make a correct call site fail.
+    public init<Data: RandomAccessCollection>(
+        _ data: Data,
+        @ViewBuilder rowContent: @escaping (Data.Element) -> Content
+    ) where SelectionValue == Never {}
     public var body: StubView { StubView() }
 }
 
@@ -922,6 +961,7 @@ public struct ScrollEdgeEffectStyle: Sendable {
     public init(_ title: String, text: Binding<String>) where Label == Text {}
     public init(_ title: String, text: Binding<String>, axis: Axis) where Label == Text {}
     public init(_ title: String, text: Binding<String>, prompt: Text?) where Label == Text {}
+    public init(_ title: String, text: Binding<String>, prompt: Text?, axis: Axis) where Label == Text {}
     public var body: StubView { StubView() }
 }
 
@@ -1007,6 +1047,11 @@ extension View {
 
     public func font(_ font: Font?) -> StubView { StubView() }
     public func foregroundStyle(_ style: some ShapeStyle) -> StubView { StubView() }
+    /// The palette overloads: a multicolour symbol takes one style per layer, and the
+    /// second and third are written as leading-dot members, so they need a typed position
+    /// to infer from.
+    public func foregroundStyle(_ primary: some ShapeStyle, _ secondary: some ShapeStyle) -> StubView { StubView() }
+    public func foregroundStyle(_ primary: some ShapeStyle, _ secondary: some ShapeStyle, _ tertiary: some ShapeStyle) -> StubView { StubView() }
     public func foregroundColor(_ color: Color?) -> StubView { StubView() }
     public func tint(_ color: Color?) -> StubView { StubView() }
     public func opacity(_ value: Double) -> StubView { StubView() }
@@ -1058,6 +1103,7 @@ extension View {
     public func backgroundExtensionEffect() -> StubView { StubView() }
 
     public func buttonStyle(_ style: ButtonStyleShim) -> StubView { StubView() }
+    public func toggleStyle(_ style: ToggleStyleShim) -> StubView { StubView() }
     public func buttonBorderShape(_ shape: ButtonBorderShape) -> StubView { StubView() }
     public func menuStyle(_ style: MenuStyleShim) -> StubView { StubView() }
     public func menuIndicator(_ visibility: Visibility) -> StubView { StubView() }
@@ -1083,6 +1129,9 @@ extension View {
     public func zIndex(_ value: Double) -> StubView { StubView() }
     public func keyboardShortcut(_ key: KeyEquivalent, modifiers: EventModifiers = .command) -> StubView { StubView() }
     public func keyboardShortcut(_ shortcut: KeyboardShortcut) -> StubView { StubView() }
+    /// The optional overload: a command in the registry may have no shortcut, and the
+    /// menus hand it straight over rather than branching at every call site.
+    public func keyboardShortcut(_ shortcut: KeyboardShortcut?) -> StubView { StubView() }
 
     public func onAppear(perform action: (() -> Void)? = nil) -> StubView { StubView() }
     public func onDisappear(perform action: (() -> Void)? = nil) -> StubView { StubView() }
@@ -1177,8 +1226,12 @@ public struct SearchFieldPlacement: Sendable {
 }
 
 public struct KeyEquivalent: Sendable, Hashable, ExpressibleByExtendedGraphemeClusterLiteral {
-    public init(_ character: Character) {}
-    public init(extendedGraphemeClusterLiteral value: Character) {}
+    /// Stored, not discarded: the command registry renders a shortcut for the menus and
+    /// the palette by reading it back.
+    public let character: Character
+
+    public init(_ character: Character) { self.character = character }
+    public init(extendedGraphemeClusterLiteral value: Character) { self.character = value }
     public static let upArrow = KeyEquivalent("\u{F700}")
     public static let downArrow = KeyEquivalent("\u{F701}")
     public static let leftArrow = KeyEquivalent("\u{F702}")
@@ -1203,6 +1256,15 @@ public struct EventModifiers: OptionSet, Sendable {
 public struct KeyboardShortcut: Sendable {
     public static let defaultAction = KeyboardShortcut()
     public static let cancelAction = KeyboardShortcut()
+
+    public var key: KeyEquivalent = " "
+    public var modifiers: EventModifiers = .command
+
+    public init() {}
+    public init(_ key: KeyEquivalent, modifiers: EventModifiers = .command) {
+        self.key = key
+        self.modifiers = modifiers
+    }
 }
 
 public struct KeyPress: Sendable {

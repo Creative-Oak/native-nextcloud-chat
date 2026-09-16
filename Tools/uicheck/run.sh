@@ -20,8 +20,8 @@ mkdir -p "$MODULES"
 SWIFTC=${SWIFTC:-swiftc}
 
 # Each stub is its own module, named after the framework it stands in for.
-# Order matters: SwiftUI's stub imports Combine and AppKit.
-for module in Combine UniformTypeIdentifiers SwiftData AppKit LinkPresentation SwiftUI UserNotifications; do
+# Order matters: SwiftUI's stub imports Combine and AppKit, and PhotosUI's imports SwiftUI.
+for module in Combine UniformTypeIdentifiers SwiftData AppKit LinkPresentation SwiftUI PhotosUI UserNotifications; do
     if [ -f "Tools/uicheck/stubs/$module.swift" ]; then
         # -parse-as-library: each stub is a single file, and swiftc treats a lone file as
         # top-level script code, where a global such as `NSApp` may not carry @MainActor.

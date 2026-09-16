@@ -17,7 +17,13 @@ jobs:
     runs-on: ubuntu-latest
     container: swift:6.1
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Install Python
+        # The Swift image stopped shipping it. Both checks below are Python, and they run
+        # before the build — so without this the whole job fails at the first step and the
+        # build and tests are skipped, which reads as "imports broken" rather than "nothing
+        # was compiled at all".
+        run: apt-get update -qq && apt-get install -y -qq --no-install-recommends python3
       - name: Check imports
         # A missing `import AppKit` in a SwiftUI file is invisible on Linux and an instant
         # error on a Mac, so it is worth checking where there is no Xcode to tell us.
@@ -40,7 +46,7 @@ jobs:
     name: App (macOS)
     runs-on: macos-26
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Show toolchain
         run: |
           xcodebuild -version

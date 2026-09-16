@@ -17,6 +17,10 @@ enum TalkError: Error, Sendable, Equatable {
     case cancelled
     case transport(code: Int, description: String)
     case untrustedCertificate(host: String)
+    /// The response body went past the ceiling the request asked for, and was abandoned.
+    case responseTooLarge
+    /// A redirect wanted to leave the origin the request was aimed at, and was refused.
+    case redirectRefused(host: String)
 
     // HTTP / OCS
     case unauthorized
@@ -84,14 +88,18 @@ enum TalkError: Error, Sendable, Equatable {
             description
         case .untrustedCertificate(let host):
             "The certificate for \(host) couldn’t be verified."
+        case .responseTooLarge:
+            "The server sent far more data than that should need."
+        case .redirectRefused(let host):
+            "\(host) tried to send this request somewhere else. kvidr only talks to your own server."
         case .unauthorized:
             "Your session has expired. Sign in again to continue."
         case .forbidden(let message):
-            message ?? "You don’t have permission to do that."
+            Self.quoting(message) ?? "You don’t have permission to do that."
         case .notFound:
             "That conversation or message no longer exists."
         case .conflict(let message):
-            message ?? "That conflicted with a change on the server."
+            Self.quoting(message) ?? "That conflicted with a change on the server."
         case .sessionExpired:
             "Reconnecting…"
         case .payloadTooLarge:
@@ -113,11 +121,44 @@ enum TalkError: Error, Sendable, Equatable {
         case .serverError(let status, _):
             "The server reported an error (\(status))."
         case .ocs(_, let message):
-            message ?? "The server rejected that request."
+            Self.quoting(message) ?? "The server rejected that request."
         case .decoding, .unexpectedResponse:
             "The server sent something unexpected."
         }
     }
+
+    /// Frames a line the *server* wrote so it cannot be mistaken for the app's own voice.
+    ///
+    /// `ocs.meta.message` is free text chosen by whoever runs (or has taken over) the
+    /// server, and it used to be printed verbatim in first-party chrome — which is an
+    /// invitation to write "Your session expired, re-enter your password at …" in kvidr's
+    /// own words. Attributed and bounded, it is still useful and no longer impersonation.
+    /// The length cap is a second job: a multi-kilobyte line is a layout weapon.
+    static func quoting(_ message: String?) -> String? {
+        guard let message = sanitizedServerText(message) else { return nil }
+        return "The server says: “\(message)”"
+    }
+
+    /// One line, no control characters, at most ``serverTextLimit`` characters.
+    ///
+    /// Applied wherever server text enters an error payload, so the bound travels with the
+    /// value rather than depending on every call site remembering it.
+    static func sanitizedServerText(_ message: String?) -> String? {
+        guard let message else { return nil }
+        var cleaned = String(message.unicodeScalars.map { scalar -> Character in
+            // C0/C1 controls, which is where line breaks, tabs and terminal escapes live.
+            if scalar.value < 0x20 || (0x7F...0x9F).contains(scalar.value) { return " " }
+            return Character(scalar)
+        })
+        cleaned = cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleaned.isEmpty else { return nil }
+        if cleaned.count > serverTextLimit {
+            cleaned = String(cleaned.prefix(serverTextLimit)).trimmingCharacters(in: .whitespaces) + "…"
+        }
+        return cleaned
+    }
+
+    static let serverTextLimit = 200
 
     /// Maps a transport-level HTTP status (plus any OCS message) onto a typed error.
     static func from(status: Int, ocsMessage: String? = nil, headers: HTTPHeaders = .init()) -> TalkError {

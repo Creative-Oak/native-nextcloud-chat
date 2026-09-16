@@ -38,6 +38,12 @@ final class LinkPreviewLoader {
     }
 
     func preview(for url: URL) async -> LinkPreview? {
+        // Nothing is fetched until this holds. A preview is an HTTP GET made from the
+        // reader's machine, at appearance, to an address whoever wrote the message picked:
+        // for a link into the reader's own network that request is a probe they can neither
+        // see nor have asked for, and the card that comes back — or doesn't — is the
+        // answer, reported to the sender. See ``Foundation/URL/isPreviewableWebLink``.
+        guard url.isPreviewableWebLink else { return nil }
         if let cached = memory[url] { return cached }
         if unavailable.contains(url) { return nil }
         if let existing = inFlight[url] { return await existing.value }

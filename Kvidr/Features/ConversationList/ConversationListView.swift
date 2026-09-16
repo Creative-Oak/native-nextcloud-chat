@@ -97,7 +97,6 @@ struct ConversationListView: View {
         }
     }
 
-    @ViewBuilder
     /// Whether the grid of faces is on screen for the draft to sit beneath.
     private var hasPinnedFaces: Bool {
         !model.isFiltering && model.sections.contains { $0.section == .favorites }

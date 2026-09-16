@@ -51,6 +51,15 @@ struct FileTransfer: Sendable, Identifiable, Equatable {
     /// Where the upload put it, once it has been uploaded. The share step needs this, and
     /// so does taking the file back out of the composer.
     var remotePath: String?
+    /// Set only when the app wrote this file itself — a pasted image, or the copy made on
+    /// the way out of the Photos picker — and naming the directory it was written into.
+    ///
+    /// Nil for a file the user chose, which is theirs and is never touched. Ownership is
+    /// recorded rather than guessed at from the path: people are handed real files out of
+    /// the temporary directory all the time (an attachment opened from Mail, a file dragged
+    /// out of an archive), and a cleanup that goes by where a file happens to live deletes
+    /// the original the moment one of those is attached.
+    var temporaryItem: URL?
 
     init(fileURL: URL, byteCount: Int, caption: String = "", replyToMessageID: Int? = nil) {
         self.id = UUID()
@@ -131,6 +140,17 @@ actor AttachmentService {
         folder: String,
         progress: @escaping @Sendable (Double) -> Void
     ) async throws(TalkError) -> String {
+        // The guard is what makes the read below safe, so it sits directly on top of it.
+        // `Data(contentsOf:)` reads whatever kind of URL it is handed: given `https://…` it
+        // performs a blocking, untimed, unbounded GET on this actor and answers with the
+        // body — which would then be uploaded to the user’s Nextcloud and shared into a
+        // conversation. Given a named pipe it blocks on this actor until the app is quit.
+        // Staging refuses both too, but a second place to stage from is one edit away, and
+        // the read is here.
+        guard transfer.fileURL.isAttachableFile else {
+            throw .unexpectedResponse("Only files on this Mac can be attached")
+        }
+
         let data: Data
         do {
             data = try Data(contentsOf: transfer.fileURL)
@@ -154,7 +174,13 @@ actor AttachmentService {
 
         for attempt in 0..<Self.maximumNameAttempts {
             let candidate = Self.name(fileName, attempt: attempt)
-            let path = "\(folder)/\(candidate)"
+            // One string, written once and then shared under that same name. The PUT below
+            // goes to exactly this path and exactly this path is what comes back for
+            // `share(path:)`. They used to be allowed to differ — the URL got the safe
+            // spelling of the name and the caller got the raw one — so `Invoice #42.pdf`
+            // went up as `Invoice _42.pdf`, the share asked for a file the server had never
+            // written, and the send failed with the upload left behind in the user's Files.
+            let path = Endpoint.filePath("\(folder)/\(candidate)")
 
             var headers: HTTPHeaders = [
                 "Content-Type": "application/octet-stream",
@@ -312,5 +338,74 @@ extension AttachmentService {
             return try await download(path: path)
         }
         throw .unexpectedResponse("That file has no path to download from")
+    }
+}
+
+// MARK: - The questions the upload path asks about a URL
+
+extension URL {
+    /// A file on this Mac — not merely something spelled like one.
+    ///
+    /// A drop and a paste both arrive as a plain `URL`, and `public.url` matches a hyperlink
+    /// as readily as a file, so by the time the composer sees one there is nothing left to
+    /// tell a dragged web link from a dragged document except this.
+    var isLocalFile: Bool {
+        guard isFileURL else { return false }
+        // `file://somewhere.example/share/secrets` is a file URL as well, and names another
+        // machine’s disk rather than this one’s.
+        guard let host = host(), !host.isEmpty else { return true }
+        return host.caseInsensitiveCompare("localhost") == .orderedSame
+    }
+
+    /// A file this app may actually read: spelled like a local file, *and* a regular file
+    /// when asked.
+    ///
+    /// ``isLocalFile`` only reads the URL. That is enough to keep a hyperlink out, and not
+    /// enough to keep out the things a path can name besides a document. A named pipe is the
+    /// one that matters: `Data(contentsOf:)` on a FIFO nobody ever writes to blocks inside
+    /// the `AttachmentService` actor and never returns, so every later upload, share, delete
+    /// and preview in that session waits behind it forever — one dragged path, and the rest
+    /// of the app's file handling is gone until it is quit. A character device is the same
+    /// read with a different ending: `/dev/zero` answers, and keeps answering.
+    ///
+    /// Regular files only, therefore, which also subsumes the directory check staging used
+    /// to make on its own.
+    ///
+    /// What this deliberately does *not* refuse is a file on a mounted volume. `/Volumes/…`
+    /// on an SMB or NFS share is another machine's disk reached through a path, and reading
+    /// it is a network fetch with this process's latency at the other end's mercy — but the
+    /// user mounted it and the user picked the file, and refusing to attach from a work share
+    /// would break something people legitimately do all day. The residual risk is a stall
+    /// rather than a disclosure: a wedged mount hangs this actor exactly as a FIFO would, and
+    /// the only real answer to that is to stream the upload from the file URL under a
+    /// timeout, which is a change to the transport rather than to this predicate.
+    var isAttachableFile: Bool {
+        guard isLocalFile else { return false }
+        if let isRegularFile = (try? resourceValues(forKeys: [.isRegularFileKey]))?.isRegularFile {
+            return isRegularFile
+        }
+        // Not every Foundation answers that key — this module builds on Linux too — and a
+        // predicate that has to fail closed must not fail closed on everything. Asking the
+        // file system for the item's type directly is the same question in older words.
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: resolvingSymlinksInPath().path),
+              let type = attributes[.type] as? FileAttributeType
+        else { return false }
+        return type == .typeRegular
+    }
+
+    /// Whether this URL names something inside `directory`.
+    ///
+    /// Compared component by component, on standardised and symlink-resolved paths. A string
+    /// prefix is the tempting version and the wrong one: `/tmp/scratchX` has `/tmp/scratch`
+    /// as a prefix, so a cleanup written that way reaches into the directory next door — and
+    /// a path carrying `..` prefixes whatever you like while pointing somewhere else.
+    func isContained(in directory: URL) -> Bool {
+        guard isFileURL, directory.isFileURL else { return false }
+        let container = directory.standardizedFileURL.resolvingSymlinksInPath().pathComponents
+        let candidate = standardizedFileURL.resolvingSymlinksInPath().pathComponents
+        // Strictly inside: a directory does not contain itself, and deleting the container is
+        // never what a per-item cleanup meant.
+        guard candidate.count > container.count else { return false }
+        return Array(candidate.prefix(container.count)) == container
     }
 }

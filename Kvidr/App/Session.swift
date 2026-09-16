@@ -71,13 +71,20 @@ final class AppDependencies {
     let store: TalkStore
     let preferences: Preferences
 
-    static let userAgent: String = {
-        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1"
-        let device = ProcessInfo.processInfo.hostName
-        // This string becomes the app password's name in the user's security settings, so
-        // it has to identify both the app and which Mac it came from.
-        return "kvidr \(version) (\(device))"
-    }()
+    private static let version: String =
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1"
+
+    /// Sent on every request, and deliberately says nothing about this Mac.
+    ///
+    /// The first thing the app does with an address is probe it, before the user has
+    /// decided to trust anything, and a Mac's host name is commonly its owner's real name.
+    /// A typosquatted address should not collect that from a single typo.
+    static let userAgent: String = "kvidr/\(version)"
+
+    /// Only the login flow sends this one. It becomes the app password's name in the
+    /// user's Nextcloud security settings, so here the device name is the whole point —
+    /// and by then the user has chosen this server and is signing in to it.
+    static let loginUserAgent: String = "kvidr \(version) (\(ProcessInfo.processInfo.hostName))"
 
     init(inMemory: Bool = false) {
         transport = URLSessionTransport(userAgent: Self.userAgent)
@@ -86,7 +93,7 @@ final class AppDependencies {
         authentication = AuthenticationService(
             transport: transport,
             credentialStore: credentialStore,
-            userAgent: Self.userAgent,
+            userAgent: Self.loginUserAgent,
             // Read on demand: `UserDefaults` is thread-safe, and the setting can be toggled
             // while the app is running.
             isInsecureHTTPAllowed: {

@@ -21,6 +21,11 @@ final class AppModel {
     private(set) var phase: Phase = .launching
     private(set) var session: Session?
     private(set) var connection: ConnectionState = .online
+    /// Set when signing out couldn’t finish the job — an app password that may still be
+    /// live on the server, or still in the keychain. Shown on the sign-in screen, which is
+    /// where the user lands next and the last moment they can be told to go and revoke it
+    /// by hand; after that no account row is left pointing at it.
+    private(set) var signOutWarning: String?
 
     /// The sidebar.
     private(set) var conversationList: ConversationListModel?
@@ -185,6 +190,11 @@ final class AppModel {
         try? await activate(account: account)
     }
 
+    /// The user has read the warning from the last sign-out; stop showing it.
+    func dismissSignOutWarning() {
+        signOutWarning = nil
+    }
+
     func signOut() async {
         // The account comes from whichever place has it. A live session is the usual one,
         // but the app password can stop working before a session ever exists: `start()`
@@ -204,10 +214,19 @@ final class AppModel {
         await teardownSession()
 
         if let account {
-            await dependencies.authentication.signOut(account: account)
+            let outcome = await dependencies.authentication.signOut(account: account)
+            signOutWarning = outcome.warning
+            // The account row goes either way. Keeping it on a failed revoke would put the
+            // user back on the reauthentication screen at the next launch over a credential
+            // they asked to be rid of; the warning is what carries the bad news instead.
             await dependencies.store.deleteAccount(id: account.id)
         }
 
+        // Dropping the loader leaves the files. Their names are the user ids and room
+        // tokens this account could see, so the cache outlines the account's contacts and
+        // conversations for anyone who reads the directory afterwards — on a shared or
+        // handed-on Mac, after the person signed out precisely so it wouldn't.
+        await avatarLoader?.purge()
         avatarLoader = nil
         previewLoader = nil
         conversationList = nil
@@ -219,6 +238,7 @@ final class AppModel {
     }
 
     func signedIn(account: Account) async {
+        signOutWarning = nil
         await dependencies.store.save(account: account)
         try? await activate(account: account)
     }

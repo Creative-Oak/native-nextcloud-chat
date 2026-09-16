@@ -279,7 +279,8 @@ struct MessageRow: View {
             },
             onReact: { onReact($0, message) },
             onShowReactions: { isShowingReactionDetail = true },
-            onMoreReactions: { onShowTapback(message) }
+            onMoreReactions: { onShowTapback(message) },
+            links: content.webLinks
         )
     }
 

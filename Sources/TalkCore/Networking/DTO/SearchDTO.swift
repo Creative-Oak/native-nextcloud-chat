@@ -55,8 +55,13 @@ struct UnifiedSearchEntryDTO: Decodable, Sendable {
 
     /// Talk's `talk-message` provider attaches these. A hit without a conversation token
     /// or a message id can't be navigated to, so it is dropped rather than shown.
+    ///
+    /// `attributes` is a free-form string map that any search provider on the server can
+    /// fill in, and this is the one place where a value out of it becomes a conversation
+    /// token the app then navigates to, long-polls and writes read markers into. A token
+    /// that is not shaped like a token is dropped here rather than carried into a URL.
     func hit() -> MessageSearchHit? {
-        guard let token = attributes["conversation"], !token.isEmpty,
+        guard let token = attributes["conversation"], Self.isPlausibleToken(token),
               let messageID = attributes["messageId"].flatMap(Int.init), messageID > 0
         else { return nil }
 
@@ -73,6 +78,14 @@ struct UnifiedSearchEntryDTO: Decodable, Sendable {
             avatarURL: thumbnailUrl.isEmpty ? nil : URL(string: thumbnailUrl),
             resourceURL: resourceUrl.isEmpty ? nil : URL(string: resourceUrl)
         )
+    }
+
+    /// Talk generates room tokens from an alphanumeric alphabet. `-` and `_` are tolerated
+    /// because they are URL-safe and a future token format may use them; anything else —
+    /// a slash, a dot, a percent — is not a token, whatever the server calls it.
+    static func isPlausibleToken(_ token: String) -> Bool {
+        !token.isEmpty && token.count <= 64
+            && token.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-" || $0 == "_") }
     }
 }
 

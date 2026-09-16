@@ -243,7 +243,12 @@ private final class ComposerNSTextView: NSTextView {
     override func readSelection(from pboard: NSPasteboard, type: NSPasteboard.PasteboardType) -> Bool {
         switch type {
         case .fileURL:
-            let urls = (pboard.readObjects(forClasses: [NSURL.self]) as? [URL]) ?? []
+            // File URLs only, and nothing else riding along. Without the option this reads
+            // *every* URL on the pasteboard, not just the flavour that brought us here, so
+            // a web link sitting beside the file would be staged too — and the upload path
+            // fetches whatever URL it is handed.
+            let options: [NSPasteboard.ReadingOptionKey: Any] = [.urlReadingFileURLsOnly: true]
+            let urls = (pboard.readObjects(forClasses: [NSURL.self], options: options) as? [URL]) ?? []
             if !urls.isEmpty {
                 onPasteFiles?(urls)
                 return true

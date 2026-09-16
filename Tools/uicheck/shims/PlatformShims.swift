@@ -63,5 +63,6 @@ actor TalkStore {
 #if !canImport(Darwin)
 extension URL {
     static var cachesDirectory: URL { URL(fileURLWithPath: NSTemporaryDirectory()) }
+    static var temporaryDirectory: URL { URL(fileURLWithPath: NSTemporaryDirectory()) }
 }
 #endif

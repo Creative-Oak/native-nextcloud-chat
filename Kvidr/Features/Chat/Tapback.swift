@@ -138,6 +138,11 @@ struct MessageMenuActions {
     var onReact: (String) -> Void
     var onShowReactions: () -> Void
     var onMoreReactions: () -> Void
+    /// The web links in the message, so the menu can offer one to copy. `Copy` copies the
+    /// words; a link's label is whatever the sender typed, and the two are allowed to
+    /// disagree, so copying the label is no way to find out where a link goes. See
+    /// ``MessageContent/webLinks``.
+    var links: [URL] = []
 }
 
 /// Right-click on a message: the reactions in two rows on top, then the actions — one
@@ -190,6 +195,14 @@ enum MessageMenu {
     /// The second row: a handful more, and the way to the rest.
     fileprivate static let moreReactions = ["🔥", "✅", "😊", "😍", "🤔"]
 
+    /// A link as a menu item reads. The whole thing, up to the point where a menu stops
+    /// being readable — it is shown to answer one question, and a truncated answer to
+    /// "where does this actually go" is still better than none.
+    private static func shortened(_ url: URL) -> String {
+        let text = url.absoluteString
+        return text.count > 60 ? String(text.prefix(60)) + "…" : text
+    }
+
     @MainActor
     static func make(_ actions: MessageMenuActions) -> NSMenu {
         let menu = NSMenu()
@@ -208,6 +221,13 @@ enum MessageMenu {
             menu.addItem(ClosureMenuItem("Reply", symbol: "arrowshape.turn.up.left", action: actions.onReply))
         }
         menu.addItem(ClosureMenuItem("Copy", symbol: "doc.on.doc", action: actions.onCopy))
+        for link in actions.links {
+            let title = actions.links.count == 1 ? "Copy Link" : "Copy \(shortened(link))"
+            menu.addItem(ClosureMenuItem(title, symbol: "link") {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(link.absoluteString, forType: .string)
+            })
+        }
         if actions.canEdit {
             menu.addItem(ClosureMenuItem("Edit…", symbol: "pencil", action: actions.onEdit))
         }

@@ -22,6 +22,7 @@ public struct Selector: Equatable, Hashable, Sendable {
     open func cancelOperation(_ sender: Any?) {}
     open func moveUp(_ sender: Any?) {}
     open func moveDown(_ sender: Any?) {}
+    open func deleteBackward(_ sender: Any?) {}
 }
 
 @MainActor open class NSView: NSResponder {
@@ -36,6 +37,16 @@ public struct Selector: Equatable, Hashable, Sendable {
     open func hitTest(_ point: NSPoint) -> NSView? { nil }
     open func rightMouseDown(with event: NSEvent) {}
     open func mouseDown(with event: NSEvent) {}
+    open var autoresizingMask: AutoresizingMask = []
+    open func viewDidMoveToSuperview() {}
+    open func layout() {}
+
+    public struct AutoresizingMask: OptionSet, Sendable {
+        public let rawValue: UInt
+        public init(rawValue: UInt) { self.rawValue = rawValue }
+        public static let width = AutoresizingMask(rawValue: 1 << 1)
+        public static let height = AutoresizingMask(rawValue: 1 << 4)
+    }
 }
 
 @MainActor open class NSWindow: NSResponder {
@@ -69,6 +80,10 @@ public struct Selector: Equatable, Hashable, Sendable {
     public func activate(ignoringOtherApps: Bool) {}
     public func activate() {}
     public func orderFrontCharacterPalette(_ sender: Any?) {}
+    /// How the app opens Settings: SwiftUI's own `showSettingsWindow:` is reachable only
+    /// by selector, so this is the one place the app talks to AppKit that way.
+    @discardableResult
+    public func sendAction(_ action: Selector, to target: Any?, from sender: Any?) -> Bool { false }
     public static let didBecomeActiveNotification = Notification.Name("NSApplicationDidBecomeActive")
     public static let didResignActiveNotification = Notification.Name("NSApplicationDidResignActive")
     public enum TerminateReply: Sendable { case terminateNow, terminateCancel, terminateLater }
@@ -101,6 +116,7 @@ extension NSApplicationDelegate {
     public init(size: NSSize) { super.init() }
     open var size: NSSize = .zero
     open var tiffRepresentation: Data? { nil }
+    public init?(pasteboard: NSPasteboard) { super.init() }
 }
 
 @MainActor open class NSBitmapImageRep: NSObject {
@@ -134,6 +150,14 @@ public struct NSColor: Sendable {
     public func string(forType type: PasteboardType) -> String? { nil }
     public func data(forType type: PasteboardType) -> Data? { nil }
     public func canReadObject(forClasses classes: [AnyClass], options: [AnyHashable: Any]?) -> Bool { false }
+
+    /// The composer reads dropped and pasted files through this, with
+    /// `urlReadingFileURLsOnly` so a pasteboard cannot offer it a web URL to go and fetch.
+    public struct ReadingOptionKey: Hashable, Sendable {
+        public static let urlReadingFileURLsOnly = ReadingOptionKey()
+        public static let urlReadingContentsConformToTypes = ReadingOptionKey()
+    }
+    public func readObjects(forClasses classes: [AnyClass], options: [ReadingOptionKey: Any]? = nil) -> [Any]? { nil }
 }
 
 public final class NSItemProvider: NSObject, @unchecked Sendable {
@@ -172,6 +196,7 @@ public final class NSItemProvider: NSObject, @unchecked Sendable {
 }
 
 @MainActor open class NSScrollView: NSView {
+    public convenience init() { self.init(frame: .zero) }
     open var documentView: NSView?
     open var drawsBackground: Bool = true
     open var hasVerticalScroller: Bool = false
@@ -183,6 +208,7 @@ public final class NSItemProvider: NSObject, @unchecked Sendable {
 @MainActor open class NSTextContainer: NSObject {
     open var widthTracksTextView: Bool = true
     open var lineFragmentPadding: CGFloat = 5
+    open var containerSize: NSSize = .zero
 }
 
 @MainActor open class NSLayoutManager: NSObject {
@@ -211,6 +237,12 @@ public final class NSItemProvider: NSObject, @unchecked Sendable {
     open var enclosingScrollView: NSScrollView? { nil }
     open func selectedRange() -> NSRange { NSRange(location: 0, length: 0) }
     open func setSelectedRange(_ range: NSRange) {}
+    open var minSize: NSSize = .zero
+    open var maxSize: NSSize = .zero
+    open var isVerticallyResizable: Bool = false
+    open var isHorizontallyResizable: Bool = false
+    open var readablePasteboardTypes: [NSPasteboard.PasteboardType] { [] }
+    open func readSelection(from pboard: NSPasteboard, type: NSPasteboard.PasteboardType) -> Bool { false }
 }
 
 @MainActor public protocol NSTextViewDelegate: NSObjectProtocol {
@@ -240,12 +272,14 @@ public struct NSFont: Sendable {
 @MainActor public let NSApp = NSApplication.shared
 
 @MainActor open class NSEvent: NSObject {
-    public enum EventType: Sendable { case leftMouseDown, rightMouseDown, mouseMoved }
+    public enum EventType: Sendable { case leftMouseDown, rightMouseDown, mouseMoved, cursorUpdate }
     public struct EventTypeMask: OptionSet, Sendable {
         public let rawValue: UInt64
         public init(rawValue: UInt64) { self.rawValue = rawValue }
         public static let leftMouseDown = EventTypeMask(rawValue: 1 << 1)
         public static let leftMouseUp = EventTypeMask(rawValue: 1 << 2)
+        public static let mouseMoved = EventTypeMask(rawValue: 1 << 5)
+        public static let cursorUpdate = EventTypeMask(rawValue: 1 << 17)
     }
     public struct ModifierFlags: OptionSet, Sendable {
         public let rawValue: UInt
@@ -256,12 +290,76 @@ public struct NSFont: Sendable {
     open var modifierFlags: ModifierFlags { [] }
     open var window: NSWindow? { nil }
     open var locationInWindow: NSPoint { .zero }
+    open var clickCount: Int { 1 }
     public class var pressedMouseButtons: Int { 0 }
     public class func addLocalMonitorForEvents(matching mask: EventTypeMask, handler block: @escaping (NSEvent) -> NSEvent?) -> Any? { nil }
     public class func removeMonitor(_ eventMonitor: Any) {}
 }
 
-@MainActor open class NSSplitView: NSView {}
+@MainActor open class NSSplitView: NSView {
+    open weak var delegate: (any NSSplitViewDelegate)?
+}
+
+@MainActor public protocol NSSplitViewDelegate: NSObjectProtocol {}
+
+@MainActor open class NSSplitViewItem: NSObject {
+    open var canCollapse: Bool = true
+    open var isCollapsed: Bool = false
+}
+
+@MainActor open class NSSplitViewController: NSObject, NSSplitViewDelegate {
+    open var splitViewItems: [NSSplitViewItem] = []
+}
+
+/// The pointer shapes the transcript and the sidebar divider set by hand.
+@MainActor public final class NSCursor {
+    public static let arrow = NSCursor()
+    public static let pointingHand = NSCursor()
+    public static let resizeLeft = NSCursor()
+    public static let resizeRight = NSCursor()
+    public static let resizeLeftRight = NSCursor()
+    public func set() {}
+}
+
+public enum NSFocusRingType: Sendable { case `default`, none, exterior }
+public enum NSLineBreakMode: Sendable { case byWordWrapping, byTruncatingTail, byClipping }
+
+@MainActor open class NSText: NSView {}
+
+@MainActor open class NSCell: NSObject {
+    open var usesSingleLineMode: Bool = false
+}
+
+@MainActor open class NSControl: NSView {}
+
+/// The recipient field in the new-message sheet is an `NSTextField` rather than a SwiftUI
+/// one, for the key handling; this is the surface it uses.
+@MainActor open class NSTextField: NSControl {
+    public convenience init() { self.init(frame: .zero) }
+    open weak var delegate: (any NSTextFieldDelegate)?
+    open var stringValue: String = ""
+    open var placeholderString: String?
+    open var isBordered: Bool = true
+    open var isBezeled: Bool = true
+    open var drawsBackground: Bool = true
+    open var focusRingType: NSFocusRingType = .default
+    open var lineBreakMode: NSLineBreakMode = .byWordWrapping
+    open var font: NSFont?
+    open var cell: NSCell? { NSCell() }
+    open func currentEditor() -> NSText? { nil }
+}
+
+@MainActor public protocol NSTextFieldDelegate: NSObjectProtocol {
+    func controlTextDidChange(_ obj: Notification)
+    func controlTextDidBeginEditing(_ obj: Notification)
+    func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool
+}
+
+extension NSTextFieldDelegate {
+    public func controlTextDidChange(_ obj: Notification) {}
+    public func controlTextDidBeginEditing(_ obj: Notification) {}
+    public func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool { false }
+}
 
 
 

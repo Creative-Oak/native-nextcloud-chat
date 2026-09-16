@@ -29,9 +29,18 @@ struct HTTPHeaders: Sendable, Equatable, ExpressibleByDictionaryLiteral {
 
     func int(_ name: String) -> Int? { self[name].flatMap(Int.init) }
 
+    /// Seconds only — the legal HTTP-date form yields `nil` rather than a guess.
+    ///
+    /// Whatever comes back is still the server's number, so it is only ever a suggestion;
+    /// ``Backoff/delay(forAttempt:after:)`` is where it is clamped. Values that are not a
+    /// finite, non-negative count of seconds are dropped here, because `TimeInterval("nan")`
+    /// and `TimeInterval("-1")` both parse and neither means anything.
     var retryAfter: TimeInterval? {
-        guard let raw = self["retry-after"] else { return nil }
-        return TimeInterval(raw)
+        guard let raw = self["retry-after"],
+              let seconds = TimeInterval(raw),
+              seconds.isFinite, seconds >= 0
+        else { return nil }
+        return seconds
     }
 
     var isMaintenanceMode: Bool { self["x-nextcloud-maintenance-mode"] == "1" }
@@ -54,6 +63,20 @@ struct HTTPRequest: Sendable {
     var body: Data?
     /// Long polls need a much longer timeout than ordinary calls.
     var timeout: TimeInterval = 30
+    /// How many bytes of response body the transport will accumulate before giving up.
+    ///
+    /// Without a ceiling the only bound on a response is the resource timeout, so a server
+    /// that simply keeps writing takes the app down — and since the chat long poll restarts
+    /// itself, it can do it again on every launch. The default is the generous one because
+    /// a download is as big as the user's file; ``OCSClient`` drops API calls to
+    /// ``apiResponseLimit``.
+    var maximumResponseSize: Int = HTTPRequest.transferResponseLimit
+
+    /// Ample for any OCS payload this client asks for. The largest is a 100-message chat
+    /// page, which at Talk's 32 000-character message limit cannot plausibly reach this.
+    static let apiResponseLimit = 16 * 1024 * 1024
+    /// A file the user asked for. Still bounded: the body is held in memory as `Data`.
+    static let transferResponseLimit = 128 * 1024 * 1024
 }
 
 struct HTTPResponse: Sendable {

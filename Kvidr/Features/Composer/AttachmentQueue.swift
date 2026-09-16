@@ -12,11 +12,17 @@ import Observation
 /// Uploads run one at a time rather than all at once: a dozen parallel PUTs to the same
 /// Nextcloud is a good way to get rate-limited, and a queue also makes the progress
 /// readable.
+///
+/// One thing does not start straight away: a file named by the pasteboard, which waits to be
+/// acknowledged before it becomes a transfer at all — see ``enqueue(pastedFiles:)``.
 @MainActor
 @Observable
 final class AttachmentQueue {
     private(set) var transfers: [FileTransfer] = []
     private(set) var isDropTargeted = false
+    /// Files that arrived on the pasteboard and are waiting to be acknowledged — see
+    /// ``enqueue(pastedFiles:)``. Not transfers yet, on purpose.
+    private(set) var pendingPastedFiles: [URL] = []
 
     private let session: Session
     /// Nil in a draft: uploading needs no conversation, only sharing does, so files can go
@@ -31,6 +37,7 @@ final class AttachmentQueue {
     init(session: Session, token: String? = nil) {
         self.session = session
         self.token = token
+        Self.sweepAbandonedScratchFiles()
     }
 
     /// Anything staged or in flight — what makes the send button worth pressing with an
@@ -64,11 +71,51 @@ final class AttachmentQueue {
     /// No caption and no reply here: both belong to the message, and the message is not
     /// written yet. They are read off the composer when send is pressed.
     func enqueue(urls: [URL]) {
-        for url in urls {
-            guard let transfer = Self.makeTransfer(for: url) else { continue }
-            transfers.append(transfer)
-        }
-        start()
+        stage(urls) { _ in nil }
+    }
+
+    /// Photos and videos copied out of the picker on their way here, each into a scratch
+    /// directory of its own — see ``PickedPhoto``.
+    ///
+    /// Separate from ``enqueue(urls:)`` because these are the app's own files rather than
+    /// the user's, which is what decides whether they may be deleted afterwards.
+    func enqueue(scratchFiles urls: [URL]) {
+        stage(urls) { $0.deletingLastPathComponent() }
+    }
+
+    /// Files named by the pasteboard, which are not attached until the user says so.
+    ///
+    /// Everything else staged here was pointed at: dragged from Finder, picked in a panel,
+    /// chosen in Photos. A paste is not. `⌘V` in a text field means "put what I copied here",
+    /// and what is on the general pasteboard is not necessarily what the person doing the
+    /// pasting copied — any process running as the user can put a `public.file-url` there,
+    /// and the composer would read it, upload it and, once the message was sent, hand it to
+    /// whoever is on the other end of the conversation. One keystroke, one arbitrary readable
+    /// file, and the only feedback a filename in a caption that appears after the bytes have
+    /// already gone.
+    ///
+    /// So these are held, and the composer asks. They are not transfers and are not in
+    /// ``transfers``, which is what makes it certain the pump cannot reach them: there is
+    /// nothing for it to find.
+    ///
+    /// A pasted *image* is not held (``enqueuePastedImage(_:)``): those bytes are the ones
+    /// the pasteboard is carrying, not a file somewhere else on the disk that it merely names.
+    func enqueue(pastedFiles urls: [URL]) {
+        guard !urls.isEmpty else { return }
+        pendingPastedFiles.append(contentsOf: urls)
+    }
+
+    /// Attaches what a paste offered, now that it has been read and accepted.
+    func confirmPastedFiles() {
+        let urls = pendingPastedFiles
+        pendingPastedFiles = []
+        stage(urls) { _ in nil }
+    }
+
+    /// Forgets what a paste offered. Nothing was read and nothing was uploaded, so there is
+    /// nothing else to undo.
+    func discardPastedFiles() {
+        pendingPastedFiles = []
     }
 
     /// An image pasted from the clipboard — written to a temporary file first, because the
@@ -81,14 +128,32 @@ final class AttachmentQueue {
         else { return }
 
         let name = "Pasted image \(Self.timestampFormatter.string(from: .now)).png"
-        let url = URL.temporaryDirectory.appending(path: name)
         do {
+            // Its own scratch directory, like a picked photo: the name carries a timestamp
+            // only to the second, so two quick pastes would otherwise collide, and a
+            // directory of the app's own is what makes the file safe to delete later.
+            let directory = try AttachmentScratch.makeItemDirectory()
+            let url = directory.appending(path: name)
             try png.write(to: url)
+            stage([url]) { _ in directory }
         } catch {
             Log.chat.warning("Couldn’t stage a pasted image for upload")
-            return
         }
-        enqueue(urls: [url])
+    }
+
+    /// - Parameter temporaryItem: what the app made for this URL and must clear away again,
+    ///   or nil when the file is the user's own.
+    private func stage(_ urls: [URL], temporaryItem: (URL) -> URL?) {
+        for url in urls {
+            guard var transfer = Self.makeTransfer(for: url) else {
+                // Refused, so no transfer will ever clean up after it — do it here instead.
+                if let item = temporaryItem(url) { Self.discard(item) }
+                continue
+            }
+            transfer.temporaryItem = temporaryItem(url)
+            transfers.append(transfer)
+        }
+        start()
     }
 
     // MARK: - Sending
@@ -116,6 +181,9 @@ final class AttachmentQueue {
     func remove(_ transfer: FileTransfer) {
         committed.remove(transfer.id)
         transfers.removeAll { $0.id == transfer.id }
+        // Out of the tray is the last anyone will see of it, including a transfer that
+        // failed and was never retried — so whatever the app made for it goes now.
+        if let temporaryItem = transfer.temporaryItem { Self.discard(temporaryItem) }
         if let path = transfer.remotePath {
             deleteRemote(path: path, name: transfer.fileName)
         }
@@ -125,6 +193,9 @@ final class AttachmentQueue {
     }
 
     func clearFinished() {
+        for transfer in transfers where transfer.state == .completed {
+            if let temporaryItem = transfer.temporaryItem { Self.discard(temporaryItem) }
+        }
         transfers.removeAll { $0.state == .completed }
     }
 
@@ -195,9 +266,12 @@ final class AttachmentQueue {
                 }
             )
 
-            // Tidy up after a paste: the temporary file has done its job.
-            if transfer.fileURL.path.hasPrefix(FileManager.default.temporaryDirectory.path) {
-                try? FileManager.default.removeItem(at: transfer.fileURL)
+            // The bytes are up, so a scratch copy the app made for this has done its job.
+            // Only ever one of ours: a file the user chose has no `temporaryItem` and stays
+            // exactly where they keep it.
+            if let temporaryItem = transfer.temporaryItem {
+                Self.discard(temporaryItem)
+                update(transfer.id) { $0.temporaryItem = nil }
             }
 
             guard transfers.contains(where: { $0.id == transfer.id }) else {
@@ -265,12 +339,67 @@ final class AttachmentQueue {
     }
 
     private static func makeTransfer(for url: URL) -> FileTransfer? {
-        let values = try? url.resourceValues(forKeys: [.fileSizeKey, .isDirectoryKey])
-        // Folders would need a recursive upload; that is not what dragging a folder into a
-        // chat usually means, so it's refused rather than half-done.
-        if values?.isDirectory == true { return nil }
-        return FileTransfer(fileURL: url, byteCount: values?.fileSize ?? 0)
+        // The door. `.dropDestination(for: URL.self)` matches `public.url`, not just
+        // `public.file-url`, so a hyperlink dragged out of the transcript or a browser
+        // arrives here looking exactly like a dragged document — and the upload path reads
+        // whatever URL it is given, which would make the app fetch that link from inside
+        // the user's network and post the answer into their Nextcloud.
+        //
+        // A regular file, then, and nothing else a path can name: not a hyperlink, and not
+        // a pipe or a device either, whose read never finishes. Folders fall out of the same
+        // test — they would need a recursive upload, which is not what dragging a folder into
+        // a chat usually means, so it is refused rather than half-done.
+        guard url.isAttachableFile else { return nil }
+
+        let size = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0
+        return FileTransfer(fileURL: url, byteCount: size)
     }
+
+    // MARK: - The app's own temporary files
+
+    /// Deletes something the app made for a transfer.
+    ///
+    /// Belt and braces on top of ``FileTransfer/temporaryItem``: whatever a transfer claims,
+    /// nothing outside the app's own scratch directory is ever removed. The containment test
+    /// is by path component on resolved paths, because the string prefix this replaced said
+    /// yes to any sibling directory whose name merely started the same way.
+    private static func discard(_ item: URL) {
+        guard item.isContained(in: AttachmentScratch.directory) else { return }
+        try? FileManager.default.removeItem(at: item)
+    }
+
+    /// Clears out anything a previous run left behind in the scratch directory.
+    ///
+    /// A transfer cleans up after itself when it finishes or leaves the tray, but a quit
+    /// with files still staged skips both, and without this the directory keeps every photo
+    /// and video the user ever tried to send, at full size. Only the app's own files live
+    /// there, and an upload is given up on after ten minutes, so anything from yesterday
+    /// belongs to a run that is over.
+    private static func sweepAbandonedScratchFiles() {
+        guard !hasSwept else { return }
+        hasSwept = true
+
+        let directory = AttachmentScratch.directory
+        let abandonedAfter = Self.abandonedAfter
+        Task.detached(priority: .background) {
+            let manager = FileManager.default
+            guard let items = try? manager.contentsOfDirectory(
+                at: directory,
+                includingPropertiesForKeys: [.contentModificationDateKey]
+            ) else { return }
+
+            for item in items {
+                let modified = try? item.resourceValues(forKeys: [.contentModificationDateKey])
+                    .contentModificationDate
+                guard let modified, Date.now.timeIntervalSince(modified) > abandonedAfter else { continue }
+                try? manager.removeItem(at: item)
+            }
+        }
+    }
+
+    /// Once per launch is enough — there is a queue per conversation and one for drafts.
+    private static var hasSwept = false
+    private static let abandonedAfter: TimeInterval = 24 * 60 * 60
 
     /// Fixed format, so fixed locale: left to the user's own, this same pattern writes
     /// 2568 on a Buddhist calendar and Arabic-Indic digits in some locales — into a file
@@ -281,4 +410,23 @@ final class AttachmentQueue {
         formatter.dateFormat = "yyyy-MM-dd 'at' HH.mm.ss"
         return formatter
     }()
+}
+
+/// Where the app puts files it makes for an upload: a pasted image, or a photo copied out of
+/// the picker.
+///
+/// Its own directory under the temporary one, so what the app made is told from what the user
+/// chose by a fact rather than by a guess. People are handed real files out of the temporary
+/// directory constantly — an attachment opened from Mail, a file dragged out of an archive
+/// Archive Utility expanded — and attaching one of those must not delete their original.
+enum AttachmentScratch {
+    static let directory = URL.temporaryDirectory
+        .appending(path: "app.kvidr.mac/Attachments", directoryHint: .isDirectory)
+
+    /// A fresh directory for one file, since two picks or two pastes can share a name.
+    static func makeItemDirectory() throws -> URL {
+        let url = directory.appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
+    }
 }

@@ -94,6 +94,26 @@ private struct MessageBlockView: View {
     }
 }
 
+/// The one door a URL out of a message leaves by.
+///
+/// `NSWorkspace.open` hands whatever it is given to LaunchServices, which will honour any
+/// registered scheme: `smb:` mounts an attacker's share and asks for credentials, `file:`
+/// gives a local path to whichever app claims it, `shortcuts:` runs a shortcut by name,
+/// and every third-party scheme on the machine starts that app with arguments a stranger
+/// chose. The sandbox constrains what *this* app reaches and does nothing about any of
+/// that. So a link that came out of a message is opened here, or it is not opened.
+enum MessageLink {
+    @MainActor
+    static func open(_ url: URL) {
+        guard url.isOpenableLink else {
+            // The URL itself is message content and does not go in the log.
+            Log.ui.warning("Refused to open a message link with scheme \(url.scheme ?? "none")")
+            return
+        }
+        NSWorkspace.shared.open(url)
+    }
+}
+
 /// Builds the attributed string for one paragraph.
 enum MessageAttributedString {
     static func make(_ nodes: [InlineNode], isFromMe: Bool) -> AttributedString {
@@ -107,55 +127,69 @@ enum MessageAttributedString {
     private static func attributed(_ node: InlineNode, isFromMe: Bool) -> AttributedString {
         switch node {
         case .text(let text):
-            return AttributedString(text)
+            return AttributedString(text.withoutInvisibleMarks)
 
         case .markdown(let source):
             // Inline-only, whitespace preserved: chat messages use single newlines to mean
             // line breaks, and a document-style parser would swallow them.
+            let cleaned = source.withoutInvisibleMarks
             let options = AttributedString.MarkdownParsingOptions(
                 allowsExtendedAttributes: false,
                 interpretedSyntax: .inlineOnlyPreservingWhitespace,
                 failurePolicy: .returnPartiallyParsedIfPossible
             )
-            if let parsed = try? AttributedString(markdown: source, options: options) {
-                return parsed
+            guard let parsed = try? AttributedString(markdown: cleaned, options: options) else {
+                return AttributedString(cleaned)
             }
-            return AttributedString(source)
+            // Foundation attaches a `.link` to any destination it can build a `URL` from,
+            // including the ones this app will not open. The strip is in the core, where a
+            // test can reach it — see ``AttributedString/withoutRefusedLinks``.
+            return parsed.withoutRefusedLinks
 
         case .mention(let mention):
             var text = AttributedString(mention.displayLabel)
             text.font = .body.weight(.medium)
+            // Every mention gets a capsule, not just a mention of you. Accent-coloured
+            // unadorned text is what a link looks like here, so without this `[@Magnus
+            // Holm](https://evil.tld)` is a verified mention to look at and a link to
+            // click. Markdown produces no background colour, so the capsule is the one
+            // part of the treatment a sender cannot write.
             if isFromMe {
                 // Nothing accent-coloured survives inside an accent bubble — including a
                 // mention of yourself, which would otherwise be accent on accent.
                 text.foregroundColor = .white
-                if mention.isCurrentUser { text.backgroundColor = Color.white.opacity(0.22) }
+                text.backgroundColor = Color.white.opacity(mention.isCurrentUser ? 0.22 : 0.12)
             } else if mention.isCurrentUser {
                 // The one piece of colour in an otherwise calm transcript.
                 text.foregroundColor = .accentColor
                 text.backgroundColor = Color.accentColor.opacity(0.15)
             } else {
                 text.foregroundColor = .accentColor
+                text.backgroundColor = Color.accentColor.opacity(0.08)
             }
             return text
 
         case .link(let url, let label):
             // No underline, as in Messages: the pointer becomes the hand over a link
-            // instead, which `InlineText` arranges.
-            var text = AttributedString(label)
-            text.link = url
+            // instead, and `InlineText` puts the destination in a tooltip, which is the
+            // only thing here that says where the words actually go.
+            var text = AttributedString(label.withoutInvisibleMarks)
+            if url.isOpenableLink { text.link = url }
             if isFromMe { text.foregroundColor = .white }
             return text
 
         case .code(let code):
-            var text = AttributedString(code)
+            var text = AttributedString(code.withoutInvisibleMarks)
             text.font = .body.monospaced()
             return text
 
         case .object(let object):
-            var text = AttributedString(object.name)
+            var text = AttributedString(object.displayName)
             text.font = .body.weight(.medium)
-            if let link = object.link { text.link = link }
+            // Already narrowed to a web link where it is read off the wire — see
+            // ``RichObject/link``. Asked again here because this is where it becomes
+            // something to click.
+            if let link = object.link, link.isWebLink { text.link = link }
             return text
         }
     }
@@ -210,7 +244,7 @@ private struct AttachmentView: View {
         // A poll is not a file to open: it is something to take part in, so it gets a card
         // that can be voted in rather than a row that opens a viewer.
         if object.type == .talkPoll, let pollID = Int(object.id) {
-            PollCard(pollID: pollID, question: object.name, isFromMe: isFromMe)
+            PollCard(pollID: pollID, question: object.displayName, isFromMe: isFromMe)
         } else if object.isImage && object.previewAvailable {
             InlineImageView(object: object)
                 .contextMenu { menu }
@@ -227,7 +261,7 @@ private struct AttachmentView: View {
                 .frame(width: 28)
 
             VStack(alignment: .leading, spacing: 1) {
-                Text(object.name)
+                Text(object.displayName)
                     .lineLimit(1)
                     .truncationMode(.middle)
                 if let detail {
@@ -245,7 +279,9 @@ private struct AttachmentView: View {
         .onTapGesture { open() }
         .accessibilityAddTraits(.isButton)
         .contextMenu { menu }
-        .help(object.name)
+        // The name is what the row shows; the link is where the row goes. A file row is
+        // the other place in this app where those two can disagree.
+        .help(object.link.map { "\(object.displayName)\n\($0.absoluteString)" } ?? object.displayName)
     }
 
     @ViewBuilder
@@ -253,16 +289,16 @@ private struct AttachmentView: View {
         if object.isImage && object.previewAvailable {
             Button("Open Preview") { openAttachment?(object) }
         }
-        if object.link != nil {
+        if let link = object.link {
             Button("Open in Nextcloud") { open() }
             Button("Copy Link") {
                 NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(object.link?.absoluteString ?? "", forType: .string)
+                NSPasteboard.general.setString(link.absoluteString, forType: .string)
             }
         }
         Button("Copy File Name") {
             NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(object.name, forType: .string)
+            NSPasteboard.general.setString(object.displayName, forType: .string)
         }
     }
 
@@ -296,6 +332,6 @@ private struct AttachmentView: View {
             return
         }
         guard let link = object.link else { return }
-        NSWorkspace.shared.open(link)
+        MessageLink.open(link)
     }
 }

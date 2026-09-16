@@ -10,6 +10,13 @@ struct OCSRequest: Sendable {
     var form: [String: String]?
     var timeout: TimeInterval = 30
     var requiresAuthentication = true
+    /// How many bytes of response this particular call is willing to take.
+    ///
+    /// The default suits an OCS payload. A caller that knows better should say so: an
+    /// avatar is a small square, and letting one arrive at the API's own ceiling means a
+    /// server can make the client hold sixteen megabytes per face it is asked about,
+    /// before anything has looked at what came back.
+    var maximumResponseSize: Int = HTTPRequest.apiResponseLimit
 
     static func get(_ path: String, query: [URLQueryItem] = []) -> OCSRequest {
         OCSRequest(method: .get, path: path, query: query)
@@ -96,7 +103,11 @@ actor OCSClient {
 
         guard envelope.meta.isSuccess, (200...299).contains(response.status) else {
             let status = (200...299).contains(response.status) ? envelope.meta.statuscode : response.status
-            throw TalkError.from(status: status, ocsMessage: envelope.meta.message, headers: response.headers)
+            throw TalkError.from(
+                status: status,
+                ocsMessage: TalkError.sanitizedServerText(envelope.meta.message),
+                headers: response.headers
+            )
         }
 
         return OCSResponse(value: envelope.data, status: response.status, headers: response.headers)
@@ -140,15 +151,25 @@ actor OCSClient {
             body = Self.formEncode(form)
         }
 
+        let url = server.url(path: request.path, query: request.query)
+        // The URL builder cannot be allowed to hand back something aimed elsewhere: this
+        // request is about to carry the account's app password, and a path that failed to
+        // build must abort the call rather than land on whatever URL came back.
+        guard url.scheme == server.url.scheme, url.host() == server.url.host(), url.port == server.url.port else {
+            throw .invalidServerURL(request.path)
+        }
+
         let httpRequest = HTTPRequest(
             method: request.method,
-            url: server.url(path: request.path, query: request.query),
+            url: url,
             headers: headers,
             body: body,
-            timeout: request.timeout
+            timeout: request.timeout,
+            maximumResponseSize: request.maximumResponseSize
         )
 
-        Log.api.debug("\(request.method.rawValue) \(request.path)")
+        // Paths carry conversation tokens and user ids, and this log line is `.public`.
+        Log.api.debug("\(request.method.rawValue) \(Endpoint.redacted(request.path))")
         let response = try await transport.send(httpRequest)
         noteTalkHash(response.headers)
         return response
@@ -186,7 +207,7 @@ actor OCSClient {
                 error = try data.decode(String.self, forKey: .error)
             }
         }
-        return (try? JSONDecoder().decode(ErrorOnly.self, from: body))?.error
+        return TalkError.sanitizedServerText((try? JSONDecoder().decode(ErrorOnly.self, from: body))?.error)
     }
 
     private static func ocsMessage(from body: Data) -> String? {
@@ -203,8 +224,10 @@ actor OCSClient {
             }
         }
         guard let decoded = try? JSONDecoder().decode(MessageOnly.self, from: body),
-              let message = decoded.message, !message.isEmpty, message != "OK"
+              let message = TalkError.sanitizedServerText(decoded.message), message != "OK"
         else { return nil }
+        // Bounded and stripped of control characters on the way in, so every error payload
+        // built from it is already safe to put on screen — see ``TalkError/quoting(_:)``.
         return message
     }
 

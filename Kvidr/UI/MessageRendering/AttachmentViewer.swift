@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// The in-app image viewer.
 ///
@@ -53,7 +54,7 @@ struct AttachmentViewer: View {
         GlassEffectContainer(spacing: GlassSpacing.distinct) {
             HStack(spacing: 10) {
                 VStack(alignment: .leading, spacing: 0) {
-                    Text(object.name)
+                    Text(object.displayName)
                         .lineLimit(1)
                         .truncationMode(.middle)
                     if let size = object.size {
@@ -78,7 +79,7 @@ struct AttachmentViewer: View {
 
                 if let link = object.link {
                     Button {
-                        NSWorkspace.shared.open(link)
+                        MessageLink.open(link)
                     } label: {
                         Label("Open in Nextcloud", systemImage: "arrow.up.forward.app")
                             .labelStyle(.iconOnly)
@@ -108,14 +109,61 @@ struct AttachmentViewer: View {
         defer { isSaving = false }
 
         let panel = NSSavePanel()
-        panel.nameFieldStringValue = object.name
+        // The prefill is a server-chosen name, and the panel is the last place the user
+        // reads it before it becomes a file: a name that reverses itself in the field is
+        // not the name that ends up on disk.
+        panel.nameFieldStringValue = Self.suggestedName(for: object.displayName)
+        // What this writes is a re-encoded bitmap, and these are the only two things it
+        // knows how to write. Saying so keeps the panel from offering a name whose extension
+        // promises something else — the whole `.jpeg` that turns out to hold PNG bytes.
+        panel.allowedContentTypes = [.png, .jpeg]
         panel.canCreateDirectories = true
         guard panel.runModal() == .OK, let url = panel.url else { return }
 
+        // The bytes decide the extension, not the other way round. This used to ask only
+        // whether the extension was exactly `jpg`, so `.jpeg` — which the panel itself is
+        // happy to produce — got a PNG inside it, and so did `.gif`, `.pdf` and anything
+        // else the server's name suggested. A file whose name and contents disagree is the
+        // problem, however harmless the mismatch looks here.
+        let isJPEG = Self.jpegExtensions.contains(url.pathExtension.lowercased())
+        let destination = isJPEG || url.pathExtension.lowercased() == "png"
+            ? url
+            : url.appendingPathExtension("png")
+
         guard let tiff = image.tiffRepresentation,
               let bitmap = NSBitmapImageRep(data: tiff),
-              let data = bitmap.representation(using: url.pathExtension.lowercased() == "jpg" ? .jpeg : .png, properties: [:])
+              let data = bitmap.representation(using: isJPEG ? .jpeg : .png, properties: [:])
         else { return }
-        try? data.write(to: url)
+        try? data.write(to: destination)
     }
+
+    /// What to put in the panel's name field, given a name the server chose.
+    ///
+    /// Three things are wrong with using it as it stands. It can carry a path separator, and
+    /// `/` in a name field is not a name — on the way to disk it is a directory boundary, and
+    /// `:` is the same character seen from the Finder's side. It can begin with a dot, which
+    /// is how a file stops being visible. And it can claim an extension that has nothing to
+    /// do with what is about to be written, so the saved copy of a picture is called
+    /// `invoice.pdf` and opens as one somewhere else later.
+    ///
+    /// Invisible marks are already gone by here — ``RichObject/displayName`` strips them —
+    /// which is what stops the name reversing itself in the field.
+    private static func suggestedName(for displayName: String) -> String {
+        var name = displayName
+        for separator in ["/", ":", "\\"] {
+            name = name.replacingOccurrences(of: separator, with: "-")
+        }
+        name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        while name.hasPrefix(".") { name.removeFirst() }
+        guard !name.isEmpty else { return "Image.png" }
+
+        let url = URL(fileURLWithPath: name)
+        let ext = url.pathExtension.lowercased()
+        guard ext == "png" || jpegExtensions.contains(ext) else { return "\(name).png" }
+        return name
+    }
+
+    /// Both spellings. Only `jpg` was recognised, and `jpeg` is the one the save panel
+    /// produces when it is told the type rather than the extension.
+    private static let jpegExtensions: Set<String> = ["jpg", "jpeg"]
 }
