@@ -53,25 +53,32 @@ struct PreferencesCards: View {
     }
 }
 
-/// A switch with its words beside it and, when it needs one, a caption underneath.
+/// A switch at the leading edge, its words after it, and a caption under the words when it
+/// needs one.
 private struct PreferenceToggle: View {
     let title: String
     var caption: String?
     @Binding var isOn: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Toggle(isOn: $isOn) {
-                Text(title).font(.system(size: 13))
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Toggle(title, isOn: $isOn)
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .labelsHidden()
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.system(size: 13))
+                if let caption {
+                    Text(caption)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.tertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
-            .toggleStyle(.switch)
-            .controlSize(.small)
-            if let caption {
-                Text(caption)
-                    .font(.system(size: 11))
-                    .foregroundStyle(.tertiary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            // The words are part of the switch: clicking them flips it, as a checkbox's do.
+            .contentShape(.rect)
+            .onTapGesture { isOn.toggle() }
         }
     }
 }
