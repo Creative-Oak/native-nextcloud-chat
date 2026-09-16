@@ -11,5 +11,12 @@
 	<!-- Phase 7, for attaching files the user picks. -->
 	<key>com.apple.security.files.user-selected.read-only</key>
 	<true/>
+	<!-- The data-protection keychain, where the app password and the cache keys live.
+	     A Mac app without an access group can't use it at all: every write fails with
+	     errSecMissingEntitlement, and sign-in with it. This one is the app's own. -->
+	<key>keychain-access-groups</key>
+	<array>
+		<string>$(AppIdentifierPrefix)app.kvidr.mac</string>
+	</array>
 </dict>
 </plist>

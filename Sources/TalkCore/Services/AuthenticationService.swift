@@ -248,7 +248,8 @@ actor AuthenticationService {
         do {
             try credentialStore.store(credentials, for: account.id)
         } catch {
-            throw .unexpectedResponse("Couldn’t save credentials to the keychain")
+            Log.auth.error("Couldn’t save credentials to the keychain: \(String(describing: error))")
+            throw .keychainUnavailable
         }
 
         Log.auth.info("Authenticated \(account.userID) on \(server.host)")

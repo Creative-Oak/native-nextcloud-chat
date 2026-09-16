@@ -164,3 +164,43 @@ struct CacheEncryptionTests {
         #expect(await reopened.conversations(accountID: account).map(\.displayName) == ["Room"])
     }
 }
+
+/// A keychain that won't answer — the state a Mac app is in without its access-group
+/// entitlement, and the one that sent everyone back to the sign-in screen.
+private struct BrokenKeyring: CacheKeyring {
+    func key(for accountID: String) throws -> SymmetricKey { throw KeychainError.unexpectedStatus(-34018) }
+    func removeKey(for accountID: String) throws { throw KeychainError.unexpectedStatus(-34018) }
+}
+
+@Suite("Encrypted cache, keychain unavailable")
+struct CacheWithoutKeychainTests {
+    @Test("An unconverted store still reads, and nothing is written to it in the clear")
+    func unconvertedStoreStillReads() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("kvidr-tests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("Kvidr.store")
+        let server = try ServerAddress.parse("https://cloud.example.com")
+        let alice = Account(server: server, loginName: "alice", userID: "alice", displayName: "Alice")
+
+        do {
+            let schema = Schema(CacheSchema.models)
+            let legacy = try ModelContainer(for: schema, configurations: [ModelConfiguration("Kvidr", schema: schema, url: url)])
+            let context = ModelContext(legacy)
+            context.insert(CachedAccount(identifier: alice.id, addedAt: .now, payload: try JSONEncoder().encode(alice)))
+            context.insert(CachedDraft(identifier: TalkStore.identifier(alice.id, "tok"), accountID: alice.id, token: "tok", text: "still mine"))
+            try context.save()
+        }
+
+        let keyring = BrokenKeyring()
+        let store = TalkStore(modelContainer: try .talkContainer(url: url, keyring: keyring), keyring: keyring)
+
+        // Still signed in, draft still there.
+        #expect(await store.accounts().map(\.id) == [alice.id])
+        #expect(await store.draft(token: "tok", accountID: alice.id)?.text == "still mine")
+
+        // And a new draft is not cached rather than cached readable.
+        await store.save(draft: Draft(token: "other", text: "never in the clear"), accountID: alice.id)
+        #expect(await store.draft(token: "other", accountID: alice.id) == nil)
+    }
+}

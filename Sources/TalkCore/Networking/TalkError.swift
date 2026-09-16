@@ -22,6 +22,9 @@ enum TalkError: Error, Sendable, Equatable {
     /// A redirect wanted to leave the origin the request was aimed at, and was refused.
     case redirectRefused(host: String)
 
+    /// The Keychain wouldn't take or give up a secret the app needs.
+    case keychainUnavailable
+
     // Attachments
     /// Not a regular file on this Mac — a link, a folder, a pipe, a device, or nothing at all.
     case fileNotAttachable
@@ -101,6 +104,8 @@ enum TalkError: Error, Sendable, Equatable {
             "The server sent far more data than that should need."
         case .redirectRefused(let host):
             "\(host) tried to send this request somewhere else. kvidr only talks to your own server."
+        case .keychainUnavailable:
+            "kvidr couldn’t use your Keychain, so your sign-in couldn’t be saved."
         case .fileNotAttachable:
             "Only files on this Mac can be attached."
         case .fileMissing:

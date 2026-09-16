@@ -64,7 +64,16 @@ enum LegacyCredentialMigration {
     }
 }
 
-enum KeychainError: Error, Sendable, Equatable {
+enum KeychainError: Error, Sendable, Equatable, CustomStringConvertible {
     case unexpectedStatus(Int32)
     case malformedData
+
+    /// The status is the whole diagnosis — `-34018` is a missing entitlement, `-25308` a
+    /// locked keychain — and without this the log says only "KeychainError error 0".
+    var description: String {
+        switch self {
+        case .unexpectedStatus(let status): "keychain status \(status)"
+        case .malformedData: "keychain item malformed"
+        }
+    }
 }

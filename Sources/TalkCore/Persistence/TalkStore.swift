@@ -72,7 +72,7 @@ actor TalkStore: ModelActor {
         do {
             try keyring.removeKey(for: accountID)
         } catch {
-            Log.persistence.error("Couldn’t destroy a signed-out account’s cache key: \(error.localizedDescription)")
+            Log.persistence.error("Couldn’t destroy a signed-out account’s cache key: \(String(describing: error))")
         }
     }
 
@@ -241,7 +241,13 @@ actor TalkStore: ModelActor {
     }
 
     private func draft(from row: CachedDraft) -> Draft? {
-        guard let key = key(for: row.accountID), let text = try? CacheCipher.open(text: row.text, key: key) else {
+        let text: String
+        if !CacheCipher.isSealed(text: row.text) {
+            // A store the rebuild couldn't convert yet — see `open(_:from:kind:accountID:)`.
+            text = row.text
+        } else if let key = key(for: row.accountID), let opened = try? CacheCipher.open(text: row.text, key: key) {
+            text = opened
+        } else {
             return nil
         }
         return Draft(
@@ -298,7 +304,7 @@ actor TalkStore: ModelActor {
             return key
         } catch {
             // Not cached is recoverable — the server has all of it. Cached in the clear is not.
-            Log.persistence.error("No cache key, so nothing is cached for now: \(error.localizedDescription)")
+            Log.persistence.error("No cache key, so nothing is cached for now: \(String(describing: error))")
             return nil
         }
     }
@@ -310,7 +316,14 @@ actor TalkStore: ModelActor {
 
     /// Nil for anything that won't open — including a row sealed under a key that has since
     /// been destroyed, which is a cache miss and nothing more.
+    ///
+    /// A row from before encryption is read as it is. It is only there because
+    /// ``CachePlaintextMigration`` couldn't get a key to convert the store with, and refusing
+    /// to read it would make a keychain that fails for a moment look like a signed-out
+    /// account — the user put back on the sign-in screen with their data still on disk.
+    /// Reading what is already in the clear discloses nothing; nothing new is written that way.
     private func open<T: Decodable>(_ type: T.Type, from data: Data, kind: CacheCipher.Kind, accountID: String) -> T? {
+        guard CacheCipher.isSealed(data) else { return try? Self.decoder.decode(type, from: data) }
         guard let key = key(for: accountID), let plaintext = try? CacheCipher.open(data, kind: kind, key: key) else {
             return nil
         }

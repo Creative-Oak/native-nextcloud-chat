@@ -39,8 +39,8 @@ struct KeychainStore: CredentialStore {
             legacy: { try self.read(accountID: accountID, dataProtection: false) },
             adopt: { try self.add($0, for: accountID) },
             forget: { try self.delete(accountID: accountID, dataProtection: false) },
-            report: { _ in
-                Log.auth.warning("Couldn’t move a saved app password into the data-protection keychain")
+            report: {
+                Log.auth.warning("Couldn’t move a saved app password into the data-protection keychain: \(String(describing: $0))")
             }
         )
     }

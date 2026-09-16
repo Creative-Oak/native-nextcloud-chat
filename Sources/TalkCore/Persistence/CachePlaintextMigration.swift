@@ -116,7 +116,7 @@ enum CachePlaintextMigration {
             }
             return carried
         } catch {
-            Log.persistence.error("Couldn’t encrypt the local cache yet, will try at next launch: \(error.localizedDescription)")
+            Log.persistence.error("Couldn’t encrypt the local cache yet, will try at next launch: \(String(describing: error))")
             return nil
         }
     }
