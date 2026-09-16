@@ -34,6 +34,8 @@ struct ConversationDTO: Decodable, Sendable {
     let lastActivity: Int?
     let isFavorite: Bool?
     let isArchived: Bool?
+    let isImportant: Bool?
+    let isSensitive: Bool?
     let notificationLevel: Int?
     let notificationCalls: Int?
     let lobbyState: Int?
@@ -59,7 +61,7 @@ struct ConversationDTO: Decodable, Sendable {
         case actorType, actorId, permissions, attendeePermissions, defaultPermissions
         case readOnly, listable, messageExpiration, hasPassword, hasCall, callFlag, callStartTime
         case canStartCall, canDeleteConversation, canLeaveConversation, lastActivity
-        case isFavorite, isArchived, notificationLevel, notificationCalls, lobbyState, lobbyTimer
+        case isFavorite, isArchived, isImportant, isSensitive, notificationLevel, notificationCalls, lobbyState, lobbyTimer
         case unreadMessages, unreadMention, unreadMentionDirect, lastReadMessage, lastCommonReadMessage
         case lastMessage, objectType, objectId, avatarVersion, isCustomAvatar, mentionPermissions
         case status, statusIcon, statusMessage, statusClearAt
@@ -93,6 +95,8 @@ struct ConversationDTO: Decodable, Sendable {
         lastActivity = Lenient.int(container, .lastActivity)
         isFavorite = Lenient.bool(container, .isFavorite)
         isArchived = Lenient.bool(container, .isArchived)
+        isImportant = Lenient.bool(container, .isImportant)
+        isSensitive = Lenient.bool(container, .isSensitive)
         notificationLevel = Lenient.int(container, .notificationLevel)
         notificationCalls = Lenient.int(container, .notificationCalls)
         lobbyState = Lenient.int(container, .lobbyState)
@@ -159,6 +163,8 @@ struct ConversationDTO: Decodable, Sendable {
             isArchived: isArchived ?? false,
             notificationLevel: NotificationLevel(rawValue: notificationLevel ?? 0),
             notificationCalls: notificationCalls ?? 1,
+            isImportant: isImportant ?? false,
+            isSensitive: isSensitive ?? false,
             unreadMessages: unreadMessages ?? 0,
             unreadMention: unreadMention ?? false,
             // Without `direct-mention-flag` the server can't distinguish @all from a direct

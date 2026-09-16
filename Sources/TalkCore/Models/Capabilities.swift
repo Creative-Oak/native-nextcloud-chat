@@ -68,6 +68,8 @@ struct TalkCapabilities: Sendable, Hashable, Codable {
     var supportsConversationAvatars: Bool { has("avatar") }
     var supportsNoteToSelf: Bool { has("note-to-self") }
     var supportsArchive: Bool { has("archived-conversations-v2") }
+    var supportsImportantConversations: Bool { has("important-conversations") }
+    var supportsSensitiveConversations: Bool { has("sensitive-conversations") }
     var supportsConversationPermissions: Bool { has("conversation-permissions") }
     var supportsSessionState: Bool { has("session-state") }
     var supportsReminders: Bool { has("remind-me-later") }

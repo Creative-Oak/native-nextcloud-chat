@@ -72,6 +72,22 @@ actor ConversationService {
         _ = try await client.send(request, as: EmptyResponse.self)
     }
 
+    /// Cap `important-conversations`. Yours alone, like archiving.
+    func setImportant(_ isImportant: Bool, token: String) async throws(TalkError) {
+        let request = isImportant
+            ? OCSRequest.post(Endpoint.important(token))
+            : OCSRequest.delete(Endpoint.important(token))
+        _ = try await client.send(request, as: EmptyResponse.self)
+    }
+
+    /// Cap `sensitive-conversations`. Yours alone, like archiving.
+    func setSensitive(_ isSensitive: Bool, token: String) async throws(TalkError) {
+        let request = isSensitive
+            ? OCSRequest.post(Endpoint.sensitive(token))
+            : OCSRequest.delete(Endpoint.sensitive(token))
+        _ = try await client.send(request, as: EmptyResponse.self)
+    }
+
     func setNotificationLevel(_ level: NotificationLevel, token: String) async throws(TalkError) {
         _ = try await client.send(
             OCSRequest.post(Endpoint.notify(token), form: ["level": String(level.rawValue)]),

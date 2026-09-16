@@ -16,6 +16,8 @@ final class NotificationController: NSObject {
 
     /// Set by the app so a click can change the selection.
     var onOpenConversation: ((String) -> Void)?
+    /// Set by the app: whether the user's own status is Do Not Disturb right now.
+    var isDoNotDisturb: () -> Bool = { false }
 
     init(preferences: Preferences) {
         self.preferences = preferences
@@ -41,12 +43,13 @@ final class NotificationController: NSObject {
         let isMention = conversation.unreadMention || conversation.unreadMentionDirect
         // The server-side notification level is the user's choice; we respect it rather
         // than inventing our own policy.
-        guard conversation.shouldNotify(forMention: isMention) else { return }
+        guard conversation.shouldNotify(forMention: isMention, isDoNotDisturb: isDoNotDisturb()) else { return }
 
         let content = UNMutableNotificationContent()
         content.title = conversation.displayName
 
-        if let message = conversation.lastMessage, preferences.showsNotificationPreviews {
+        // A sensitive conversation says who and where, never what — whatever the preference.
+        if let message = conversation.lastMessage, preferences.showsNotificationPreviews, !conversation.isSensitive {
             let preview = MessageContentParser(currentUserID: "", markdownEnabled: false)
                 .parse(message)
                 .preview

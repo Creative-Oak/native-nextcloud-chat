@@ -125,6 +125,7 @@ final class ConversationListModel {
     // MARK: - Actions
 
     func toggleFavorite(_ conversation: Conversation) {
+        guard let conversation = index[conversation.token] else { return }
         let newValue = !conversation.isFavorite
         index.update(token: conversation.token) { $0.isFavorite = newValue }
         persist(token: conversation.token)
@@ -145,6 +146,7 @@ final class ConversationListModel {
     /// Moves the conversation into the Archived section, or back out. It stays selected if
     /// it was: filing something away is not a reason to close it.
     func toggleArchived(_ conversation: Conversation) {
+        guard let conversation = index[conversation.token] else { return }
         guard hasArchive else { return }
         let newValue = !conversation.isArchived
         index.update(token: conversation.token) { $0.isArchived = newValue }
@@ -163,7 +165,50 @@ final class ConversationListModel {
         }
     }
 
+    func toggleImportant(_ conversation: Conversation) {
+        guard hasImportant else { return }
+        toggle(\.isImportant, of: conversation, what: "important") { service, value, token throws(TalkError) in
+            try await service.setImportant(value, token: token)
+        }
+    }
+
+    func toggleSensitive(_ conversation: Conversation) {
+        guard hasSensitive else { return }
+        toggle(\.isSensitive, of: conversation, what: "sensitive") { service, value, token throws(TalkError) in
+            try await service.setSensitive(value, token: token)
+        }
+    }
+
+    /// Flips one of the user's own flags on a conversation at once, then tells the server,
+    /// and puts it back if the server refuses.
+    private func toggle(
+        _ flag: WritableKeyPath<Conversation, Bool>,
+        of conversation: Conversation,
+        what: String,
+        send: @escaping @Sendable (ConversationService, Bool, String) async throws(TalkError) -> Void
+    ) {
+        // The current value, not the caller's copy of it: flipping a stale copy sends the
+        // value the conversation already has, and nothing changes.
+        guard let conversation = index[conversation.token] else { return }
+        let newValue = !conversation[keyPath: flag]
+        let token = conversation.token
+        index.update(token: token) { $0[keyPath: flag] = newValue }
+        persist(token: token)
+
+        let service = session.conversations
+        Task { [weak self] in
+            do throws(TalkError) {
+                try await send(service, newValue, token)
+            } catch {
+                self?.index.update(token: token) { $0[keyPath: flag] = !newValue }
+                self?.persist(token: token)
+                Log.ui.warning("Couldn’t change \(what): \(error.userMessage)")
+            }
+        }
+    }
+
     func setNotificationLevel(_ level: NotificationLevel, for conversation: Conversation) {
+        guard let conversation = index[conversation.token] else { return }
         let previous = conversation.notificationLevel
         index.update(token: conversation.token) { $0.notificationLevel = level }
         persist(token: conversation.token)
@@ -265,6 +310,8 @@ extension ConversationListModel {
 
     /// Whether the server can archive conversations. Hidden, not disabled, when it can't.
     var hasArchive: Bool { session.capabilitySnapshot.supportsArchive }
+    var hasImportant: Bool { session.capabilitySnapshot.supportsImportantConversations }
+    var hasSensitive: Bool { session.capabilitySnapshot.supportsSensitiveConversations }
 
     /// The conversation's URL in the Nextcloud web UI.
     func webURL(for conversation: Conversation) -> URL {

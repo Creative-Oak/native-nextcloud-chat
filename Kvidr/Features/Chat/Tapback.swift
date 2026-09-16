@@ -245,14 +245,14 @@ enum MessageMenu {
 
 /// A menu item that runs a closure. `NSMenuItem` wants a target and a selector; this is
 /// both.
-private final class ClosureMenuItem: NSMenuItem {
+final class ClosureMenuItem: NSMenuItem {
     private let handler: () -> Void
 
-    init(_ title: String, symbol: String, action handler: @escaping () -> Void) {
+    init(_ title: String, symbol: String? = nil, action handler: @escaping () -> Void) {
         self.handler = handler
         super.init(title: title, action: #selector(fire), keyEquivalent: "")
         target = self
-        image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
+        image = symbol.flatMap { NSImage(systemSymbolName: $0, accessibilityDescription: nil) }
     }
 
     @available(*, unavailable)

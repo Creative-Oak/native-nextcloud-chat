@@ -129,6 +129,25 @@ struct Conversation: Sendable, Hashable, Identifiable, Codable {
     var notificationLevel: NotificationLevel
     var notificationCalls: Int
 
+    /// Still notifies while you are on Do Not Disturb. Cap `important-conversations`.
+    var isImportant: Bool {
+        get { importantFlag ?? false }
+        set { importantFlag = newValue }
+    }
+
+    /// What is said here stays out of the sidebar and out of notifications. Cap
+    /// `sensitive-conversations`.
+    var isSensitive: Bool {
+        get { sensitiveFlag ?? false }
+        set { sensitiveFlag = newValue }
+    }
+
+    // Optional underneath so a conversation cached before these existed still decodes:
+    // synthesized `Codable` requires the key of every non-optional property, and a cache
+    // that fails to open is a sidebar that is empty at launch.
+    private var importantFlag: Bool?
+    private var sensitiveFlag: Bool?
+
     var unreadMessages: Int
     var unreadMention: Bool
     var unreadMentionDirect: Bool
@@ -187,10 +206,24 @@ struct Conversation: Sendable, Hashable, Identifiable, Codable {
         return a.displayName.localizedCaseInsensitiveCompare(b.displayName) == .orderedAscending
     }
 
+    /// The level actually in force. The server's "default" is all messages in a one-to-one
+    /// and mentions everywhere else — and it can't be chosen, only started from.
+    var effectiveNotificationLevel: NotificationLevel {
+        guard notificationLevel == .default else { return notificationLevel }
+        return isOneToOne ? .always : .mention
+    }
+
+    /// The levels a user can pick. Talk refuses a request to go back to "default".
+    static let selectableNotificationLevels: [NotificationLevel] = [.always, .mention, .never]
+
     /// Whether a new message here should raise a notification, per the user's server-side
     /// notification level for this conversation.
-    func shouldNotify(forMention isMention: Bool) -> Bool {
-        switch notificationLevel {
+    ///
+    /// - Parameter isDoNotDisturb: the user's own status is Do Not Disturb, which silences
+    ///   everything except conversations marked important — as Talk's own notifications do.
+    func shouldNotify(forMention isMention: Bool, isDoNotDisturb: Bool = false) -> Bool {
+        if isDoNotDisturb && !isImportant { return false }
+        return switch notificationLevel {
         case .never: false
         case .always: true
         case .mention: isMention
@@ -226,6 +259,8 @@ struct Conversation: Sendable, Hashable, Identifiable, Codable {
         isArchived: Bool = false,
         notificationLevel: NotificationLevel = .default,
         notificationCalls: Int = 1,
+        isImportant: Bool = false,
+        isSensitive: Bool = false,
         unreadMessages: Int = 0,
         unreadMention: Bool = false,
         unreadMentionDirect: Bool = false,
@@ -266,6 +301,8 @@ struct Conversation: Sendable, Hashable, Identifiable, Codable {
         self.isArchived = isArchived
         self.notificationLevel = notificationLevel
         self.notificationCalls = notificationCalls
+        self.importantFlag = isImportant
+        self.sensitiveFlag = isSensitive
         self.unreadMessages = unreadMessages
         self.unreadMention = unreadMention
         self.unreadMentionDirect = unreadMentionDirect

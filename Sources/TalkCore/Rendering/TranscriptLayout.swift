@@ -96,9 +96,13 @@ struct ChatRow: Sendable, Identifiable, Equatable {
 
 /// The one-line summary shown in the sidebar and in notifications.
 enum ConversationPreview {
+    /// What stands in for the last message of a sensitive conversation.
+    static let hiddenText = "Preview hidden"
+
     /// - Parameter includeSender: group conversations prefix the sender's name; one-to-ones
     ///   don't, because you already know who it is.
     static func text(for conversation: Conversation) -> String {
+        if conversation.isSensitive { return hiddenText }
         guard let message = conversation.lastMessage else {
             return conversation.isNoteToSelf ? "Notes to yourself" : "No messages yet"
         }

@@ -49,7 +49,7 @@ struct ConversationListView: View {
                 // a different presentation of an existing idea rather than a new one.
                 // While filtering, everything is one flat list of results.
                 case .favorites where !model.isFiltering:
-                    PinnedConversations(conversations: group.items, selection: $selection)
+                    PinnedConversations(model: model, conversations: group.items, selection: $selection)
                         .listRowInsets(EdgeInsets())
                         .listRowSeparator(.hidden)
                     draftRow
@@ -206,8 +206,11 @@ private struct SidebarSearchField: View {
 /// that set the selection — and a tap recogniser on an actual row would fight the List for
 /// the click, which is a mistake this file has made before.
 private struct PinnedConversations: View {
+    let model: ConversationListModel
     let conversations: [Conversation]
     @Binding var selection: String?
+    /// The face whose menu is open.
+    @State private var menuToken: String?
 
     /// Three across at the sidebar's ideal width, as in Messages.
     private let columns = [GridItem(.adaptive(minimum: 72), spacing: 2)]
@@ -251,6 +254,24 @@ private struct PinnedConversations: View {
                     }
                 }
                 .buttonStyle(.plain)
+                // An outline around this face while its menu is open, where a list row
+                // would draw one around itself.
+                .overlay {
+                    if menuToken == conversation.token {
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .strokeBorder(Color.accentColor, lineWidth: 2)
+                    }
+                }
+                .overlay {
+                    ConversationMenuHost(
+                        model: model,
+                        token: conversation.token,
+                        isOpen: Binding(
+                            get: { menuToken == conversation.token },
+                            set: { menuToken = $0 ? conversation.token : nil }
+                        )
+                    )
+                }
                 .help(conversation.displayName)
                 .accessibilityLabel(label(for: conversation))
                 .accessibilityAddTraits(isSelected ? .isSelected : [])

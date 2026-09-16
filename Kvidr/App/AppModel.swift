@@ -90,6 +90,8 @@ final class AppModel {
         self.notifications = NotificationController(preferences: dependencies.preferences)
         Log.isDeveloperModeEnabled = dependencies.preferences.isDeveloperModeEnabled
 
+        notifications.isDoNotDisturb = { [weak self] in self?.profile?.status?.status == .dnd }
+
         // Clicking a notification opens that conversation.
         notifications.onOpenConversation = { [weak self] token in
             self?.selectedToken = token

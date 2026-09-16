@@ -80,6 +80,19 @@ struct ServiceRequestTests {
         #expect(Endpoint.redacted(Endpoint.archive("tok")) == "/ocs/v2.php/apps/spreed/api/v4/room/…/archive")
     }
 
+    @Test("Important and sensitive use POST to set and DELETE to clear")
+    func importantAndSensitive() async throws {
+        let transport = StubTransport(json: ocsEnvelope("[]"))
+        let service = ConversationService(client: try client(transport))
+
+        try await service.setImportant(true, token: "tok")
+        #expect(transport.lastRequest?.method == .post)
+        #expect(transport.lastRequest?.url.path == "/ocs/v2.php/apps/spreed/api/v4/room/tok/important")
+        try await service.setSensitive(false, token: "tok")
+        #expect(transport.lastRequest?.method == .delete)
+        #expect(transport.lastRequest?.url.path == "/ocs/v2.php/apps/spreed/api/v4/room/tok/sensitive")
+    }
+
     @Test("Notification level posts the documented integer")
     func notificationLevel() async throws {
         let transport = StubTransport(json: ocsEnvelope("[]"))

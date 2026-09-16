@@ -105,6 +105,43 @@ struct ConversationDecodingTests {
         #expect(!video.isVideoCall)      // a stale flag is not a call
     }
 
+    @Test("The default notification level is what a one-to-one or a group actually gets")
+    func effectiveNotificationLevel() {
+        #expect(Conversation(token: "a", type: .oneToOne).effectiveNotificationLevel == .always)
+        #expect(Conversation(token: "b", type: .group).effectiveNotificationLevel == .mention)
+        #expect(Conversation(token: "c", type: .group, notificationLevel: .never).effectiveNotificationLevel == .never)
+        #expect(!Conversation.selectableNotificationLevels.contains(.default))
+    }
+
+    @Test("Do Not Disturb silences everything but an important conversation")
+    func doNotDisturb() {
+        var room = Conversation(token: "t", type: .oneToOne, notificationLevel: .always)
+        #expect(room.shouldNotify(forMention: true))
+        #expect(!room.shouldNotify(forMention: true, isDoNotDisturb: true))
+        room.isImportant = true
+        #expect(room.shouldNotify(forMention: false, isDoNotDisturb: true))
+        room.notificationLevel = .never
+        #expect(!room.shouldNotify(forMention: true, isDoNotDisturb: true))  // off is still off
+    }
+
+    @Test("Important and sensitive decode, and a cached conversation from before them still opens")
+    func importantAndSensitive() throws {
+        let json = #"{"token":"t","isImportant":true,"isSensitive":1}"#
+        let room = try JSONDecoder().decode(ConversationDTO.self, from: Data(json.utf8)).model()
+        #expect(room.isImportant)
+        #expect(room.isSensitive)
+        #expect(ConversationPreview.text(for: room) == ConversationPreview.hiddenText)
+
+        // Encode a conversation, strip the new keys, and decode it as the cache would.
+        let encoded = try JSONEncoder().encode(Conversation(token: "old", displayName: "Old"))
+        var object = try #require(try JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        object.removeValue(forKey: "importantFlag")
+        object.removeValue(forKey: "sensitiveFlag")
+        let old = try JSONDecoder().decode(Conversation.self, from: JSONSerialization.data(withJSONObject: object))
+        #expect(old.displayName == "Old")
+        #expect(!old.isImportant && !old.isSensitive)
+    }
+
     @Test("Sidebar order: favourites first, then most recent")
     func sidebarOrdering() throws {
         let sorted = try conversations().sorted(by: Conversation.sidebarSort)
