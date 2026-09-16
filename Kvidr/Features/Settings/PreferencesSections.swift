@@ -53,19 +53,15 @@ struct PreferencesCards: View {
     }
 }
 
-/// A switch at the leading edge, its words after it, and a caption under the words when it
-/// needs one.
+/// Its words on the left with a caption under them when it needs one, and the switch at the
+/// trailing edge, where macOS puts it.
 private struct PreferenceToggle: View {
     let title: String
     var caption: String?
     @Binding var isOn: Bool
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 10) {
-            Toggle(title, isOn: $isOn)
-                .toggleStyle(.switch)
-                .controlSize(.small)
-                .labelsHidden()
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
                     .font(.system(size: 13))
@@ -76,9 +72,11 @@ private struct PreferenceToggle: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            // The words are part of the switch: clicking them flips it, as a checkbox's do.
-            .contentShape(.rect)
-            .onTapGesture { isOn.toggle() }
+            Spacer(minLength: 0)
+            Toggle(title, isOn: $isOn)
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .labelsHidden()
         }
     }
 }
