@@ -1,6 +1,7 @@
 import Foundation
 
-#if canImport(SwiftData)
+#if canImport(SwiftData) && canImport(CryptoKit)
+import CryptoKit
 import SwiftData
 
 /// The local cache, as an actor.
@@ -8,24 +9,40 @@ import SwiftData
 /// Every method here runs off the main actor. Callers hand over and receive **domain
 /// value types** — no `PersistentModel` ever escapes this file, so a SwiftData object can
 /// never be touched from the wrong actor.
-@ModelActor
-actor TalkStore {
+///
+/// **What is written is sealed.** Message bodies, conversations, drafts and account details
+/// are encrypted with the account's key from a ``CacheKeyring`` before they reach SQLite —
+/// see ``CacheCipher``. What stays readable is what the queries need: account ids, tokens,
+/// message ids, timestamps and counts. Signing out destroys the key along with the rows, so
+/// whatever SQLite leaves behind in the file, and whatever a backup kept, can't be read.
+/// A key that can't be had means the cache is skipped, never written in the clear.
+actor TalkStore: ModelActor {
+    nonisolated let modelExecutor: any ModelExecutor
+    nonisolated let modelContainer: ModelContainer
+
     private static let encoder = JSONEncoder()
     private static let decoder = JSONDecoder()
-    /// Whether rows keyed the old way have been brought up to date — see
-    /// ``migrateLegacyIdentifiersIfNeeded()``.
-    private var hasMigratedIdentifiers = false
+
+    private let keyring: any CacheKeyring
+    /// Keys already fetched, so the keychain is asked once per account rather than per row.
+    private var keys: [String: SymmetricKey] = [:]
+
+    init(modelContainer: ModelContainer, keyring: any CacheKeyring) {
+        self.modelContainer = modelContainer
+        self.modelExecutor = DefaultSerialModelExecutor(modelContext: ModelContext(modelContainer))
+        self.keyring = keyring
+    }
 
     // MARK: - Accounts
 
     func accounts() -> [Account] {
         let descriptor = FetchDescriptor<CachedAccount>(sortBy: [SortDescriptor(\.addedAt)])
         let rows = (try? modelContext.fetch(descriptor)) ?? []
-        return rows.compactMap { try? Self.decoder.decode(Account.self, from: $0.payload) }
+        return rows.compactMap { open(Account.self, from: $0.payload, kind: .account, accountID: $0.identifier) }
     }
 
     func save(account: Account) {
-        guard let payload = try? Self.encoder.encode(account) else { return }
+        guard let payload = seal(account, kind: .account, accountID: account.id) else { return }
         let identifier = account.id
         let existing = fetchOne(FetchDescriptor<CachedAccount>(
             predicate: #Predicate { $0.identifier == identifier }
@@ -38,8 +55,9 @@ actor TalkStore {
         persist()
     }
 
-    /// Removes the account and everything cached for it. Credentials live in the Keychain
-    /// and are deleted separately by ``AuthenticationService/signOut(account:)``.
+    /// Removes the account and everything cached for it, and destroys its cache key.
+    /// Credentials live in the Keychain and are deleted separately by
+    /// ``AuthenticationService/signOut(account:)``.
     func deleteAccount(id accountID: String) {
         try? modelContext.delete(model: CachedMessage.self, where: #Predicate { $0.accountID == accountID })
         try? modelContext.delete(model: CachedConversation.self, where: #Predicate { $0.accountID == accountID })
@@ -47,6 +65,15 @@ actor TalkStore {
         try? modelContext.delete(model: CachedSyncState.self, where: #Predicate { $0.accountID == accountID })
         try? modelContext.delete(model: CachedAccount.self, where: #Predicate { $0.identifier == accountID })
         persist()
+
+        // The rows are gone from the table, not necessarily from the file. The key is what
+        // makes the remainder unreadable, so failing to destroy it is worth saying.
+        keys[accountID] = nil
+        do {
+            try keyring.removeKey(for: accountID)
+        } catch {
+            Log.persistence.error("Couldn’t destroy a signed-out account’s cache key: \(error.localizedDescription)")
+        }
     }
 
     // MARK: - Conversations
@@ -60,13 +87,12 @@ actor TalkStore {
         )
         descriptor.fetchLimit = 500
         let rows = (try? modelContext.fetch(descriptor)) ?? []
-        return rows.compactMap { try? Self.decoder.decode(Conversation.self, from: $0.payload) }
+        return rows.compactMap { open(Conversation.self, from: $0.payload, kind: .conversation, accountID: accountID) }
     }
 
     func save(conversations: [Conversation], accountID: String) {
-        migrateLegacyIdentifiersIfNeeded()
         for conversation in conversations {
-            guard let payload = try? Self.encoder.encode(conversation) else { continue }
+            guard let payload = seal(conversation, kind: .conversation, accountID: accountID) else { continue }
             let identifier = Self.identifier(accountID, conversation.token)
             if let existing = fetchOne(FetchDescriptor<CachedConversation>(
                 predicate: #Predicate { $0.identifier == identifier }
@@ -75,7 +101,7 @@ actor TalkStore {
                 existing.isFavorite = conversation.isFavorite
                 existing.isArchived = conversation.isArchived
                 existing.unreadMessages = conversation.unreadMessages
-                existing.displayName = conversation.displayName
+                existing.displayName = ""
                 existing.payload = payload
             } else {
                 modelContext.insert(CachedConversation(
@@ -86,7 +112,9 @@ actor TalkStore {
                     isFavorite: conversation.isFavorite,
                     isArchived: conversation.isArchived,
                     unreadMessages: conversation.unreadMessages,
-                    displayName: conversation.displayName,
+                    // Nothing queries the name, and a readable column of every conversation
+                    // name is most of what encrypting the payload is meant to hide.
+                    displayName: "",
                     payload: payload
                 ))
             }
@@ -97,7 +125,6 @@ actor TalkStore {
     /// Only ever called with the result of a **full** refresh — an incremental one can't
     /// prove a conversation is gone.
     func deleteConversations(tokens: [String], accountID: String) {
-        migrateLegacyIdentifiersIfNeeded()
         for token in tokens {
             let identifier = Self.identifier(accountID, token)
             try? modelContext.delete(model: CachedConversation.self, where: #Predicate { $0.identifier == identifier })
@@ -119,14 +146,13 @@ actor TalkStore {
         descriptor.fetchLimit = limit
         let rows = (try? modelContext.fetch(descriptor)) ?? []
         return rows
-            .compactMap { try? Self.decoder.decode(Message.self, from: $0.payload) }
+            .compactMap { open(Message.self, from: $0.payload, kind: .message, accountID: accountID) }
             .sorted { MessageTimeline.isOrderedBefore($0, $1) }
     }
 
     func save(messages: [Message], accountID: String) {
-        migrateLegacyIdentifiersIfNeeded()
         for message in messages {
-            guard let payload = try? Self.encoder.encode(message) else { continue }
+            guard let payload = seal(message, kind: .message, accountID: accountID) else { continue }
             let identifier = Self.identifier(accountID, message.token, message.localID)
             if let existing = fetchOne(FetchDescriptor<CachedMessage>(
                 predicate: #Predicate { $0.identifier == identifier }
@@ -149,7 +175,6 @@ actor TalkStore {
     }
 
     func deleteMessage(localID: String, token: String, accountID: String) {
-        migrateLegacyIdentifiersIfNeeded()
         let identifier = Self.identifier(accountID, token, localID)
         try? modelContext.delete(model: CachedMessage.self, where: #Predicate { $0.identifier == identifier })
         persist()
@@ -171,36 +196,20 @@ actor TalkStore {
     // MARK: - Drafts
 
     func draft(token: String, accountID: String) -> Draft? {
-        migrateLegacyIdentifiersIfNeeded()
         let identifier = Self.identifier(accountID, token)
         guard let row = fetchOne(FetchDescriptor<CachedDraft>(
             predicate: #Predicate { $0.identifier == identifier }
         )) else { return nil }
-        return Draft(
-            token: row.token,
-            text: row.text,
-            replyToMessageID: row.replyToMessageID == 0 ? nil : row.replyToMessageID,
-            editingMessageID: row.editingMessageID == 0 ? nil : row.editingMessageID,
-            updatedAt: row.updatedAt
-        )
+        return draft(from: row)
     }
 
     func drafts(accountID: String) -> [Draft] {
         let descriptor = FetchDescriptor<CachedDraft>(predicate: #Predicate { $0.accountID == accountID })
         let rows = (try? modelContext.fetch(descriptor)) ?? []
-        return rows.map {
-            Draft(
-                token: $0.token,
-                text: $0.text,
-                replyToMessageID: $0.replyToMessageID == 0 ? nil : $0.replyToMessageID,
-                editingMessageID: $0.editingMessageID == 0 ? nil : $0.editingMessageID,
-                updatedAt: $0.updatedAt
-            )
-        }
+        return rows.compactMap(draft(from:))
     }
 
     func save(draft: Draft, accountID: String) {
-        migrateLegacyIdentifiersIfNeeded()
         let identifier = Self.identifier(accountID, draft.token)
         let existing = fetchOne(FetchDescriptor<CachedDraft>(
             predicate: #Predicate { $0.identifier == identifier }
@@ -210,9 +219,10 @@ actor TalkStore {
             if let existing { modelContext.delete(existing) ; persist() }
             return
         }
+        guard let key = key(for: accountID), let text = try? CacheCipher.seal(text: draft.text, key: key) else { return }
 
         if let existing {
-            existing.text = draft.text
+            existing.text = text
             existing.replyToMessageID = draft.replyToMessageID ?? 0
             existing.editingMessageID = draft.editingMessageID ?? 0
             existing.updatedAt = draft.updatedAt
@@ -221,13 +231,26 @@ actor TalkStore {
                 identifier: identifier,
                 accountID: accountID,
                 token: draft.token,
-                text: draft.text,
+                text: text,
                 replyToMessageID: draft.replyToMessageID ?? 0,
                 editingMessageID: draft.editingMessageID ?? 0,
                 updatedAt: draft.updatedAt
             ))
         }
         persist()
+    }
+
+    private func draft(from row: CachedDraft) -> Draft? {
+        guard let key = key(for: row.accountID), let text = try? CacheCipher.open(text: row.text, key: key) else {
+            return nil
+        }
+        return Draft(
+            token: row.token,
+            text: text,
+            replyToMessageID: row.replyToMessageID == 0 ? nil : row.replyToMessageID,
+            editingMessageID: row.editingMessageID == 0 ? nil : row.editingMessageID,
+            updatedAt: row.updatedAt
+        )
     }
 
     // MARK: - Sync state
@@ -265,6 +288,35 @@ actor TalkStore {
         persist()
     }
 
+    // MARK: - Sealing
+
+    private func key(for accountID: String) -> SymmetricKey? {
+        if let key = keys[accountID] { return key }
+        do {
+            let key = try keyring.key(for: accountID)
+            keys[accountID] = key
+            return key
+        } catch {
+            // Not cached is recoverable — the server has all of it. Cached in the clear is not.
+            Log.persistence.error("No cache key, so nothing is cached for now: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
+    private func seal<T: Encodable>(_ value: T, kind: CacheCipher.Kind, accountID: String) -> Data? {
+        guard let key = key(for: accountID), let plaintext = try? Self.encoder.encode(value) else { return nil }
+        return try? CacheCipher.seal(plaintext, kind: kind, key: key)
+    }
+
+    /// Nil for anything that won't open — including a row sealed under a key that has since
+    /// been destroyed, which is a cache miss and nothing more.
+    private func open<T: Decodable>(_ type: T.Type, from data: Data, kind: CacheCipher.Kind, accountID: String) -> T? {
+        guard let key = key(for: accountID), let plaintext = try? CacheCipher.open(data, kind: kind, key: key) else {
+            return nil
+        }
+        return try? Self.decoder.decode(type, from: plaintext)
+    }
+
     // MARK: - Plumbing
 
     private func fetchOne<T: PersistentModel>(_ descriptor: FetchDescriptor<T>) -> T? {
@@ -291,70 +343,36 @@ actor TalkStore {
     /// the account `h|alice|b` with the token `c` made the same key, and because the column
     /// is unique, saving one quietly replaced the other. Talk's own tokens never contain a
     /// `|`, but the key should not depend on what a server chooses to send.
+    ///
+    /// Stores from before this are re-keyed when ``CachePlaintextMigration`` rebuilds them.
     static func identifier(_ parts: String...) -> String {
         parts
             .map { $0.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "|", with: "\\|") }
             .joined(separator: "|")
     }
-
-    /// Re-keys rows written before ``identifier(_:)`` escaped its parts.
-    ///
-    /// An account id is `server|login`, so the change re-keyed every row there was, and a
-    /// row left on its old key is one no lookup finds: a draft that silently disappears, or
-    /// a conversation that is inserted a second time beside itself. Each row already stores
-    /// the parts of its key in columns (a message's local id in its payload), so the new key
-    /// is rebuilt from those.
-    ///
-    /// A new key always contains an escaped `|` from the account id, so the rows without one
-    /// are the only candidates. Once they are done that finds nothing, and it runs once per
-    /// launch, before the first read or write that goes by key.
-    private func migrateLegacyIdentifiersIfNeeded() {
-        guard !hasMigratedIdentifiers else { return }
-        hasMigratedIdentifiers = true
-        let marker = "\\|"
-
-        let conversations = (try? modelContext.fetch(FetchDescriptor<CachedConversation>(
-            predicate: #Predicate { !$0.identifier.contains(marker) }
-        ))) ?? []
-        for row in conversations {
-            let identifier = Self.identifier(row.accountID, row.token)
-            if row.identifier != identifier { row.identifier = identifier }
-        }
-
-        let drafts = (try? modelContext.fetch(FetchDescriptor<CachedDraft>(
-            predicate: #Predicate { !$0.identifier.contains(marker) }
-        ))) ?? []
-        for row in drafts {
-            let identifier = Self.identifier(row.accountID, row.token)
-            if row.identifier != identifier { row.identifier = identifier }
-        }
-
-        let messages = (try? modelContext.fetch(FetchDescriptor<CachedMessage>(
-            predicate: #Predicate { !$0.identifier.contains(marker) }
-        ))) ?? []
-        for row in messages {
-            guard let message = try? Self.decoder.decode(Message.self, from: row.payload) else {
-                // Unreadable is unfindable either way; the server has the real one.
-                modelContext.delete(row)
-                continue
-            }
-            let identifier = Self.identifier(row.accountID, row.token, message.localID)
-            if row.identifier != identifier { row.identifier = identifier }
-        }
-
-        persist()
-    }
 }
 
 extension ModelContainer {
-    /// The app's on-disk store.
-    static func talkContainer(inMemory: Bool = false) throws -> ModelContainer {
-        let configuration = ModelConfiguration(
-            "Kvidr",
-            schema: Schema(CacheSchema.models),
-            isStoredInMemoryOnly: inMemory
-        )
-        return try ModelContainer(for: Schema(CacheSchema.models), configurations: [configuration])
+    /// The app's on-disk store, with any cache from before encryption turned into an
+    /// encrypted one first — see ``CachePlaintextMigration``.
+    ///
+    /// - Parameter url: where the store lives. Nil is the default location; tests pass
+    ///   their own.
+    static func talkContainer(
+        inMemory: Bool = false,
+        url: URL? = nil,
+        keyring: any CacheKeyring
+    ) throws -> ModelContainer {
+        let schema = Schema(CacheSchema.models)
+        let configuration = if inMemory {
+            ModelConfiguration("Kvidr", schema: schema, isStoredInMemoryOnly: true)
+        } else if let url {
+            ModelConfiguration("Kvidr", schema: schema, url: url)
+        } else {
+            ModelConfiguration("Kvidr", schema: schema)
+        }
+        guard !inMemory else { return try ModelContainer(for: schema, configurations: [configuration]) }
+        return try CachePlaintextMigration.open(configuration: configuration, schema: schema, keyring: keyring)
     }
 }
 #endif

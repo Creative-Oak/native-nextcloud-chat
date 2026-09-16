@@ -101,9 +101,12 @@ final class AppDependencies {
             }
         )
         network = SystemNetworkMonitor()
+        // One per process, shared by the migration that may rebuild the store at launch and
+        // the store that reads it afterwards.
+        let cacheKeyring = KeychainCacheKeyring()
 
         do {
-            modelContainer = try ModelContainer.talkContainer(inMemory: inMemory)
+            modelContainer = try ModelContainer.talkContainer(inMemory: inMemory, keyring: cacheKeyring)
         } catch {
             // A corrupt or unreadable cache must not stop the app from launching: fall back
             // to memory and refill from the server.
@@ -119,7 +122,7 @@ final class AppDependencies {
                 fatalError("The cache schema could not be opened even in memory: \(error)")
             }
         }
-        store = TalkStore(modelContainer: modelContainer)
+        store = TalkStore(modelContainer: modelContainer, keyring: cacheKeyring)
     }
 
     func makeSession(account: Account) throws -> Session {
