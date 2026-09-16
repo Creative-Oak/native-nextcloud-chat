@@ -947,6 +947,7 @@ public struct ScrollEdgeEffectStyle: Sendable {
     public init(_ title: String, text: Binding<String>) where Label == Text {}
     public init(_ title: String, text: Binding<String>, axis: Axis) where Label == Text {}
     public init(_ title: String, text: Binding<String>, prompt: Text?) where Label == Text {}
+    public init(_ title: String, text: Binding<String>, prompt: Text?, axis: Axis) where Label == Text {}
     public var body: StubView { StubView() }
 }
 
