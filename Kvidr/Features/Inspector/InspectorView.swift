@@ -124,7 +124,7 @@ struct InspectorView: View {
 
 /// One of the round glass buttons under the name — the same control as the composer's
 /// plus and the transcript's scroll-to-bottom, so the three read as one family.
-private struct InspectorAction: View {
+struct InspectorAction: View {
     let symbol: String
     let label: String
     var action: () -> Void
@@ -139,6 +139,7 @@ private struct InspectorAction: View {
         }
         .buttonStyle(.plain)
         .glassCircle()
+        .pointerStyle(.link)
         .help(label)
         .accessibilityLabel(label)
     }
@@ -187,7 +188,7 @@ private struct InspectorTabBar: View {
 
 /// A rounded card of rows with a hairline between each, the way Messages' info panel
 /// stacks its information. A caption above names the group when one is needed.
-private struct InspectorCard<Content: View>: View {
+struct InspectorCard<Content: View>: View {
     var title: String?
     @ViewBuilder var content: Content
 
@@ -224,7 +225,7 @@ private struct InspectorCard<Content: View>: View {
 }
 
 /// A small grey label over its value.
-private struct InspectorRow: View {
+struct InspectorRow: View {
     let label: String
     let value: String
 
@@ -242,19 +243,21 @@ private struct InspectorRow: View {
 }
 
 /// A row that does something: accent-coloured words, as in Messages.
-private struct InspectorActionRow: View {
+struct InspectorActionRow: View {
     let title: String
+    var role: ButtonRole?
     var action: () -> Void
 
     var body: some View {
-        Button(action: action) {
+        Button(role: role, action: action) {
             Text(title)
                 .font(.system(size: 13))
-                .foregroundStyle(Color.accentColor)
+                .foregroundStyle(role == .destructive ? Color.red : Color.accentColor)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(.rect)
         }
         .buttonStyle(.plain)
+        .pointerStyle(.link)
     }
 }
 

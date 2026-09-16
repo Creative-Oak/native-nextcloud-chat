@@ -103,24 +103,28 @@ final class ProfileModel {
     }
 
     // MARK: - Status
+    //
+    // Each of these changes `status` before it returns and sends the request after, so a
+    // view that reads the status straight back — a text field deciding whether it still has
+    // anything to save — already sees the change. Only the newest change's answer is applied;
+    // a slower answer to an earlier one must not undo it.
 
-    /// Shown at once, sent, and put back with the server's reason if it is refused. Nothing
-    /// is queued: a status set while offline would arrive at the wrong moment.
-    func setStatus(_ new: OnlineStatus) async {
+    func setStatus(_ new: OnlineStatus) {
         let previous = status ?? .unset
         guard previous.status != new else { return }
         var optimistic = previous
         optimistic.status = new
-        status = optimistic
-        await save(restoring: previous) { (service: UserStatusService) async throws(TalkError) -> OwnStatus in try await service.setStatus(new) }
+        send(optimistic, restoring: previous) { service async throws(TalkError) -> OwnStatus in
+            try await service.setStatus(new)
+        }
     }
 
     /// A message of the user's own. Nothing in either field clears the message instead.
-    func setMessage(icon: String, text: String, clearAfter: ClearAfter) async {
+    func setMessage(icon: String, text: String, clearAfter: ClearAfter) {
         let icon = icon.trimmingCharacters(in: .whitespacesAndNewlines)
         let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !icon.isEmpty || !text.isEmpty else {
-            await clearMessage()
+            clearMessage()
             return
         }
         let previous = status ?? .unset
@@ -130,14 +134,13 @@ final class ProfileModel {
         optimistic.messageID = nil
         optimistic.messageIsPredefined = false
         optimistic.clearAt = clearAfter.date(from: .now)
-        status = optimistic
         let clearAt = optimistic.clearAt
-        await save(restoring: previous) { (service: UserStatusService) async throws(TalkError) -> OwnStatus in
+        send(optimistic, restoring: previous) { service async throws(TalkError) -> OwnStatus in
             try await service.setCustomMessage(icon: icon, message: text, clearAt: clearAt)
         }
     }
 
-    func applyPredefined(_ predefined: PredefinedStatus) async {
+    func applyPredefined(_ predefined: PredefinedStatus) {
         let previous = status ?? .unset
         var optimistic = previous
         optimistic.icon = predefined.icon
@@ -145,14 +148,13 @@ final class ProfileModel {
         optimistic.messageID = predefined.id
         optimistic.messageIsPredefined = true
         optimistic.clearAt = predefined.clearAfter.date(from: .now)
-        status = optimistic
         let clearAt = optimistic.clearAt
-        await save(restoring: previous) { (service: UserStatusService) async throws(TalkError) -> OwnStatus in
+        send(optimistic, restoring: previous) { service async throws(TalkError) -> OwnStatus in
             try await service.setPredefinedMessage(id: predefined.id, clearAt: clearAt)
         }
     }
 
-    func clearMessage() async {
+    func clearMessage() {
         let previous = status ?? .unset
         guard previous.hasMessage else { return }
         var optimistic = previous
@@ -161,24 +163,36 @@ final class ProfileModel {
         optimistic.messageID = nil
         optimistic.messageIsPredefined = false
         optimistic.clearAt = nil
-        status = optimistic
-        await save(restoring: previous) { (service: UserStatusService) async throws(TalkError) -> OwnStatus in
+        let cleared = optimistic
+        send(cleared, restoring: previous) { service async throws(TalkError) -> OwnStatus in
             try await service.clearMessage()
-            return optimistic
+            return cleared
         }
     }
 
-    private func save(
+    @ObservationIgnored private var statusGeneration = 0
+
+    private func send(
+        _ optimistic: OwnStatus,
         restoring previous: OwnStatus,
-        _ change: (UserStatusService) async throws(TalkError) -> OwnStatus
-    ) async {
+        _ change: @escaping @Sendable (UserStatusService) async throws(TalkError) -> OwnStatus
+    ) {
+        status = optimistic
         statusSave = .saving
-        do {
-            status = try await change(session.userStatus)
-            settle(\.statusSave)
-        } catch {
-            status = previous
-            statusSave = .failed(error.userMessage)
+        statusGeneration += 1
+        let generation = statusGeneration
+        let service = session.userStatus
+        Task { [weak self] in
+            do throws(TalkError) {
+                let result = try await change(service)
+                guard let self, generation == self.statusGeneration else { return }
+                self.status = result
+                self.settle(\.statusSave)
+            } catch {
+                guard let self, generation == self.statusGeneration else { return }
+                self.status = previous
+                self.statusSave = .failed(error.userMessage)
+            }
         }
     }
 

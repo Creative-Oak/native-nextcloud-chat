@@ -1,33 +1,59 @@
 import AppKit
+import PhotosUI
 import SwiftUI
 
 /// Settings, in the messages column: who you are on Nextcloud, this Mac's sign-in, and the
-/// app's own preferences — one scrolling page.
+/// app's own preferences.
+///
+/// Drawn the way the inspector is — the face large and centred, round buttons under it,
+/// then rounded cards with a small grey label over each value — so the two panels that
+/// describe a person read as one family. It uses the inspector's own cards rather than
+/// imitations of them.
 struct SettingsPage: View {
     let profile: ProfileModel
     @Environment(AppModel.self) private var app
+    @Environment(\.colorScheme) private var colorScheme
     @State private var isConfirmingRemoval = false
 
     var body: some View {
-        Form {
-            Section {
-                SettingsHeader(profile: profile)
+        ScrollView {
+            VStack(spacing: 18) {
+                identity
+                actions
+
+                VStack(spacing: 14) {
+                    if let support = profile.statusSupport {
+                        StatusCard(profile: profile, support: support)
+                    }
+                    ProfileCard(profile: profile)
+                    thisMac
+                    PreferencesCards(preferences: app.dependencies.preferences)
+                }
+                .padding(.horizontal, 14)
+                .padding(.bottom, 24)
             }
-
-            ProfileSection(profile: profile)
-
-            thisMac
-
-            PreferencesSections(preferences: app.dependencies.preferences)
+            .frame(maxWidth: 520)
+            .frame(maxWidth: .infinity)
+            .padding(.top, 28)
         }
-        .formStyle(.grouped)
-        .frame(maxWidth: 640)
-        .frame(maxWidth: .infinity)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background {
+            // The inspector's page: recessed so the cards read as cards, with a wash of the
+            // accent behind the face.
+            ZStack {
+                Color(nsColor: .textBackgroundColor)
+                if colorScheme == .light { Color.primary.opacity(0.045) }
+                LinearGradient(
+                    colors: [Color.accentColor.opacity(colorScheme == .dark ? 0.16 : 0.10), .clear],
+                    startPoint: .top,
+                    endPoint: UnitPoint(x: 0.5, y: 0.3)
+                )
+            }
+            .ignoresSafeArea()
+        }
         .task { await profile.load() }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-            // The way back from "Edit in Nextcloud…": whatever changed in the browser shows
-            // up the moment kvidr is in front again.
+            // The way back from "Edit in Nextcloud": whatever changed in the browser shows up
+            // the moment kvidr is in front again.
             Task { await profile.load() }
         }
         .confirmationDialog("Remove this account?", isPresented: $isConfirmingRemoval) {
@@ -40,110 +66,140 @@ struct SettingsPage: View {
         }
     }
 
-    private var thisMac: some View {
-        let account = profile.session.account
-        return Section("This Mac") {
-            LabeledContent("Server", value: account.server.displayString)
-            LabeledContent("Account", value: account.userID)
-            LabeledContent("Status") {
-                Label(app.connection == .offline ? "Offline" : "Connected",
-                      systemImage: app.connection == .offline ? "wifi.slash" : "checkmark.circle.fill")
-                    .foregroundStyle(app.connection == .offline ? Color.secondary : Color.green)
-            }
-            LabeledContent("Nextcloud", value: account.capabilities.serverVersion.string)
-            LabeledContent("Talk", value: account.capabilities.talkVersion ?? "unknown")
+    private var identity: some View {
+        VStack(spacing: 8) {
+            PictureControl(profile: profile)
+                .padding(.bottom, 2)
+            Text(profile.displayName)
+                .font(.system(size: 24, weight: .bold))
+                .multilineTextAlignment(.center)
+                .textSelection(.enabled)
+            Text(profile.session.account.server.displayString)
+                .font(.system(size: 13))
+                .foregroundStyle(.secondary)
+            SaveIndicator(save: profile.pictureSave, savedText: "Picture updated")
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 16)
+    }
 
-            Button("Manage Devices in Nextcloud…") {
+    private var actions: some View {
+        HStack(spacing: 16) {
+            InspectorAction(symbol: "safari", label: "Edit Profile in Nextcloud") {
+                NSWorkspace.shared.open(profile.links.personalInfo)
+            }
+            if profile.profile?.isProfileEnabled == true {
+                InspectorAction(symbol: "person.crop.circle", label: "View Public Profile") {
+                    NSWorkspace.shared.open(profile.links.publicProfile)
+                }
+            }
+            InspectorAction(symbol: "lock.shield", label: "Security and Devices in Nextcloud") {
                 NSWorkspace.shared.open(profile.links.security)
             }
-            Text("Nextcloud doesn’t let an app list or sign out your other devices. Security in Nextcloud does both.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+        }
+    }
 
-            Button("Remove Account…", role: .destructive) { isConfirmingRemoval = true }
+    private var thisMac: some View {
+        let account = profile.session.account
+        return InspectorCard(title: "This Mac") {
+            InspectorRow(label: "Server", value: account.server.displayString)
+            InspectorRow(label: "Account", value: account.userID)
+            InspectorRow(label: "Connection", value: app.connection == .offline ? "Offline" : "Connected")
+            InspectorRow(
+                label: "Versions",
+                value: "Nextcloud \(account.capabilities.serverVersion.string) · Talk \(account.capabilities.talkVersion ?? "unknown")"
+            )
+            InspectorActionRow(title: "Manage Devices in Nextcloud…") {
+                NSWorkspace.shared.open(profile.links.security)
+            }
+            InspectorActionRow(title: "Remove Account…", role: .destructive) {
+                isConfirmingRemoval = true
+            }
         }
     }
 }
 
-/// Picture, name, server and status, at the top of the page.
-private struct SettingsHeader: View {
-    let profile: ProfileModel
+// MARK: - Picture
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .center, spacing: 16) {
-                PictureControl(profile: profile)
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(profile.displayName)
-                        .font(.title2.weight(.semibold))
-                    Text(profile.session.account.server.displayString)
-                        .foregroundStyle(.secondary)
-                    SaveIndicator(save: profile.pictureSave, savedText: "Picture updated")
-                }
-
-                Spacer()
-
-                Button("Edit in Nextcloud…") {
-                    NSWorkspace.shared.open(profile.links.personalInfo)
-                }
-                .help("Change your name and profile on Nextcloud’s Personal info page")
-            }
-
-            if let support = profile.statusSupport {
-                StatusEditor(profile: profile, support: support)
-            }
-        }
-        .padding(.vertical, 6)
-    }
-}
-
-/// The picture, which is also the button that changes it.
+/// The picture, which is also the menu that changes it.
 private struct PictureControl: View {
     let profile: ProfileModel
     @Environment(\.avatarLoader) private var avatarLoader
     @State private var pending: PendingPicture?
     @State private var isPreparing = false
+    @State private var isShowingPhotos = false
+    @State private var pickedPhoto: PhotosPickerItem?
 
     var body: some View {
         Menu {
-            Button("Choose Picture…") { choose() }
-            Button("Remove Picture", role: .destructive) {
+            Button("Photos…", systemImage: "photo") { isShowingPhotos = true }
+            Button("Choose File…", systemImage: "folder") { chooseFile() }
+            Divider()
+            Button("Remove Picture", systemImage: "trash", role: .destructive) {
                 Task { await profile.removePicture(avatarLoader: avatarLoader) }
             }
         } label: {
-            ProfileAvatar(profile: profile, size: 64, showsStatus: false)
+            ProfileAvatar(profile: profile, size: 72, showsStatus: false)
                 .overlay {
                     if isPreparing || profile.pictureSave == .saving {
-                        Circle().fill(.black.opacity(0.35))
+                        Circle().fill(.black.opacity(0.4))
                         ProgressView().controlSize(.small).tint(.white)
                     }
+                }
+                .overlay(alignment: .bottomTrailing) {
+                    Image(systemName: "pencil")
+                        .font(.system(size: 11, weight: .semibold))
+                        .frame(width: 24, height: 24)
+                        .glassEffect(.regular, in: .circle)
                 }
         }
         .menuStyle(.button)
         .buttonStyle(.plain)
         .menuIndicator(.hidden)
+        .pointerStyle(.link)
         .fixedSize()
         .help("Change your picture")
+        .photosPicker(isPresented: $isShowingPhotos, selection: $pickedPhoto, matching: .images)
+        .onChange(of: pickedPhoto) { _, item in
+            guard let item else { return }
+            pickedPhoto = nil
+            prepare { () async throws(TalkError) -> Data in
+                guard let picked = try? await item.loadTransferable(type: PickedPhoto.self) else {
+                    throw TalkError.fileNotAPicture
+                }
+                defer {
+                    // The picker's copy was made for this, and has served its purpose.
+                    let directory = picked.url.deletingLastPathComponent()
+                    if directory.isContained(in: AttachmentScratch.directory) {
+                        try? FileManager.default.removeItem(at: directory)
+                    }
+                }
+                return try await ProfileModel.preparePicture(from: picked.url)
+            }
+        }
         .sheet(item: $pending) { picture in
             PictureConfirmation(profile: profile, picture: picture) { pending = nil }
         }
     }
 
-    private func choose() {
+    private func chooseFile() {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.image]
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
+        panel.prompt = "Choose"
         panel.message = "Choose a picture for your Nextcloud profile"
         guard panel.runModal() == .OK, let url = panel.url else { return }
+        prepare { () async throws(TalkError) -> Data in try await ProfileModel.preparePicture(from: url) }
+    }
 
+    private func prepare(_ work: @escaping () async throws(TalkError) -> Data) {
         profile.resetPictureSave()
         isPreparing = true
         Task {
             defer { isPreparing = false }
             do throws(TalkError) {
-                pending = PendingPicture(png: try await ProfileModel.preparePicture(from: url))
+                pending = PendingPicture(png: try await work())
             } catch {
                 pending = PendingPicture(png: nil, error: error.userMessage)
             }
@@ -164,9 +220,11 @@ private struct PictureConfirmation: View {
     let onClose: () -> Void
     @Environment(\.avatarLoader) private var avatarLoader
 
+    private var isUploading: Bool { profile.pictureSave == .saving }
+
     var body: some View {
         VStack(spacing: 16) {
-            Text("New Picture")
+            Text(picture.png == nil ? "Couldn’t Use That Picture" : "New Picture")
                 .font(.headline)
 
             if let png = picture.png, let image = NSImage(data: png) {
@@ -176,7 +234,13 @@ private struct PictureConfirmation: View {
                     .frame(width: 160, height: 160)
                     .clipShape(.circle)
                     .overlay { Circle().strokeBorder(Color(nsColor: .separatorColor), lineWidth: 0.5) }
-                Text("Everyone who can see you in Nextcloud sees this picture.")
+                    .overlay {
+                        if isUploading {
+                            Circle().fill(.black.opacity(0.4))
+                            ProgressView().tint(.white)
+                        }
+                    }
+                Text(isUploading ? "Uploading to Nextcloud…" : "Everyone who can see you in Nextcloud sees this picture.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -189,21 +253,23 @@ private struct PictureConfirmation: View {
             }
 
             HStack {
-                Button("Cancel", role: .cancel, action: onClose)
+                Button(picture.png == nil ? "OK" : "Cancel", role: .cancel, action: onClose)
                     .keyboardShortcut(.cancelAction)
+                    .disabled(isUploading)
                 if let png = picture.png {
-                    Button("Use Picture") {
+                    Button(isUploading ? "Uploading…" : "Use Picture") {
                         Task {
                             if await profile.setPicture(png: png, avatarLoader: avatarLoader) { onClose() }
                         }
                     }
                     .keyboardShortcut(.defaultAction)
-                    .disabled(profile.pictureSave == .saving)
+                    .disabled(isUploading)
                 }
             }
         }
         .padding(24)
         .frame(width: 320)
+        .interactiveDismissDisabled(isUploading)
     }
 
     private var failure: String? {
@@ -212,25 +278,29 @@ private struct PictureConfirmation: View {
     }
 }
 
-/// Presence and the status message, saved as they change.
-private struct StatusEditor: View {
+// MARK: - Status
+
+/// Presence, the message, when it clears, and the server's suggestions — saved as they change.
+private struct StatusCard: View {
     let profile: ProfileModel
     let support: UserStatusSupport
 
     @State private var icon = ""
     @State private var text = ""
     @State private var clearAfter: ClearAfter = .never
-    @FocusState private var focused: Field?
-
-    private enum Field { case icon, text }
+    @FocusState private var isTextFocused: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 10) {
+        InspectorCard(title: "Status") {
+            HStack {
+                Text("Availability")
+                    .font(.system(size: 13))
+                Spacer()
+                SaveIndicator(save: profile.statusSave, savedText: "Saved")
                 Menu {
                     ForEach(OnlineStatus.choosable(supportsBusy: support.supportsBusy), id: \.self) { choice in
                         Button {
-                            Task { await profile.setStatus(choice) }
+                            profile.setStatus(choice)
                         } label: {
                             if choice == currentStatus {
                                 Label(choice.title, systemImage: "checkmark")
@@ -245,68 +315,96 @@ private struct StatusEditor: View {
                         Text(currentStatus.title)
                     }
                 }
+                .menuStyle(.button)
                 .fixedSize()
-
-                if !profile.predefinedStatuses.isEmpty {
-                    Menu("Suggestions") {
-                        ForEach(profile.predefinedStatuses) { predefined in
-                            Button("\(predefined.icon) \(predefined.message)") {
-                                Task { await profile.applyPredefined(predefined) }
-                            }
-                        }
-                    }
-                    .fixedSize()
-                }
-
-                Spacer()
-                SaveIndicator(save: profile.statusSave, savedText: "Saved")
             }
 
             HStack(spacing: 8) {
                 if support.supportsEmoji {
-                    TextField("🙂", text: $icon)
-                        .frame(width: 40)
-                        .multilineTextAlignment(.center)
-                        .focused($focused, equals: .icon)
-                        .onSubmit { commit() }
-                        .onChange(of: icon) { _, new in
-                            // One emoji: whatever was typed last.
-                            if new.count > 1, let last = new.last { icon = String(last) }
-                        }
+                    EmojiPickerButton(emoji: icon) { picked in
+                        icon = picked
+                        commit(force: true)
+                    }
                 }
                 TextField("What’s your status?", text: $text)
-                    .focused($focused, equals: .text)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 13))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .background(.quaternary.opacity(0.7), in: .rect(cornerRadius: 8, style: .continuous))
+                    .focused($isTextFocused)
                     .onSubmit { commit() }
-                Picker("Clear after", selection: $clearAfter) {
+                if profile.status?.hasMessage == true {
+                    Button {
+                        icon = ""
+                        text = ""
+                        clearAfter = .never
+                        profile.clearMessage()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.tertiary)
+                    }
+                    .buttonStyle(.plain)
+                    .pointerStyle(.link)
+                    .help("Clear status message")
+                }
+            }
+
+            HStack {
+                Text("Clear after")
+                    .font(.system(size: 13))
+                Spacer()
+                Picker("Clear after", selection: Binding(
+                    get: { clearAfter },
+                    set: { new in
+                        clearAfter = new
+                        // A new time is a change even when the words are the same.
+                        if !text.isEmpty || !icon.isEmpty { commit(force: true) }
+                    }
+                )) {
                     ForEach(ClearAfter.allCases, id: \.self) { Text($0.title).tag($0) }
                 }
                 .labelsHidden()
                 .fixedSize()
-                .onChange(of: clearAfter) { _, _ in
-                    // A new clear-after is a change even when the words are the same.
-                    if !text.isEmpty || !icon.isEmpty { commit(force: true) }
-                }
-                if profile.status?.hasMessage == true {
-                    Button("Clear") {
-                        icon = ""
-                        text = ""
-                        clearAfter = .never
-                        Task { await profile.clearMessage() }
-                    }
-                }
             }
 
             if let clearAt = profile.status?.clearAt, profile.status?.hasMessage == true {
                 Text("Clears \(clearAt.formatted(.relative(presentation: .named)))")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.tertiary)
+            }
+
+            ForEach(profile.predefinedStatuses) { predefined in
+                Button {
+                    // The fields first, then the model, which changes before it returns — so
+                    // the text field losing focus to this click finds nothing left to save.
+                    icon = predefined.icon
+                    text = predefined.message
+                    clearAfter = predefined.clearAfter
+                    isTextFocused = false
+                    profile.applyPredefined(predefined)
+                } label: {
+                    HStack(spacing: 8) {
+                        Text(predefined.icon).frame(width: 20)
+                        Text(predefined.message)
+                            .foregroundStyle(.primary)
+                        Spacer()
+                        Text(predefined.clearAfter.title)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.tertiary)
+                    }
+                    .font(.system(size: 13))
+                    .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .pointerStyle(.link)
             }
         }
         .onAppear(perform: syncFromServer)
         .onChange(of: profile.status) { _, _ in syncFromServer() }
-        .onChange(of: focused) { old, new in
-            // Leaving the fields is a commit, as Return is.
-            if old != nil && new == nil { commit() }
+        .onChange(of: isTextFocused) { wasFocused, focused in
+            // Leaving the field is a commit, as Return is.
+            if wasFocused && !focused { commit() }
         }
     }
 
@@ -314,21 +412,72 @@ private struct StatusEditor: View {
         profile.status?.status ?? .online
     }
 
-    /// The fields follow the server unless they are being typed in.
+    /// The fields follow the server, except while they are being typed in.
     private func syncFromServer() {
-        guard focused == nil else { return }
+        guard !isTextFocused else { return }
         let message = profile.statusMessage
         icon = message?.icon ?? ""
         text = message?.text ?? ""
+        if profile.status?.clearAt == nil { clearAfter = .never }
     }
 
-    /// Sends the message if it differs from what the server has — leaving a field you only
-    /// clicked into sends nothing.
+    /// Sends the message if it differs from what the server has — clicking into the field and
+    /// out again sends nothing.
     private func commit(force: Bool = false) {
         let shown = profile.statusMessage
         guard force || icon != (shown?.icon ?? "") || text != (shown?.text ?? "") else { return }
-        let icon = icon, text = text, clearAfter = clearAfter
-        Task { await profile.setMessage(icon: icon, text: text, clearAfter: clearAfter) }
+        profile.setMessage(icon: icon, text: text, clearAfter: clearAfter)
+    }
+}
+
+/// The status emoji: a button that opens the system's emoji palette and keeps what is chosen.
+///
+/// The palette types into whatever has focus, so a field too small to see takes focus first
+/// and hands on the first emoji it receives.
+private struct EmojiPickerButton: View {
+    let emoji: String
+    let onPick: (String) -> Void
+
+    @State private var catcher = ""
+    @FocusState private var isCatching: Bool
+
+    var body: some View {
+        ZStack {
+            TextField("", text: $catcher)
+                .textFieldStyle(.plain)
+                .frame(width: 1, height: 1)
+                .opacity(0.01)
+                .focused($isCatching)
+                .onChange(of: catcher) { _, new in
+                    guard let last = new.last else { return }
+                    catcher = ""
+                    isCatching = false
+                    onPick(String(last))
+                }
+                .accessibilityHidden(true)
+
+            Button {
+                isCatching = true
+                Task { @MainActor in NSApplication.shared.orderFrontCharacterPalette(nil) }
+            } label: {
+                Group {
+                    if emoji.isEmpty {
+                        Image(systemName: "face.smiling")
+                            .font(.system(size: 16))
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text(emoji).font(.system(size: 18))
+                    }
+                }
+                .frame(width: 34, height: 34)
+                .background(.quaternary.opacity(0.7), in: .circle)
+                .contentShape(.circle)
+            }
+            .buttonStyle(.plain)
+            .pointerStyle(.link)
+            .help("Choose an emoji")
+            .accessibilityLabel(emoji.isEmpty ? "Choose an emoji" : "Emoji \(emoji)")
+        }
     }
 }
 
@@ -345,87 +494,84 @@ private struct SaveIndicator: View {
             ProgressView().controlSize(.mini)
         case .saved:
             Label(savedText, systemImage: "checkmark.circle.fill")
-                .font(.caption)
+                .font(.system(size: 11))
                 .foregroundStyle(.green)
                 .transition(.opacity)
         case .failed(let reason):
             Label(reason, systemImage: "exclamationmark.triangle.fill")
-                .font(.caption)
+                .font(.system(size: 11))
                 .foregroundStyle(.red)
                 .lineLimit(2)
         }
     }
 }
 
+// MARK: - Profile
+
 /// The Personal info page's fields, as they are on the server. Read-only here: editing them
 /// needs a confirmed password, which an app password never has.
-private struct ProfileSection: View {
+private struct ProfileCard: View {
     let profile: ProfileModel
 
     var body: some View {
-        Section {
+        InspectorCard(title: "Profile") {
             switch profile.profileLoad {
-            case .idle, .loading where profile.profile == nil:
-                HStack {
-                    Spacer()
-                    ProgressView().controlSize(.small)
-                    Spacer()
-                }
             case .failed(let reason):
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: 4) {
                     Text("Couldn’t load your profile")
-                    Text(reason).font(.caption).foregroundStyle(.secondary)
-                    Button("Try Again") { Task { await profile.load() } }
+                        .font(.system(size: 13))
+                    Text(reason)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
                 }
+                InspectorActionRow(title: "Try Again") { Task { await profile.load() } }
             default:
                 if let loaded = profile.profile {
                     if loaded.fields.isEmpty {
                         Text("Nothing on your profile yet.")
+                            .font(.system(size: 13))
                             .foregroundStyle(.secondary)
                     }
                     ForEach(loaded.fields) { field in
                         ProfileFieldRow(field: field)
                     }
+                } else {
+                    ProgressView().controlSize(.small).frame(maxWidth: .infinity)
                 }
             }
-        } header: {
-            Text("Profile")
-        } footer: {
-            HStack {
-                Button("Edit in Nextcloud…") { NSWorkspace.shared.open(profile.links.personalInfo) }
-                if profile.profile?.isProfileEnabled == true {
-                    Button("View Profile…") { NSWorkspace.shared.open(profile.links.publicProfile) }
-                }
-                Spacer()
+            InspectorActionRow(title: "Edit in Nextcloud…") {
+                NSWorkspace.shared.open(profile.links.personalInfo)
             }
-            .buttonStyle(.link)
-            .padding(.top, 4)
         }
     }
 }
 
+/// A label over its value, as the inspector's rows are, with who can see it at the side.
 private struct ProfileFieldRow: View {
     let field: ProfileField
 
     var body: some View {
-        LabeledContent {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(field.kind.title)
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
                 value
-                    .multilineTextAlignment(.trailing)
+                    .font(.system(size: 13))
                     .textSelection(.enabled)
-                if let scope = field.scope {
-                    Text(scope.title)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 1)
-                        .background(.quaternary, in: .capsule)
-                        .help(scope.explanation)
-                        .fixedSize()
-                }
+                    .fixedSize(horizontal: false, vertical: true)
             }
-        } label: {
-            Text(field.kind.title)
+            Spacer(minLength: 8)
+            if let scope = field.scope {
+                Text(scope.title)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 2)
+                    .background(.quaternary, in: .capsule)
+                    .help(scope.explanation)
+                    .fixedSize()
+            }
         }
     }
 
@@ -434,9 +580,9 @@ private struct ProfileFieldRow: View {
         // A website only becomes a link through the same check message links go through.
         if field.kind == .website, let url = URL(string: field.value), url.isOpenableLink {
             Link(field.value, destination: url)
+                .pointerStyle(.link)
         } else {
             Text(field.value)
-                .lineLimit(field.kind.isMultiline ? nil : 1)
         }
     }
 }

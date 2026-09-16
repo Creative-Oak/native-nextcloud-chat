@@ -2,71 +2,76 @@ import AppKit
 import SwiftUI
 
 /// The app's own preferences, on this Mac — what the Settings window's General,
-/// Notifications and Advanced tabs held, now sections of the Settings page.
-struct PreferencesSections: View {
+/// Notifications and Advanced tabs held — as cards on the Settings page.
+struct PreferencesCards: View {
     @Bindable var preferences: Preferences
 
     var body: some View {
-        Section("General") {
-            Picker("Return key", selection: $preferences.sendsOnReturn) {
-                Text("Sends the message").tag(true)
-                Text("Inserts a line break").tag(false)
-            }
-            .pickerStyle(.radioGroup)
-
-            Text(preferences.sendsOnReturn
-                 ? "Shift-Return inserts a line break."
-                 : "⌘Return sends the message.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+        InspectorCard(title: "Messages") {
+            PreferenceToggle(
+                title: "Return sends the message",
+                caption: preferences.sendsOnReturn ? "Shift-Return inserts a line break." : "Return inserts a line break; ⌘Return sends.",
+                isOn: $preferences.sendsOnReturn
+            )
+            PreferenceToggle(
+                title: "Suggest people before you type",
+                caption: "Asks your server for a list of people when you start a new message, which fills the contacts browser and lets kvidr match initials like “hvr” locally. Some servers do not list people until you search for them, in which case this finds nothing either way.",
+                isOn: $preferences.browsesContacts
+            )
         }
 
-        Section("New Messages") {
-            Toggle("Suggest people before you type", isOn: $preferences.browsesContacts)
-            Text("Asks your server for a list of people when you start a new message, which fills the contacts browser and lets kvidr match initials like “hvr” locally. Some servers do not list people until you search for them, in which case this finds nothing either way.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-
-        Section("Notifications") {
-            Toggle("Show notifications", isOn: $preferences.showsNotifications)
-            Toggle("Play a sound", isOn: $preferences.playsNotificationSound)
+        InspectorCard(title: "Notifications") {
+            PreferenceToggle(title: "Show notifications", isOn: $preferences.showsNotifications)
+            PreferenceToggle(title: "Play a sound", isOn: $preferences.playsNotificationSound)
                 .disabled(!preferences.showsNotifications)
-            Toggle("Show message previews", isOn: $preferences.showsNotificationPreviews)
+            PreferenceToggle(title: "Show message previews", isOn: $preferences.showsNotificationPreviews)
                 .disabled(!preferences.showsNotifications)
-            Toggle("Show unread count on the Dock icon", isOn: $preferences.showsDockBadge)
-
-            Text("kvidr follows each conversation’s notification setting from Nextcloud. Change it by right-clicking a conversation in the sidebar.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Text("Notifications arrive while kvidr is running. Closing the window keeps it running; quitting it does not.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            Button("Open macOS Notification Settings…") {
+            PreferenceToggle(title: "Show unread count on the Dock icon", isOn: $preferences.showsDockBadge)
+            Text("kvidr follows each conversation’s notification setting from Nextcloud — right-click a conversation in the sidebar to change it. Notifications arrive while kvidr is running; closing the window keeps it running, quitting does not.")
+                .font(.system(size: 11))
+                .foregroundStyle(.tertiary)
+                .fixedSize(horizontal: false, vertical: true)
+            InspectorActionRow(title: "Open macOS Notification Settings…") {
                 if let url = URL(string: "x-apple.systempreferences:com.apple.preference.notifications") {
                     NSWorkspace.shared.open(url)
                 }
             }
         }
 
-        Section("Diagnostics") {
-            Toggle("Verbose logging", isOn: $preferences.isDeveloperModeEnabled)
-            Text("Writes detailed logs, which may include message content, to the system log. Off by default.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Button("Reveal Logs in Console…") {
-                if let url = URL(string: "x-apple.systempreferences:") {
-                    NSWorkspace.shared.open(url)
-                }
-            }
+        InspectorCard(title: "Advanced") {
+            PreferenceToggle(
+                title: "Verbose logging",
+                caption: "Writes detailed logs, which may include message content, to the system log. Off by default.",
+                isOn: $preferences.isDeveloperModeEnabled
+            )
+            PreferenceToggle(
+                title: "Allow insecure local servers",
+                caption: "Permits plain HTTP for localhost and private-network addresses only. Public servers always require HTTPS.",
+                isOn: $preferences.allowsInsecureLocalServers
+            )
         }
+    }
+}
 
-        Section("Development") {
-            Toggle("Allow insecure local servers", isOn: $preferences.allowsInsecureLocalServers)
-            Text("Permits plain HTTP for localhost and private-network addresses only. Public servers always require HTTPS.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+/// A switch with its words beside it and, when it needs one, a caption underneath.
+private struct PreferenceToggle: View {
+    let title: String
+    var caption: String?
+    @Binding var isOn: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Toggle(isOn: $isOn) {
+                Text(title).font(.system(size: 13))
+            }
+            .toggleStyle(.switch)
+            .controlSize(.small)
+            if let caption {
+                Text(caption)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 }
