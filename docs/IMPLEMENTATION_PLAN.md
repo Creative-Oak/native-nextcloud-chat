@@ -240,6 +240,38 @@ sidebar or ⌘,. *(`a16f8e3`, `9dd3524`, `ce2c183`, `e1f3f70`, `b6d1c45`)*
 - **Status that updates live** when it changes on another device. It is read when Settings
   opens and when kvidr comes to the front.
 
+## Shared pictures and avatars on disk — done 2026-09-16
+
+*(`8114e89`)*
+
+- **Inline previews are kept.** A shared picture's 640px preview is written to disk the
+  first time it loads, so it draws at once afterwards, across launches. Sealed with the
+  account's key through `EncryptedFileCache`; 200 MB, least recently used evicted first;
+  purged on sign-out, and unreadable after it because the key is destroyed.
+- **Avatars on disk are sealed the same way.** The avatar cache's format moved to 3, so the
+  readable version-2 files are removed at the next launch.
+- **A loading picture no longer moves the transcript.** `ImageLayout` fixes the frame from
+  the message's `width` and `height` before anything arrives and draws the picture into it.
+  The picture's own shape wins only when it clearly differs (a photo rotated by its EXIF
+  orientation), and a picture that fails keeps its frame with a symbol in it.
+
+### Left out, on purpose
+
+- **Full-size pictures aren't kept.** The lightbox's 1600px image is fetched when opened: it
+  is large, and opened far less often than the preview is scrolled past.
+- **A picture whose message carries no dimensions still moves once**, the first time it
+  loads — there is nothing to size the placeholder from. After that it comes from disk. Its
+  size could be remembered too, if it turns out to happen often.
+- **Link-preview images** are still held in memory only.
+
+## Discovered work (append as found)
+
+- `NSImage.size` is in points, not pixels: a preview saying it is 144 dpi reports half its
+  pixel size. Layout that must match the server's pixel dimensions reads them from ImageIO,
+  with the EXIF orientation applied. *(2026-09-16)*
+- A bottom-pinned transcript turns any row whose height changes after it appears into a jump
+  of everything above it; a placeholder has to be the size of what replaces it, not an
+  estimate of it. *(2026-09-16)*
 
 - `uploadTask(with:fromFile:)` reads the file on `URLSession`'s own threads, so a read that
   never returns stalls every transfer in the process. And a named pipe is no stand-in for a
