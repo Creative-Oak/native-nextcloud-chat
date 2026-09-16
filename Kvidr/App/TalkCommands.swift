@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// The menu bar, rendered from the command registry — see `AppCommand`.
@@ -7,9 +8,24 @@ import SwiftUI
 /// stays stable and discoverable; with no window key, the registry's placeholder keeps
 /// every item in its place, disabled.
 struct TalkCommands: Commands {
+    let app: AppModel
     @FocusedValue(\.appCommands) private var registry
 
     var body: some Commands {
+        // Settings is a page in the main window, so ⌘, brings that window forward — and
+        // works with it closed, when there is no focused registry to ask.
+        CommandGroup(replacing: .appSettings) {
+            Button("Settings…") {
+                if let window = NSApp.windows.first(where: { $0.frameAutosaveName == "KvidrMain" }) {
+                    window.makeKeyAndOrderFront(nil)
+                }
+                NSApp.activate()
+                app.showSettings()
+            }
+            .keyboardShortcut(",", modifiers: .command)
+            .disabled(app.session == nil)
+        }
+
         // Replaces the default "New Window" — a second window on a messaging app is rarely
         // what anyone wants, and ⌘N should start a conversation.
         CommandGroup(replacing: .newItem) { items(.file) }

@@ -294,3 +294,11 @@ enum ConversationDraftToken {
 
     static func isDraft(_ token: String?) -> Bool { token == value }
 }
+
+/// What the sidebar selection holds while Settings has the messages column — the draft's
+/// trick again, so Settings and an open conversation can never both be the selection.
+enum SettingsToken {
+    static let value = "#settings"
+
+    static func isSettings(_ token: String?) -> Bool { token == value }
+}

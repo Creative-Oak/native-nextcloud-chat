@@ -14,8 +14,25 @@ struct SidebarColumn: View {
     /// The unsent conversation, which sits above the real ones.
     var draft: ConversationDraft?
     var onDiscardDraft: () -> Void
+    var profile: ProfileModel?
+    var onOpenSettings: () -> Void = {}
 
     var body: some View {
+        lists
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if let profile {
+                    SidebarAccountRow(
+                        profile: profile,
+                        mode: mode,
+                        isSelected: SettingsToken.isSettings(selection),
+                        onOpen: onOpenSettings
+                    )
+                }
+            }
+    }
+
+    @ViewBuilder
+    private var lists: some View {
         if let list {
             if mode == .compact {
                 CompactConversationListView(

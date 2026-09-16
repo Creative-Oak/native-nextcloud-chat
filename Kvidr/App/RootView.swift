@@ -102,7 +102,7 @@ struct RootView: View {
                 NSWorkspace.shared.open(url)
             }
         }
-        context.openSettings = { NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil) }
+        context.openSettings = { app.showSettings() }
         return .make(context)
     }
 
@@ -217,7 +217,9 @@ struct RootView: View {
                 searchFocusRequest: searchFocusRequest,
                 onSearchFocusHandled: { searchFocusRequest = false },
                 draft: app.draft,
-                onDiscardDraft: { app.discardDraft() }
+                onDiscardDraft: { app.discardDraft() },
+                profile: app.profile,
+                onOpenSettings: { app.showSettings() }
             )
             // No sidebar toggle, as in Messages: the sidebar is not something you
             // fold away by hand. It goes only when the inspector needs its room in
@@ -260,6 +262,8 @@ struct RootView: View {
                         // The pane takes the toolbar's strip so the band can sit in it. Safe
                         // in this column: the traffic lights are over the sidebar, not here.
                         .ignoresSafeArea(.container, edges: .top)
+                    } else if app.isShowingSettings, let profile = app.profile {
+                        SettingsPage(profile: profile)
                     } else if let chat = app.chat {
                         ChatView(
                             model: chat,
@@ -337,6 +341,12 @@ struct RootView: View {
             }
         }
         .onChange(of: preferences.sidebarMode) { _, _ in reconcileColumns() }
+        // Settings has no conversation to inspect; the panel goes with the conversation.
+        .onChange(of: app.isShowingSettings) { _, showing in
+            if showing && isShowingInspector {
+                withAnimation(.smooth(duration: 0.3)) { isShowingInspector = false }
+            }
+        }
         .sheet(item: $conversationSettings) { model in
             ConversationSettingsSheet(model: model)
         }

@@ -237,8 +237,8 @@ struct AppCommandRegistry {
                 id: "help.documentation", title: "Nextcloud Talk Documentation", aliases: ["docs", "manual", "help"],
                 symbolName: "book", placement: .help, isEnabled: live, perform: c.openDocumentation
             ),
-            // ⌘, is the Settings scene's own; this is the palette's way there, and it
-            // is kept out of the menus, which already have it.
+            // ⌘, is the app menu's own item; this is the palette's way there, and it is
+            // kept out of the other menus.
             AppCommand(
                 id: "app.settings", title: "Settings…", aliases: ["preferences", "options", "notifications", "account"],
                 symbolName: "gearshape", shortcut: KeyboardShortcut(",", modifiers: .command), placement: .help,

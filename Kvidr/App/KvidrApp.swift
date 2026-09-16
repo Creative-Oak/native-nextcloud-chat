@@ -28,7 +28,7 @@ struct KvidrApp: App {
         // the scene has a stable identity.
         .defaultSize(width: 1040, height: 700)
         .windowToolbarStyle(.unified)
-        .commands { TalkCommands() }
+        .commands { TalkCommands(app: app) }
 
         // A plain utility window rather than a sheet: you want to be able to leave it open
         // beside the app while you learn the shortcuts.
@@ -37,12 +37,6 @@ struct KvidrApp: App {
         }
         .windowResizability(.contentSize)
         .defaultPosition(.center)
-
-        Settings {
-            SettingsView()
-                .environment(app)
-                .environment(\.preferences, app.dependencies.preferences)
-        }
     }
 }
 

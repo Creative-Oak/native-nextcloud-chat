@@ -52,8 +52,8 @@ final class AppModel {
     var selectedToken: String? {
         didSet {
             guard oldValue != selectedToken else { return }
-            // The draft is not a conversation and must not be restored as one next launch.
-            if !ConversationDraftToken.isDraft(selectedToken) {
+            // Neither the draft nor Settings is a conversation, and neither is restored next launch.
+            if !ConversationDraftToken.isDraft(selectedToken), !SettingsToken.isSettings(selectedToken) {
                 dependencies.preferences.lastSelectedToken = selectedToken
             }
             openSelectedConversation()
@@ -61,6 +61,11 @@ final class AppModel {
     }
 
     var isShowingDraft: Bool { ConversationDraftToken.isDraft(selectedToken) && draft != nil }
+    var isShowingSettings: Bool { SettingsToken.isSettings(selectedToken) && session != nil }
+
+    /// The signed-in user's own picture, name and status — shared by the sidebar's account
+    /// row and the Settings page, so the two can never disagree.
+    private(set) var profile: ProfileModel?
 
     /// Window/app activation, which gates read state. See `ReadStatePolicy`.
     var isApplicationActive = true { didSet { activationChanged() } }
@@ -125,6 +130,7 @@ final class AppModel {
             supportsConversationAvatars: account.capabilities.supportsConversationAvatars
         )
         previewLoader = PreviewLoader(session: session)
+        profile = ProfileModel(session: session)
 
         let list = ConversationListModel(session: session, notifications: notifications)
         list.isCurrentlyVisible = { [weak self] token in
@@ -178,6 +184,7 @@ final class AppModel {
         conversationSyncTask = nil
         await session.shutdown()
         self.session = nil
+        profile = nil
     }
 
     /// The server's Talk configuration changed — refetch capabilities and rebuild around
@@ -405,6 +412,14 @@ final class AppModel {
         conversationList?.insert(conversation)
         selectedToken = conversation.token
         refreshNow()
+    }
+
+    // MARK: - Settings
+
+    /// ⌘, and the account row at the foot of the sidebar: Settings in the messages column.
+    func showSettings() {
+        guard session != nil else { return }
+        selectedToken = SettingsToken.value
     }
 
     // MARK: - New Message
