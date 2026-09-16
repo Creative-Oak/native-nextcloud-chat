@@ -32,9 +32,15 @@ final class AvatarLoader {
     /// A few hundred small images is a couple of megabytes — well worth never refetching.
     private let memoryLimit = 300
 
-    init(client: OCSClient, supportsConversationAvatars: Bool) {
+    /// Avatars on disk are sealed with the account's key, like the rest of its cache: a
+    /// directory of colleagues' faces, each file named for one of them, is not something to
+    /// leave readable — or readable after signing out.
+    private let sealer: CacheSealer
+
+    init(client: OCSClient, supportsConversationAvatars: Bool, sealer: CacheSealer) {
         self.client = client
         self.supportsConversationAvatars = supportsConversationAvatars
+        self.sealer = sealer
         // One cache, however many loaders. A loader is rebuilt whenever the server says its
         // capabilities moved, and the disk cache's idea of how much it has written since it
         // last swept up lived on the loader — so a server that changed one capability every
@@ -80,7 +86,9 @@ final class AvatarLoader {
         case .user: Self.userAvatarMaximumAge
         case .conversation: nil
         }
-        if let data = await diskCache.read(key: key, maximumAge: maximumAge), let image = NSImage(data: data) {
+        if let sealed = await diskCache.read(key: key, maximumAge: maximumAge),
+           let data = sealer.open(sealed),
+           let image = NSImage(data: data) {
             store(image, for: key)
             return image
         }
@@ -114,7 +122,9 @@ final class AvatarLoader {
             // not put back what the purge has just cleared away.
             guard !Task.isCancelled else { return nil }
             store(image, for: key)
-            await diskCache.write(response.body, key: key)
+            if let sealed = sealer.seal(response.body) {
+                await diskCache.write(sealed, key: key)
+            }
             return image
         } catch {
             // An avatar is decoration; a failure is never worth surfacing to the user.
@@ -329,7 +339,9 @@ private actor AvatarDiskCache {
     /// The subdirectory the current key format writes into. Bumped whenever the shape of a
     /// key changes, which is what makes the previous format's files identifiable and so
     /// removable — see ``removeSupersededFormats()``.
-    private static let formatVersion = "2"
+    /// 3: sealed with the account's key. A version-2 file is readable by anyone, and is
+    /// removed at launch like any other superseded format.
+    private static let formatVersion = "3"
     /// How much may be written between two sweeps. The cache therefore never exceeds its
     /// budget by more than this plus one avatar.
     private static let bytesBetweenTrims = 4 * 1024 * 1024

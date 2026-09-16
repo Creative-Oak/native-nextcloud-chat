@@ -9,8 +9,10 @@ import CryptoKit
 /// as a draft or an account. A sealed blob starts with a version byte. A pre-encryption
 /// payload is JSON and starts with `{`, which is how one is recognised.
 enum CacheCipher {
-    enum Kind: String {
+    enum Kind: String, Sendable {
         case account, conversation, message, draft
+        /// Pictures: a shared image's inline preview, a person's or a conversation's avatar.
+        case preview, avatar
     }
 
     private static let version: UInt8 = 1

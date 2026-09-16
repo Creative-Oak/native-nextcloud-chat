@@ -127,9 +127,10 @@ final class AppModel {
         self.session = session
         avatarLoader = AvatarLoader(
             client: session.client,
-            supportsConversationAvatars: account.capabilities.supportsConversationAvatars
+            supportsConversationAvatars: account.capabilities.supportsConversationAvatars,
+            sealer: CacheSealer(keyring: dependencies.cacheKeyring, accountID: account.id, kind: .avatar)
         )
-        previewLoader = PreviewLoader(session: session)
+        previewLoader = PreviewLoader(session: session, keyring: dependencies.cacheKeyring)
         profile = ProfileModel(session: session)
 
         let list = ConversationListModel(session: session, notifications: notifications)
@@ -244,6 +245,7 @@ final class AppModel {
         // conversations for anyone who reads the directory afterwards — on a shared or
         // handed-on Mac, after the person signed out precisely so it wouldn't.
         await avatarLoader?.purge()
+        await previewLoader?.purge()
         avatarLoader = nil
         previewLoader = nil
         conversationList = nil

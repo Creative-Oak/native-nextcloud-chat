@@ -5,22 +5,47 @@ import SwiftUI
 ///
 /// Same shape as ``AvatarLoader`` and for the same reason: `NSImage` isn't `Sendable`, so
 /// the cache lives on the main actor while the fetching happens inside an actor.
+///
+/// The inline previews are also kept on disk, sealed with the account's key — see
+/// ``EncryptedFileCache``. A picture seen once then draws at once the next time, and a
+/// transcript full of photos isn't downloaded again every launch. The lightbox's full-size
+/// image is not kept: it is large, and opened far less often than it is scrolled past.
 @MainActor
 final class PreviewLoader {
     private let session: Session
     private var memory: [String: NSImage] = [:]
+    /// Each image's upright pixel size, by file — what ``ImageLayout`` needs, and what
+    /// `NSImage.size` (in points) doesn't give.
+    private var pixelSizes: [String: CGSize] = [:]
     private var inFlight: [String: Task<NSImage?, Never>] = [:]
     /// Files the server has no preview for. Remembered so we ask exactly once.
     private var unavailable: Set<String> = []
+    private let disk: EncryptedFileCache
 
     private let memoryLimit = 120
+    /// A few thousand previews at the size the transcript asks for.
+    private static let diskBudget = 200 * 1024 * 1024
+    /// The size the transcript shows a shared picture at, and the one kept on disk.
+    static let inlineSize = 640
 
-    init(session: Session) {
+    init(session: Session, keyring: any CacheKeyring) {
         self.session = session
+        let directory = URL.cachesDirectory
+            .appending(path: "app.kvidr.mac/Previews", directoryHint: .isDirectory)
+            .appending(path: CacheKey.fileName(session.account.id), directoryHint: .isDirectory)
+        disk = EncryptedFileCache(
+            directory: directory,
+            sealer: CacheSealer(keyring: keyring, accountID: session.account.id, kind: .preview),
+            byteBudget: Self.diskBudget
+        )
     }
 
     func cached(fileID: String, width: Int) -> NSImage? {
         memory[key(fileID, width)]
+    }
+
+    func pixelSize(fileID: String) -> CGSize? {
+        pixelSizes[fileID]
     }
 
     func hasNoPreview(fileID: String) -> Bool {
@@ -33,15 +58,22 @@ final class PreviewLoader {
         if unavailable.contains(fileID) { return nil }
         if let existing = inFlight[key] { return await existing.value }
 
+        let keepsOnDisk = width == Self.inlineSize
+        let disk = disk
         let task = Task<NSImage?, Never> { [weak self] in
             guard let self else { return nil }
+            if keepsOnDisk, let data = await disk.read(key), let image = self.accept(data, fileID: fileID, key: key) {
+                return image
+            }
             do throws(TalkError) {
                 let data = try await self.session.attachments.preview(fileID: fileID, width: width, height: height)
-                guard let image = NSImage(data: data) else {
+                guard let image = self.accept(data, fileID: fileID, key: key) else {
                     self.unavailable.insert(fileID)
                     return nil
                 }
-                self.store(image, for: key)
+                // Not after a purge: a fetch still in flight when the account signed out
+                // must not put back what the purge has just cleared away.
+                if keepsOnDisk, !Task.isCancelled { await disk.write(data, name: key) }
                 return image
             } catch {
                 // 404 here means "no preview for this kind of file", which is a normal
@@ -63,12 +95,32 @@ final class PreviewLoader {
         await preview(fileID: fileID, width: 1600, height: 1600)
     }
 
+    /// Everything, memory and disk. For sign-out — though by then the account's key is gone
+    /// and what is on disk can't be opened anyway.
+    func purge() async {
+        memory.removeAll()
+        pixelSizes.removeAll()
+        for task in inFlight.values { task.cancel() }
+        inFlight.removeAll()
+        await disk.purge()
+    }
+
+    private func accept(_ data: Data, fileID: String, key: String) -> NSImage? {
+        guard let image = NSImage(data: data) else { return nil }
+        if let pixels = ImageLayout.pixelSize(of: data) { pixelSizes[fileID] = pixels }
+        store(image, for: key)
+        return image
+    }
+
     private func store(_ image: NSImage, for key: String) {
         if memory.count >= memoryLimit { memory.removeAll(keepingCapacity: true) }
         memory[key] = image
     }
 
-    private func key(_ fileID: String, _ width: Int) -> String { "\(fileID)@\(width)" }
+    /// Hex, so it is a safe file name as well as a memory key.
+    private func key(_ fileID: String, _ width: Int) -> String {
+        "\(CacheKey.fileName(fileID))-\(width)"
+    }
 }
 
 private struct PreviewLoaderKey: EnvironmentKey {
@@ -95,15 +147,12 @@ extension EnvironmentValues {
 }
 
 /// An image shared into the conversation, shown inline.
+///
+/// Its frame is decided before the picture arrives and kept when it does — see
+/// ``ImageLayout`` — so a picture loading doesn't move the transcript.
 struct InlineImageView: View {
     let object: RichObject
-    /// Inside the 520pt a message row allows itself, with room left for the bubble's own
-    /// padding — a picture should read as a message, not as the window.
-    var maximumWidth: CGFloat = 420
-    /// Generous, because it is not really a limit on how big a picture is: a landscape one
-    /// runs out of width long before this. It is here to stop a tall panorama becoming a
-    /// column you have to scroll past.
-    var maximumHeight: CGFloat = 520
+    var limits: ImageLayout.Limits = .transcript
     /// Rounder than a thumbnail in a row, because with no bubble around it the picture is
     /// the shape the eye reads.
     var cornerRadius: CGFloat = 16
@@ -114,65 +163,47 @@ struct InlineImageView: View {
     @State private var didFail = false
 
     var body: some View {
-        Group {
+        let frame = frameSize
+        ZStack {
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(.quaternary.opacity(0.4))
             if let image {
                 Image(nsImage: image)
                     .resizable()
-                    // An exact frame, not `maxWidth`/`maxHeight`: those leave the container
-                    // at its limit with the picture fitted inside, and the rounded border
-                    // below then draws a box around the picture instead of round it. Inside
-                    // a bubble the gap was accent on accent and invisible; bare on the
-                    // transcript it is the first thing you see.
-                    .frame(width: size(of: image).width, height: size(of: image).height)
-                    .clipShape(.rect(cornerRadius: cornerRadius, style: .continuous))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                            .strokeBorder(Color(nsColor: .separatorColor).opacity(0.6), lineWidth: 0.5)
-                    }
-                    .contentShape(.rect)
-                    .onTapGesture { openAttachment?(object) }
-                    .accessibilityAddTraits(.isButton)
-                    .accessibilityLabel(object.name)
-                    .help(object.name)
+                    // Filling the frame rather than fitting it: when the shapes agree, which
+                    // is what the frame was chosen for, the difference is a rounding pixel.
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: frame.width, height: frame.height)
+                    .transition(.opacity)
             } else if didFail {
-                EmptyView()
+                Image(systemName: "photo")
+                    .font(.system(size: 28))
+                    .foregroundStyle(.tertiary)
             } else {
-                placeholder
+                ProgressView().controlSize(.small)
             }
         }
+        .frame(width: frame.width, height: frame.height)
+        .clipShape(.rect(cornerRadius: cornerRadius, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .strokeBorder(Color(nsColor: .separatorColor).opacity(0.6), lineWidth: 0.5)
+        }
+        .contentShape(.rect)
+        .onTapGesture { openAttachment?(object) }
+        .accessibilityAddTraits(.isButton)
+        .accessibilityLabel(object.name)
+        .help(object.name)
         .task(id: object.id) { await load() }
     }
 
-    /// Sized from the file's own dimensions where the server sent them, so the layout
-    /// doesn't jump when the picture arrives.
-    private var placeholder: some View {
-        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .fill(.quaternary.opacity(0.4))
-            .frame(width: placeholderSize.width, height: placeholderSize.height)
-            .overlay { ProgressView().controlSize(.small) }
-    }
-
-    private var placeholderSize: CGSize {
-        guard let width = object.width, let height = object.height, width > 0, height > 0 else {
-            return CGSize(width: 220, height: 150)
+    private var frameSize: CGSize {
+        let announced: CGSize? = if let width = object.width, let height = object.height {
+            CGSize(width: width, height: height)
+        } else {
+            nil
         }
-        return fitted(CGSize(width: CGFloat(width), height: CGFloat(height)))
-    }
-
-    /// The picture's own size, which is what the container should be. The server's `width`
-    /// and `height` are a hint for the placeholder; once the bytes are here, the bytes know.
-    private func size(of image: NSImage) -> CGSize {
-        fitted(image.size)
-    }
-
-    /// Scaled down to fit the limits, never up: a small picture blown out to fill the width
-    /// is worse than a small picture.
-    private func fitted(_ size: CGSize) -> CGSize {
-        guard size.width > 0, size.height > 0 else {
-            return CGSize(width: 220, height: 150)
-        }
-        let scale = min(maximumWidth / size.width, maximumHeight / size.height, 1)
-        return CGSize(width: (size.width * scale).rounded(), height: (size.height * scale).rounded())
+        return ImageLayout.frame(announced: announced, original: loader?.pixelSize(fileID: object.id), limits: limits)
     }
 
     private func load() async {
@@ -180,11 +211,12 @@ struct InlineImageView: View {
             didFail = true
             return
         }
-        if let cached = loader.cached(fileID: object.id, width: 640) {
+        let size = PreviewLoader.inlineSize
+        if let cached = loader.cached(fileID: object.id, width: size) {
             image = cached
             return
         }
-        let fetched = await loader.preview(fileID: object.id, width: 640, height: 640)
+        let fetched = await loader.preview(fileID: object.id, width: size, height: size)
         withAnimation(.easeOut(duration: 0.2)) {
             image = fetched
             didFail = fetched == nil

@@ -82,6 +82,9 @@ final class AppDependencies {
     let modelContainer: ModelContainer
     let store: TalkStore
     let preferences: Preferences
+    /// The keys everything cached for an account is sealed with — the database, and the
+    /// pictures kept as files beside it.
+    let cacheKeyring: any CacheKeyring
 
     private static let version: String =
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1"
@@ -116,6 +119,7 @@ final class AppDependencies {
         // One per process, shared by the migration that may rebuild the store at launch and
         // the store that reads it afterwards.
         let cacheKeyring = KeychainCacheKeyring()
+        self.cacheKeyring = cacheKeyring
 
         do {
             modelContainer = try ModelContainer.talkContainer(inMemory: inMemory, keyring: cacheKeyring)
