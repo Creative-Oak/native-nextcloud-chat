@@ -19,6 +19,38 @@ struct CapabilitiesDTO: Decodable, Sendable {
 
     struct CapabilitiesBody: Decodable, Sendable {
         let spreed: SpreedDTO?
+        let userStatus: UserStatusDTO?
+
+        private enum CodingKeys: String, CodingKey {
+            case spreed
+            case userStatus = "user_status"
+        }
+
+        init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            spreed = try container.decodeIfPresent(SpreedDTO.self, forKey: .spreed)
+            // Nothing about status may cost the account its Talk capabilities.
+            userStatus = try? container.decodeIfPresent(UserStatusDTO.self, forKey: .userStatus)
+        }
+    }
+
+    struct UserStatusDTO: Decodable, Sendable {
+        let enabled: Bool?
+        let supportsEmoji: Bool?
+        let supportsBusy: Bool?
+
+        private enum CodingKeys: String, CodingKey {
+            case enabled
+            case supportsEmoji = "supports_emoji"
+            case supportsBusy = "supports_busy"
+        }
+
+        init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            enabled = Lenient.bool(container, .enabled)
+            supportsEmoji = Lenient.bool(container, .supportsEmoji)
+            supportsBusy = Lenient.bool(container, .supportsBusy)
+        }
     }
 
     struct SpreedDTO: Decodable, Sendable {
@@ -138,7 +170,12 @@ struct CapabilitiesDTO: Decodable, Sendable {
                 micro: version?.micro ?? 0,
                 string: version?.string ?? "unknown",
                 edition: version?.edition ?? ""
-            )
+            ),
+            userStatus: capabilities?.userStatus.flatMap { status in
+                // Present but switched off is the same as absent.
+                guard status.enabled ?? true else { return nil }
+                return UserStatusSupport(supportsEmoji: status.supportsEmoji ?? true, supportsBusy: status.supportsBusy ?? false)
+            }
         )
     }
 }

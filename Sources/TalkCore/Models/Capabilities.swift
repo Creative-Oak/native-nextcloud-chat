@@ -22,17 +22,22 @@ struct TalkCapabilities: Sendable, Hashable, Codable {
     /// The Talk app version, for display in Settings → Accounts only.
     var talkVersion: String?
     var serverVersion: ServerVersion
+    /// The `user_status` app. Nil when it is not installed or turned off, which hides status
+    /// everywhere rather than showing controls the server will refuse.
+    var userStatus: UserStatusSupport?
 
     init(
         features: Set<String> = [],
         config: TalkConfig = TalkConfig(),
         talkVersion: String? = nil,
-        serverVersion: ServerVersion = .unknown
+        serverVersion: ServerVersion = .unknown,
+        userStatus: UserStatusSupport? = nil
     ) {
         self.features = features
         self.config = config
         self.talkVersion = talkVersion
         self.serverVersion = serverVersion
+        self.userStatus = userStatus
     }
 
     func has(_ feature: String) -> Bool { features.contains(feature) }
@@ -94,6 +99,12 @@ struct TalkCapabilities: Sendable, Hashable, Codable {
     }
 
     static let empty = TalkCapabilities()
+}
+
+/// What the server's `user_status` app offers.
+struct UserStatusSupport: Sendable, Hashable, Codable {
+    var supportsEmoji: Bool
+    var supportsBusy: Bool
 }
 
 struct TalkConfig: Sendable, Hashable, Codable {

@@ -87,6 +87,19 @@ enum Endpoint {
     static func sharedItems(_ token: String) -> String { "\(spreedV1)/chat/\(segment(token))/share" }
     static func sharedItemsOverview(_ token: String) -> String { "\(spreedV1)/chat/\(segment(token))/share/overview" }
 
+    // The signed-in user's profile and status
+    static func cloudUser(_ userID: String) -> String { "\(ocs)/cloud/users/\(segment(userID))" }
+    static let userStatusAPI = "\(ocs)/apps/user_status/api/v1"
+    static let userStatus = "\(userStatusAPI)/user_status"
+    static let userStatusType = "\(userStatusAPI)/user_status/status"
+    static let userStatusMessage = "\(userStatusAPI)/user_status/message"
+    static let userStatusCustomMessage = "\(userStatusAPI)/user_status/message/custom"
+    static let userStatusPredefinedMessage = "\(userStatusAPI)/user_status/message/predefined"
+    /// With the trailing slash the route is declared with.
+    static let predefinedStatuses = "\(userStatusAPI)/predefined_statuses/"
+    /// Setting or removing the signed-in user's own picture. A front-page route, not OCS.
+    static let ownAvatar = "/index.php/avatar/"
+
     // Avatars (not OCS)
     static func userAvatar(_ userID: String, size: Int, dark: Bool = false) -> String {
         "/index.php/avatar/\(segment(userID))/\(size)" + (dark ? "/dark" : "")
@@ -143,6 +156,7 @@ enum Endpoint {
         "room", "note-to-self", "favorite", "notify", "participants", "active", "state",
         "avatar", "dark", "chat", "read", "context", "mentions", "reaction", "poll",
         "search", "providers", "preview", "files_sharing", "shares", "dav", "files",
-        "attendees", "share", "overview", "call"
+        "attendees", "share", "overview", "call",
+        "users", "user_status", "status", "message", "custom", "predefined", "predefined_statuses"
     ]
 }
