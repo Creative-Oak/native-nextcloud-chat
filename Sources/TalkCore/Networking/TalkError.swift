@@ -31,6 +31,10 @@ enum TalkError: Error, Sendable, Equatable {
     /// The file was there when it was attached and isn't now — moved, deleted, or on a
     /// share that has since been unmounted.
     case fileMissing
+    /// Bigger than the place it's going will take.
+    case fileTooLarge
+    /// Chosen as a picture, and not one.
+    case fileNotAPicture
     /// The disk the file is on stopped answering: a network share whose server has gone.
     case fileNotAnswering
 
@@ -108,6 +112,10 @@ enum TalkError: Error, Sendable, Equatable {
             "kvidr couldn’t use your Keychain, so your sign-in couldn’t be saved."
         case .fileNotAttachable:
             "Only files on this Mac can be attached."
+        case .fileTooLarge:
+            "That file is too big."
+        case .fileNotAPicture:
+            "That file isn’t a picture kvidr can read."
         case .fileMissing:
             "That file isn’t there anymore."
         case .fileNotAnswering:

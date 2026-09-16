@@ -12,6 +12,7 @@ import Foundation
 /// and key the cache on the server's own version string so a changed avatar busts the cache
 /// and an unchanged one never refetches.
 @MainActor
+@Observable
 final class AvatarLoader {
     enum Subject: Sendable, Hashable {
         case user(id: String)
@@ -21,9 +22,12 @@ final class AvatarLoader {
     private let client: OCSClient
     private let supportsConversationAvatars: Bool
 
-    private var memory: [String: NSImage] = [:]
-    private var inFlight: [String: Task<NSImage?, Never>] = [:]
+    @ObservationIgnored private var memory: [String: NSImage] = [:]
+    @ObservationIgnored private var inFlight: [String: Task<NSImage?, Never>] = [:]
     private let diskCache: AvatarDiskCache
+    /// Bumped per person when their picture is known to have changed. Views showing a user
+    /// avatar include it in what they load on, so they all ask again at once.
+    private(set) var userRevisions: [String: Int] = [:]
 
     /// A few hundred small images is a couple of megabytes — well worth never refetching.
     private let memoryLimit = 300
@@ -149,6 +153,26 @@ final class AvatarLoader {
         }
     }
 
+    /// Forgets one person's picture, in memory and on disk, and tells every view showing it.
+    ///
+    /// For the signed-in user's own picture after they change it: a user avatar's key says
+    /// who, never which picture, so without this the old one would be served from the
+    /// cache for up to a day.
+    func forget(userID: String) async {
+        let prefix = "user-\(CacheKey.fileName(userID))-"
+        for key in memory.keys where key.hasPrefix(prefix) { memory[key] = nil }
+        for (key, task) in inFlight where key.hasPrefix(prefix) {
+            task.cancel()
+            inFlight[key] = nil
+        }
+        await diskCache.remove(keysWithPrefix: prefix)
+        userRevisions[userID, default: 0] += 1
+    }
+
+    func revision(ofUser userID: String) -> Int {
+        userRevisions[userID] ?? 0
+    }
+
     /// Throws away everything this loader has cached — the images in memory and the files on
     /// disk both — and leaves it usable afterwards.
     ///
@@ -223,6 +247,14 @@ private actor AvatarDiskCache {
         if bytesSinceTrim >= Self.bytesBetweenTrims {
             bytesSinceTrim = 0
             trim()
+        }
+    }
+
+    func remove(keysWithPrefix prefix: String) {
+        let manager = FileManager.default
+        guard let files = try? manager.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil) else { return }
+        for file in files where file.lastPathComponent.hasPrefix(prefix) {
+            try? manager.removeItem(at: file)
         }
     }
 

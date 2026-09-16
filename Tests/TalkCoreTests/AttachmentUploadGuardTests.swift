@@ -321,3 +321,47 @@ struct AttachmentUploadGuardTests {
         #expect(link.appendingPathComponent("photo.png").isContained(in: real))
     }
 }
+
+@Suite("Reading a small file off the caller")
+struct FileInspectionReadTests {
+    private func scratch() throws -> URL {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("kvidr-tests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        return root
+    }
+
+    @Test("A file is read whole")
+    func readsFile() async throws {
+        let root = try scratch()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let file = root.appendingPathComponent("me.jpg")
+        try Data("picture".utf8).write(to: file)
+        #expect(try await FileInspection.read(file, maximumBytes: 100) == Data("picture".utf8))
+    }
+
+    @Test("Each way it can fail says which", arguments: ["big", "missing", "folder", "link"])
+    func failures(_ kind: String) async throws {
+        let root = try scratch()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let url: URL
+        let expected: TalkError
+        switch kind {
+        case "big":
+            url = root.appendingPathComponent("big.jpg")
+            try Data(count: 200).write(to: url)
+            expected = .fileTooLarge
+        case "missing":
+            url = root.appendingPathComponent("gone.jpg")
+            expected = .fileMissing
+        case "folder":
+            url = root
+            expected = .fileNotAttachable
+        default:
+            url = try #require(URL(string: "https://cloud.example.com/me.jpg"))
+            expected = .fileNotAttachable
+        }
+        await #expect(throws: expected) {
+            _ = try await FileInspection.read(url, maximumBytes: 100)
+        }
+    }
+}

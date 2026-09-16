@@ -8,6 +8,14 @@ import Observation
 @MainActor
 @Observable
 final class ProfileModel {
+    /// Where a change stands, for the spinner, the checkmark or the reason beside it.
+    enum Save: Equatable {
+        case idle
+        case saving
+        case saved
+        case failed(String)
+    }
+
     enum Load: Equatable {
         case idle
         case loading
@@ -27,8 +35,9 @@ final class ProfileModel {
     /// first load: an account signed in before status was parsed has none stored, and would
     /// otherwise not see status until the server's Talk configuration next changed.
     private(set) var statusSupport: UserStatusSupport?
-    /// Bumped when the picture changes, so every view showing it asks again.
-    private(set) var avatarRevision = 0
+
+    private(set) var statusSave: Save = .idle
+    private(set) var pictureSave: Save = .idle
 
     init(session: Session) {
         self.session = session
@@ -91,5 +100,139 @@ final class ProfileModel {
         let icon = status.icon ?? ""
         guard !text.isEmpty || !icon.isEmpty else { return nil }
         return (icon, text)
+    }
+
+    // MARK: - Status
+
+    /// Shown at once, sent, and put back with the server's reason if it is refused. Nothing
+    /// is queued: a status set while offline would arrive at the wrong moment.
+    func setStatus(_ new: OnlineStatus) async {
+        let previous = status ?? .unset
+        guard previous.status != new else { return }
+        var optimistic = previous
+        optimistic.status = new
+        status = optimistic
+        await save(restoring: previous) { (service: UserStatusService) async throws(TalkError) -> OwnStatus in try await service.setStatus(new) }
+    }
+
+    /// A message of the user's own. Nothing in either field clears the message instead.
+    func setMessage(icon: String, text: String, clearAfter: ClearAfter) async {
+        let icon = icon.trimmingCharacters(in: .whitespacesAndNewlines)
+        let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !icon.isEmpty || !text.isEmpty else {
+            await clearMessage()
+            return
+        }
+        let previous = status ?? .unset
+        var optimistic = previous
+        optimistic.icon = icon
+        optimistic.message = text
+        optimistic.messageID = nil
+        optimistic.messageIsPredefined = false
+        optimistic.clearAt = clearAfter.date(from: .now)
+        status = optimistic
+        let clearAt = optimistic.clearAt
+        await save(restoring: previous) { (service: UserStatusService) async throws(TalkError) -> OwnStatus in
+            try await service.setCustomMessage(icon: icon, message: text, clearAt: clearAt)
+        }
+    }
+
+    func applyPredefined(_ predefined: PredefinedStatus) async {
+        let previous = status ?? .unset
+        var optimistic = previous
+        optimistic.icon = predefined.icon
+        optimistic.message = predefined.message
+        optimistic.messageID = predefined.id
+        optimistic.messageIsPredefined = true
+        optimistic.clearAt = predefined.clearAfter.date(from: .now)
+        status = optimistic
+        let clearAt = optimistic.clearAt
+        await save(restoring: previous) { (service: UserStatusService) async throws(TalkError) -> OwnStatus in
+            try await service.setPredefinedMessage(id: predefined.id, clearAt: clearAt)
+        }
+    }
+
+    func clearMessage() async {
+        let previous = status ?? .unset
+        guard previous.hasMessage else { return }
+        var optimistic = previous
+        optimistic.icon = nil
+        optimistic.message = nil
+        optimistic.messageID = nil
+        optimistic.messageIsPredefined = false
+        optimistic.clearAt = nil
+        status = optimistic
+        await save(restoring: previous) { (service: UserStatusService) async throws(TalkError) -> OwnStatus in
+            try await service.clearMessage()
+            return optimistic
+        }
+    }
+
+    private func save(
+        restoring previous: OwnStatus,
+        _ change: (UserStatusService) async throws(TalkError) -> OwnStatus
+    ) async {
+        statusSave = .saving
+        do {
+            status = try await change(session.userStatus)
+            settle(\.statusSave)
+        } catch {
+            status = previous
+            statusSave = .failed(error.userMessage)
+        }
+    }
+
+    // MARK: - Picture
+
+    /// What a picture file becomes before it is shown for confirmation: read where a dead
+    /// share can't hang the window, then squared and encoded off the main actor.
+    static func preparePicture(from url: URL) async throws(TalkError) -> Data {
+        // The server refuses anything over twenty megabytes; a photo larger than that
+        // would be refused after the work of squaring it.
+        let original = try await FileInspection.read(url, maximumBytes: 20 * 1024 * 1024)
+        let squared = await Task.detached(priority: .userInitiated) { () -> Data? in
+            try? SquareAvatar.png(from: original)
+        }.value
+        guard let squared else { throw .fileNotAPicture }
+        return squared
+    }
+
+    /// Returns whether it took, so the confirmation sheet knows whether to close.
+    func setPicture(png: Data, avatarLoader: AvatarLoader?) async -> Bool {
+        pictureSave = .saving
+        do {
+            try await session.profile.setAvatar(png: png)
+            await avatarLoader?.forget(userID: userID)
+            settle(\.pictureSave)
+            return true
+        } catch {
+            pictureSave = .failed(error.userMessage)
+            return false
+        }
+    }
+
+    func removePicture(avatarLoader: AvatarLoader?) async {
+        pictureSave = .saving
+        do {
+            try await session.profile.removeAvatar()
+            await avatarLoader?.forget(userID: userID)
+            settle(\.pictureSave)
+        } catch {
+            pictureSave = .failed(error.userMessage)
+        }
+    }
+
+    func resetPictureSave() {
+        pictureSave = .idle
+    }
+
+    /// A checkmark for a moment, then nothing.
+    private func settle(_ keyPath: ReferenceWritableKeyPath<ProfileModel, Save>) {
+        self[keyPath: keyPath] = .saved
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(2))
+            guard let self, self[keyPath: keyPath] == .saved else { return }
+            self[keyPath: keyPath] = .idle
+        }
     }
 }

@@ -40,7 +40,8 @@ struct AvatarView: View {
     }
 
     private var taskID: String {
-        "\(conversation.token)-\(conversation.avatarVersion)-\(colorScheme == .dark)"
+        let revision = conversation.isOneToOne ? loader?.revision(ofUser: conversation.name) ?? 0 : 0
+        return "\(conversation.token)-\(conversation.avatarVersion)-\(colorScheme == .dark)-\(revision)"
     }
 
     @ViewBuilder
@@ -157,7 +158,7 @@ struct ActorAvatarView: View {
         }
         .frame(width: size, height: size)
         .clipShape(.circle)
-        .task(id: actor.id) { await load() }
+        .task(id: "\(actor.id)-\(loader?.revision(ofUser: actor.id) ?? 0)") { await load() }
         .accessibilityLabel(actor.resolvedDisplayName)
     }
 

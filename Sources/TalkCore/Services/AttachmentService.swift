@@ -500,17 +500,58 @@ enum FileInspection: Sendable, Equatable {
         return .regularFile(byteCount: size?.intValue)
     }
 
-    /// Resumes a continuation with whichever answer arrives first, and ignores the other.
-    private final class FirstAnswer: @unchecked Sendable {
-        private let lock = NSLock()
-        private var continuation: CheckedContinuation<FileInspection, Never>?
+    /// Reads a small file whole — a profile picture — where a hang can't reach the caller.
+    ///
+    /// The same two steps an upload takes: ask what the file is under the deadline, then
+    /// read it on a thread of its own under the deadline again, since the file can stop
+    /// answering between the two.
+    static func read(
+        _ url: URL,
+        maximumBytes: Int,
+        deadline: TimeInterval = FileInspection.deadline
+    ) async throws(TalkError) -> Data {
+        guard url.isLocalFile else { throw .fileNotAttachable }
+        switch await inspect(url, deadline: deadline) {
+        case .regularFile(let size):
+            if let size, size > maximumBytes { throw .fileTooLarge }
+        case .notAttachable:
+            throw .fileNotAttachable
+        case .missing:
+            throw .fileMissing
+        case .notAnswering:
+            throw .fileNotAnswering
+        }
 
-        init(_ continuation: CheckedContinuation<FileInspection, Never>) {
+        let result: Result<Data, TalkError> = await withCheckedContinuation { continuation in
+            let answer = FirstAnswer(continuation)
+            DispatchQueue.global(qos: .userInitiated).async {
+                if let data = try? Data(contentsOf: url) {
+                    answer.give(.success(data))
+                } else {
+                    answer.give(.failure(FileManager.default.fileExists(atPath: url.path) ? .fileNotAnswering : .fileMissing))
+                }
+            }
+            DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + deadline) {
+                answer.give(.failure(.fileNotAnswering))
+            }
+        }
+        let data = try result.get()
+        // The size can change between the question and the read.
+        guard data.count <= maximumBytes else { throw .fileTooLarge }
+        return data
+    }
+
+    /// Resumes a continuation with whichever answer arrives first, and ignores the other.
+    private final class FirstAnswer<Value: Sendable>: @unchecked Sendable {
+        private let lock = NSLock()
+        private var continuation: CheckedContinuation<Value, Never>?
+
+        init(_ continuation: CheckedContinuation<Value, Never>) {
             self.continuation = continuation
         }
 
-        func give(_ result: FileInspection) {
-            let continuation = lock.withLock { () -> CheckedContinuation<FileInspection, Never>? in
+        func give(_ result: Value) {
+            let continuation = lock.withLock { () -> CheckedContinuation<Value, Never>? in
                 defer { self.continuation = nil }
                 return self.continuation
             }

@@ -3,8 +3,8 @@ import SwiftUI
 
 /// The signed-in user's own picture, with their status as a dot.
 ///
-/// Asks again whenever ``ProfileModel/avatarRevision`` moves, so a new picture shows
-/// everywhere at once rather than wherever the cache happens to expire first.
+/// Asks again whenever the avatar loader's revision for this user moves, so a new picture
+/// shows everywhere at once rather than wherever the cache happens to expire first.
 struct ProfileAvatar: View {
     let profile: ProfileModel
     var size: CGFloat = 32
@@ -37,7 +37,7 @@ struct ProfileAvatar: View {
                 StatusDot(status: status, diameter: max(8, size * 0.3))
             }
         }
-        .task(id: "\(profile.userID)-\(profile.avatarRevision)-\(colorScheme == .dark)-\(size)") { await load() }
+        .task(id: "\(profile.userID)-\(loader?.revision(ofUser: profile.userID) ?? 0)-\(colorScheme == .dark)-\(size)") { await load() }
         .accessibilityHidden(true)
     }
 
