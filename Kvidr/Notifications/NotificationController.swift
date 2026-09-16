@@ -16,6 +16,8 @@ final class NotificationController: NSObject {
 
     /// Set by the app so a click can change the selection.
     var onOpenConversation: ((String) -> Void)?
+    /// Set by the app so a reminder's click can show the message it is about.
+    var onOpenMessage: ((String, Int) -> Void)?
     /// Set by the app: whether the user's own status is Do Not Disturb right now.
     var isDoNotDisturb: () -> Bool = { false }
 
@@ -78,6 +80,61 @@ final class NotificationController: NSObject {
         }
     }
 
+    // MARK: - Reminders
+
+    private static let reminderPrefix = "reminder-"
+    private var reminderScheduling: Task<Void, Never>?
+
+    /// Replaces every scheduled reminder notification with these. macOS delivers them at
+    /// their time whether or not kvidr is running.
+    func scheduleReminders(_ reminders: [Reminder], conversation: @escaping (String) -> Conversation?) {
+        let requests = reminders.filter { $0.date > Date() }.map { reminder in
+            let room = conversation(reminder.token)
+            let content = UNMutableNotificationContent()
+            content.title = room.map { "Reminder: \($0.displayName)" } ?? "Reminder"
+            let sender = reminder.actor.resolvedDisplayName
+            if preferences.showsNotificationPreviews, room?.isSensitive != true, !reminder.text.isEmpty {
+                let preview = MessageContentParser(currentUserID: "", markdownEnabled: false)
+                    .parse(Message(messageID: reminder.messageID, token: reminder.token, actor: reminder.actor,
+                                   timestamp: reminder.date, text: reminder.text, parameters: reminder.parameters))
+                    .preview
+                content.subtitle = sender
+                content.body = preview
+            } else {
+                content.body = sender.isEmpty ? "A message you asked to be reminded about" : "A message from \(sender)"
+            }
+            if preferences.playsNotificationSound { content.sound = .default }
+            content.userInfo = ["token": reminder.token, "messageID": reminder.messageID]
+            content.threadIdentifier = reminder.token
+            content.interruptionLevel = .timeSensitive
+
+            let components = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute, .second], from: reminder.date)
+            return UNNotificationRequest(
+                identifier: Self.reminderPrefix + reminder.id,
+                content: content,
+                trigger: UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
+            )
+        }
+
+        // One replacement at a time: two overlapping ones could each clear the pending list
+        // before either added to it, and leave both sets scheduled.
+        let previous = reminderScheduling
+        let center = self.center
+        reminderScheduling = Task {
+            await previous?.value
+            let pending = await center.pendingNotificationRequests()
+            let stale = pending.map(\.identifier).filter { $0.hasPrefix(Self.reminderPrefix) }
+            center.removePendingNotificationRequests(withIdentifiers: stale)
+            for request in requests {
+                do {
+                    try await center.add(request)
+                } catch {
+                    Log.notification.warning("Couldn’t schedule reminder: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+
     /// Dock badge. Cleared entirely when the preference is off, so it can't get stuck.
     func updateBadge(count: Int) {
         let label = preferences.showsDockBadge && count > 0 ? String(count) : nil
@@ -102,10 +159,17 @@ extension NotificationController: UNUserNotificationCenterDelegate {
         _ center: UNUserNotificationCenter,
         didReceive response: UNNotificationResponse
     ) async {
-        let token = response.notification.request.content.userInfo["token"] as? String
+        let userInfo = response.notification.request.content.userInfo
+        let token = userInfo["token"] as? String
+        let messageID = userInfo["messageID"] as? Int
         await MainActor.run { [weak self] in
             NSApplication.shared.activate(ignoringOtherApps: true)
-            if let token { self?.onOpenConversation?(token) }
+            guard let token else { return }
+            if let messageID, let open = self?.onOpenMessage {
+                open(token, messageID)
+            } else {
+                self?.onOpenConversation?(token)
+            }
         }
     }
 

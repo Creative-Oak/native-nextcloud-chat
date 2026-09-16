@@ -75,6 +75,7 @@ struct TalkCapabilities: Sendable, Hashable, Codable {
     var supportsConversationPermissions: Bool { has("conversation-permissions") }
     var supportsSessionState: Bool { has("session-state") }
     var supportsReminders: Bool { has("remind-me-later") }
+    var supportsUpcomingReminders: Bool { has("upcoming-reminders") }
     var supportsClearHistory: Bool { has("clear-history") }
     var supportsSharedItems: Bool { has("rich-object-list-media") }
     var supportsFederation: Bool { has("federation-v1") || has("federation-v2") }

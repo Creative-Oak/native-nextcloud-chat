@@ -20,6 +20,8 @@ struct ChatView: View {
     /// The conversation as the sidebar last synced it. `model.conversation` is the snapshot
     /// the conversation opened with, and a call starting or ending doesn't reach it.
     var liveConversation: Conversation?
+    /// Reminders on this conversation's messages, and the way to set one.
+    var reminders: ReminderStore?
     /// Reply Privately: opens the one-to-one with the author, with the message quoted.
     var onReplyPrivately: (Message) -> Void = { _ in }
 
@@ -383,6 +385,9 @@ struct ChatView: View {
                 capabilities: model.capabilities,
                 onReply: { model.beginReply(to: $0); composerFocused = true },
                 onReplyPrivately: model.canReplyPrivately(to: message) ? onReplyPrivately : nil,
+                reminder: reminders?.reminder(token: message.token, messageID: message.messageID),
+                onRemind: reminders?.canSetReminders == true ? { date in reminders?.set(on: message, at: date) } : nil,
+                onRemoveReminder: { reminders?.remove($0) },
                 onEdit: { model.beginEdit($0); composerFocused = true },
                 onDelete: { model.delete($0) },
                 onReact: { emoji, message in model.toggleReaction(emoji, on: message) },

@@ -327,3 +327,11 @@ enum SettingsToken {
 
     static func isSettings(_ token: String?) -> Bool { token == value }
 }
+
+/// The sidebar selection that shows the list of upcoming reminders. Not a conversation token,
+/// for the same reasons as ``SettingsToken``.
+enum RemindersToken {
+    static let value = "#reminders"
+
+    static func isReminders(_ token: String?) -> Bool { token == value }
+}

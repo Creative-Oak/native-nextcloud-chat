@@ -53,7 +53,8 @@ final class AppModel {
         didSet {
             guard oldValue != selectedToken else { return }
             // Neither the draft nor Settings is a conversation, and neither is restored next launch.
-            if !ConversationDraftToken.isDraft(selectedToken), !SettingsToken.isSettings(selectedToken) {
+            if !ConversationDraftToken.isDraft(selectedToken), !SettingsToken.isSettings(selectedToken),
+               !RemindersToken.isReminders(selectedToken) {
                 dependencies.preferences.lastSelectedToken = selectedToken
             }
             openSelectedConversation()
@@ -62,10 +63,12 @@ final class AppModel {
 
     var isShowingDraft: Bool { ConversationDraftToken.isDraft(selectedToken) && draft != nil }
     var isShowingSettings: Bool { SettingsToken.isSettings(selectedToken) && session != nil }
+    var isShowingReminders: Bool { RemindersToken.isReminders(selectedToken) && reminders != nil }
 
     /// The signed-in user's own picture, name and status — shared by the sidebar's account
     /// row and the Settings page, so the two can never disagree.
     private(set) var profile: ProfileModel?
+    private(set) var reminders: ReminderStore?
 
     /// Window/app activation, which gates read state. See `ReadStatePolicy`.
     var isApplicationActive = true { didSet { activationChanged() } }
@@ -93,6 +96,9 @@ final class AppModel {
         Log.isDeveloperModeEnabled = dependencies.preferences.isDeveloperModeEnabled
 
         notifications.isDoNotDisturb = { [weak self] in self?.profile?.status?.status == .dnd }
+        notifications.onOpenMessage = { [weak self] token, messageID in
+            self?.openMessage(token: token, messageID: messageID)
+        }
 
         // Clicking a notification opens that conversation.
         notifications.onOpenConversation = { [weak self] token in
@@ -144,6 +150,10 @@ final class AppModel {
         }
         conversationList = list
 
+        let reminders = ReminderStore(session: session, notifications: notifications)
+        reminders.conversation = { [weak list] token in list?[token] }
+        self.reminders = reminders
+
         // Paint from the cache *before* going to `.ready`, so the window never flashes an
         // empty "No Conversations" state on the way in.
         await list.loadFromCache()
@@ -160,6 +170,7 @@ final class AppModel {
 
         startConversationSync(session: session, list: list)
         await notifications.requestAuthorizationIfNeeded()
+        await reminders.load()
     }
 
     /// Restores the previously open conversation, if it still exists.
@@ -190,6 +201,8 @@ final class AppModel {
         await session.shutdown()
         self.session = nil
         profile = nil
+        reminders?.tearDown()
+        reminders = nil
     }
 
     /// The server's Talk configuration changed — refetch capabilities and rebuild around
@@ -359,13 +372,25 @@ final class AppModel {
 
     /// Opens a search result: switches to its conversation, then scrolls to the message.
     func open(_ hit: MessageSearchHit) {
-        guard let chat, chat.token == hit.token else {
-            pendingReveal = hit.messageID
-            selectedToken = hit.token
+        openMessage(token: hit.token, messageID: hit.messageID)
+    }
+
+    /// Switches to a conversation and scrolls to one message in it — a search result, a
+    /// reminder.
+    func openMessage(token: String, messageID: Int) {
+        guard let chat, chat.token == token else {
+            pendingReveal = messageID
+            selectedToken = token
             return
         }
         // Already there — no need to wait for an activation that isn't going to happen.
-        Task { await chat.reveal(messageID: hit.messageID) }
+        Task { await chat.reveal(messageID: messageID) }
+    }
+
+    /// The sidebar's Reminders row.
+    func showReminders() {
+        guard reminders != nil else { return }
+        selectedToken = RemindersToken.value
     }
 
     /// Everything the read-state policy needs to know about the window right now.
@@ -391,6 +416,7 @@ final class AppModel {
                 // Coming back to the app is the moment to notice anything we missed.
                 await session.conversationSync.applicationDidBecomeActive()
                 await chat?.applicationDidBecomeActive()
+                await self.reminders?.load()
             } else {
                 await session.conversationSync.applicationDidResignActive()
             }

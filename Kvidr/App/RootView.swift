@@ -222,6 +222,7 @@ struct RootView: View {
                 draft: app.draft,
                 onDiscardDraft: { app.discardDraft() },
                 profile: app.profile,
+                reminderCount: app.reminders?.reminders.count ?? 0,
                 onOpenSettings: { app.showSettings() }
             )
             // No sidebar toggle, as in Messages: the sidebar is not something you
@@ -267,12 +268,15 @@ struct RootView: View {
                         .ignoresSafeArea(.container, edges: .top)
                     } else if app.isShowingSettings, let profile = app.profile {
                         SettingsPage(profile: profile)
+                    } else if app.isShowingReminders, let reminders = app.reminders {
+                        RemindersPage(store: reminders)
                     } else if let chat = app.chat {
                         ChatView(
                             model: chat,
                             composerFocused: $composerFocused,
                             isHeaderAlwaysFrosted: isSidebarYieldingToInspector,
                             liveConversation: app.conversationList?[chat.token],
+                            reminders: app.reminders,
                             onReplyPrivately: { message in
                                 Task {
                                     await app.replyPrivately(to: message)

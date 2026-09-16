@@ -17,6 +17,11 @@ struct MessageRow: View {
     var onReply: (Message) -> Void
     /// Nil where the message can't be answered privately.
     var onReplyPrivately: ((Message) -> Void)?
+    /// The reminder set on this message, if any.
+    var reminder: Reminder?
+    /// Nil where reminders can't be set.
+    var onRemind: ((Date) -> Void)?
+    var onRemoveReminder: (Reminder) -> Void = { _ in }
     var onEdit: (Message) -> Void
     var onDelete: (Message) -> Void
     var onReact: (String, Message) -> Void
@@ -87,6 +92,13 @@ struct MessageRow: View {
                 }
 
                 if message.deliveryState.isPending { deliveryStatus }
+
+                if let reminder {
+                    Label(ReminderTime.text(reminder.date), systemImage: "alarm")
+                        .font(.caption2)
+                        .foregroundStyle(.orange)
+                        .help("You’ll be reminded about this message")
+                }
             }
             // A bubble that runs the full width of a wide window is a wall of text, not a
             // message. Past this the line length stops being comfortable to read anyway.
@@ -274,6 +286,9 @@ struct MessageRow: View {
             myReactions: message.myReactions,
             onReply: { onReply(message) },
             onReplyPrivately: onReplyPrivately.map { handler in { handler(message) } },
+            reminder: reminder?.date,
+            onRemind: onRemind,
+            onRemoveReminder: reminder.map { reminder in { onRemoveReminder(reminder) } },
             onEdit: { onEdit(message) },
             onDelete: { onDelete(message) },
             onCopy: {

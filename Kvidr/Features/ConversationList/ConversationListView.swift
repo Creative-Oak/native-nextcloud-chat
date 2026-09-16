@@ -14,6 +14,8 @@ struct ConversationListView: View {
     var onSearchFocusHandled: () -> Void
     var draft: ConversationDraft?
     var onDiscardDraft: () -> Void
+    /// Upcoming reminders; the Reminders row shows while there are any.
+    var reminderCount = 0
 
     @FocusState private var isSearchFocused: Bool
 
@@ -24,7 +26,8 @@ struct ConversationListView: View {
         searchFocusRequest: Bool,
         onSearchFocusHandled: @escaping () -> Void,
         draft: ConversationDraft? = nil,
-        onDiscardDraft: @escaping () -> Void = {}
+        onDiscardDraft: @escaping () -> Void = {},
+        reminderCount: Int = 0
     ) {
         self.model = model
         _selection = selection
@@ -33,10 +36,17 @@ struct ConversationListView: View {
         self.onSearchFocusHandled = onSearchFocusHandled
         self.draft = draft
         self.onDiscardDraft = onDiscardDraft
+        self.reminderCount = reminderCount
     }
 
     var body: some View {
         List(selection: $selection) {
+            if reminderCount > 0, !model.isFiltering {
+                RemindersSidebarRow(count: reminderCount, isSelected: RemindersToken.isReminders(selection))
+                    .tag(RemindersToken.value)
+                    .listRowSeparator(.hidden)
+            }
+
             // Under the pinned faces rather than over them, where Messages puts it — the
             // faces are the top of the sidebar and a draft does not displace them. When
             // there are none to sit under, it goes first instead.

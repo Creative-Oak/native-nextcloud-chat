@@ -15,6 +15,7 @@ struct SidebarColumn: View {
     var draft: ConversationDraft?
     var onDiscardDraft: () -> Void
     var profile: ProfileModel?
+    var reminderCount = 0
     var onOpenSettings: () -> Void = {}
 
     var body: some View {
@@ -48,7 +49,8 @@ struct SidebarColumn: View {
                     searchFocusRequest: searchFocusRequest,
                     onSearchFocusHandled: onSearchFocusHandled,
                     draft: draft,
-                    onDiscardDraft: onDiscardDraft
+                    onDiscardDraft: onDiscardDraft,
+                    reminderCount: reminderCount
                 )
             }
         } else {

@@ -134,6 +134,11 @@ struct MessageMenuActions {
     var onReply: () -> Void
     /// Nil where a private reply isn't possible.
     var onReplyPrivately: (() -> Void)?
+    /// When this message's reminder is due, if it has one.
+    var reminder: Date?
+    /// Nil where reminders can't be set.
+    var onRemind: ((Date) -> Void)?
+    var onRemoveReminder: (() -> Void)?
     var onEdit: () -> Void
     var onDelete: () -> Void
     var onCopy: () -> Void
@@ -205,6 +210,32 @@ enum MessageMenu {
         return text.count > 60 ? String(text.prefix(60)) + "…" : text
     }
 
+    /// Remind Me ▸ the reminder already set, if one is, and the times on offer, each with
+    /// the moment it means underneath.
+    @MainActor
+    private static func remindMe(_ actions: MessageMenuActions, onRemind: @escaping (Date) -> Void) -> NSMenuItem {
+        let submenu = NSMenu()
+        submenu.autoenablesItems = false
+        if let date = actions.reminder {
+            let current = NSMenuItem(title: "Reminder: \(ReminderTime.text(date))", action: nil, keyEquivalent: "")
+            current.isEnabled = false
+            submenu.addItem(current)
+            if let remove = actions.onRemoveReminder {
+                submenu.addItem(ClosureMenuItem("Remove Reminder", action: remove))
+            }
+            submenu.addItem(.separator())
+        }
+        for preset in ReminderPreset.presets() {
+            let item = ClosureMenuItem(preset.title) { onRemind(preset.date) }
+            item.subtitle = ReminderTime.text(preset.date)
+            submenu.addItem(item)
+        }
+        let item = NSMenuItem(title: actions.reminder == nil ? "Remind Me" : "Change Reminder", action: nil, keyEquivalent: "")
+        item.image = NSImage(systemSymbolName: "alarm", accessibilityDescription: nil)
+        item.submenu = submenu
+        return item
+    }
+
     @MainActor
     static func make(_ actions: MessageMenuActions) -> NSMenu {
         let menu = NSMenu()
@@ -224,6 +255,9 @@ enum MessageMenu {
         }
         if let onReplyPrivately = actions.onReplyPrivately {
             menu.addItem(ClosureMenuItem("Reply Privately", symbol: "person.fill", action: onReplyPrivately))
+        }
+        if let onRemind = actions.onRemind {
+            menu.addItem(remindMe(actions, onRemind: onRemind))
         }
         menu.addItem(ClosureMenuItem("Copy", symbol: "doc.on.doc", action: actions.onCopy))
         for link in actions.links {
