@@ -12,6 +12,9 @@ import SwiftData
 actor TalkStore {
     private static let encoder = JSONEncoder()
     private static let decoder = JSONDecoder()
+    /// Whether rows keyed the old way have been brought up to date — see
+    /// ``migrateLegacyIdentifiersIfNeeded()``.
+    private var hasMigratedIdentifiers = false
 
     // MARK: - Accounts
 
@@ -61,6 +64,7 @@ actor TalkStore {
     }
 
     func save(conversations: [Conversation], accountID: String) {
+        migrateLegacyIdentifiersIfNeeded()
         for conversation in conversations {
             guard let payload = try? Self.encoder.encode(conversation) else { continue }
             let identifier = Self.identifier(accountID, conversation.token)
@@ -93,6 +97,7 @@ actor TalkStore {
     /// Only ever called with the result of a **full** refresh — an incremental one can't
     /// prove a conversation is gone.
     func deleteConversations(tokens: [String], accountID: String) {
+        migrateLegacyIdentifiersIfNeeded()
         for token in tokens {
             let identifier = Self.identifier(accountID, token)
             try? modelContext.delete(model: CachedConversation.self, where: #Predicate { $0.identifier == identifier })
@@ -119,6 +124,7 @@ actor TalkStore {
     }
 
     func save(messages: [Message], accountID: String) {
+        migrateLegacyIdentifiersIfNeeded()
         for message in messages {
             guard let payload = try? Self.encoder.encode(message) else { continue }
             let identifier = Self.identifier(accountID, message.token, message.localID)
@@ -143,6 +149,7 @@ actor TalkStore {
     }
 
     func deleteMessage(localID: String, token: String, accountID: String) {
+        migrateLegacyIdentifiersIfNeeded()
         let identifier = Self.identifier(accountID, token, localID)
         try? modelContext.delete(model: CachedMessage.self, where: #Predicate { $0.identifier == identifier })
         persist()
@@ -164,6 +171,7 @@ actor TalkStore {
     // MARK: - Drafts
 
     func draft(token: String, accountID: String) -> Draft? {
+        migrateLegacyIdentifiersIfNeeded()
         let identifier = Self.identifier(accountID, token)
         guard let row = fetchOne(FetchDescriptor<CachedDraft>(
             predicate: #Predicate { $0.identifier == identifier }
@@ -192,6 +200,7 @@ actor TalkStore {
     }
 
     func save(draft: Draft, accountID: String) {
+        migrateLegacyIdentifiersIfNeeded()
         let identifier = Self.identifier(accountID, draft.token)
         let existing = fetchOne(FetchDescriptor<CachedDraft>(
             predicate: #Predicate { $0.identifier == identifier }
@@ -275,8 +284,65 @@ actor TalkStore {
         }
     }
 
-    private static func identifier(_ parts: String...) -> String {
-        parts.joined(separator: "|")
+    /// A row's unique key, made from the parts that identify it.
+    ///
+    /// Each part is escaped before they are joined — `\` as `\\`, `|` as `\|` — so a key
+    /// reads back one way only. Joined raw, the account `h|alice` with the token `b|c` and
+    /// the account `h|alice|b` with the token `c` made the same key, and because the column
+    /// is unique, saving one quietly replaced the other. Talk's own tokens never contain a
+    /// `|`, but the key should not depend on what a server chooses to send.
+    static func identifier(_ parts: String...) -> String {
+        parts
+            .map { $0.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "|", with: "\\|") }
+            .joined(separator: "|")
+    }
+
+    /// Re-keys rows written before ``identifier(_:)`` escaped its parts.
+    ///
+    /// An account id is `server|login`, so the change re-keyed every row there was, and a
+    /// row left on its old key is one no lookup finds: a draft that silently disappears, or
+    /// a conversation that is inserted a second time beside itself. Each row already stores
+    /// the parts of its key in columns (a message's local id in its payload), so the new key
+    /// is rebuilt from those.
+    ///
+    /// A new key always contains an escaped `|` from the account id, so the rows without one
+    /// are the only candidates. Once they are done that finds nothing, and it runs once per
+    /// launch, before the first read or write that goes by key.
+    private func migrateLegacyIdentifiersIfNeeded() {
+        guard !hasMigratedIdentifiers else { return }
+        hasMigratedIdentifiers = true
+        let marker = "\\|"
+
+        let conversations = (try? modelContext.fetch(FetchDescriptor<CachedConversation>(
+            predicate: #Predicate { !$0.identifier.contains(marker) }
+        ))) ?? []
+        for row in conversations {
+            let identifier = Self.identifier(row.accountID, row.token)
+            if row.identifier != identifier { row.identifier = identifier }
+        }
+
+        let drafts = (try? modelContext.fetch(FetchDescriptor<CachedDraft>(
+            predicate: #Predicate { !$0.identifier.contains(marker) }
+        ))) ?? []
+        for row in drafts {
+            let identifier = Self.identifier(row.accountID, row.token)
+            if row.identifier != identifier { row.identifier = identifier }
+        }
+
+        let messages = (try? modelContext.fetch(FetchDescriptor<CachedMessage>(
+            predicate: #Predicate { !$0.identifier.contains(marker) }
+        ))) ?? []
+        for row in messages {
+            guard let message = try? Self.decoder.decode(Message.self, from: row.payload) else {
+                // Unreadable is unfindable either way; the server has the real one.
+                modelContext.delete(row)
+                continue
+            }
+            let identifier = Self.identifier(row.accountID, row.token, message.localID)
+            if row.identifier != identifier { row.identifier = identifier }
+        }
+
+        persist()
     }
 }
 

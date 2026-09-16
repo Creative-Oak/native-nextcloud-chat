@@ -26,7 +26,8 @@ final class CachedAccount {
 
 @Model
 final class CachedConversation {
-    /// `accountID|token` — unique per account, so two accounts can share a token.
+    /// Account id and token, escaped and joined by `TalkStore.identifier(_:)` — unique per
+    /// account, so two accounts can share a token.
     @Attribute(.unique) var identifier: String
     var accountID: String
     var token: String
@@ -62,7 +63,7 @@ final class CachedConversation {
 
 @Model
 final class CachedMessage {
-    /// `accountID|token|localID`.
+    /// Account id, token and local id, escaped and joined by `TalkStore.identifier(_:)`.
     @Attribute(.unique) var identifier: String
     var accountID: String
     var token: String
