@@ -240,9 +240,10 @@ extension URL {
     var isOpenableLink: Bool {
         if isWebLink { return true }
         guard let scheme = scheme?.lowercased(), scheme == "mailto" || scheme == "tel" else { return false }
-        // A scheme and nothing after it addresses nobody, and `mailto:` has no authority to
-        // hide a second destination in — but an empty one is still not worth opening.
-        return !(resourceSpecifier ?? "").isEmpty
+        // A scheme and nothing after it addresses nobody. Read off the string rather than
+        // from `path`, because neither of these is a hierarchical URL and what Foundation
+        // calls the path of one is not something to rely on.
+        return absoluteString.dropFirst(scheme.count + 1).contains { !$0.isWhitespace }
     }
 
     /// A link worth fetching a preview for.
