@@ -243,6 +243,7 @@ struct AttachmentUploadGuardTests {
         let fifo = root.appendingPathComponent("pipe.pdf")
         try #require(mkfifo(fifo.path, 0o600) == 0)
         #expect(FileInspection.probe(fifo) == .notAttachable)
+        #expect(FileInspection.probe(root.appendingPathComponent("gone.pdf")) == .missing)
     }
 
     // MARK: - isContained(in:)

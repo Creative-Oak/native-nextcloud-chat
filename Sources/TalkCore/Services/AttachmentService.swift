@@ -160,6 +160,8 @@ actor AttachmentService {
             byteCount = size
         case .notAttachable:
             throw .fileNotAttachable
+        case .missing:
+            throw .fileMissing
         case .notAnswering:
             throw .fileNotAnswering
         }
@@ -460,6 +462,8 @@ enum FileInspection: Sendable, Equatable {
     case regularFile(byteCount: Int?)
     /// Not a regular local file — a link, a directory, a pipe, a device, or nothing at all.
     case notAttachable
+    /// Nothing at that path at all.
+    case missing
     /// No answer before the deadline.
     case notAnswering
 
@@ -483,7 +487,10 @@ enum FileInspection: Sendable, Equatable {
 
     /// The blocking question itself.
     static func probe(_ url: URL) -> FileInspection {
-        guard url.isAttachableFile else { return .notAttachable }
+        guard url.isAttachableFile else {
+            // Asked only once the file has been refused, so the common case stays one `stat`.
+            return FileManager.default.fileExists(atPath: url.path) ? .notAttachable : .missing
+        }
         if let size = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize {
             return .regularFile(byteCount: size)
         }

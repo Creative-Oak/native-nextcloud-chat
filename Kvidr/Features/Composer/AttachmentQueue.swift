@@ -374,7 +374,7 @@ final class AttachmentQueue {
         switch inspection {
         case .regularFile(let size):
             return FileTransfer(fileURL: url, byteCount: size ?? 0)
-        case .notAttachable:
+        case .notAttachable, .missing:
             return nil
         case .notAnswering:
             // Shown rather than dropped: the user chose this file and should hear why it

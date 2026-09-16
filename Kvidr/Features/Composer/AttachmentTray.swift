@@ -67,14 +67,20 @@ private struct TransferRow: View {
             }
 
             Button(action: onCancel) {
-                Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary)
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundStyle(.tertiary)
+                    .frame(width: 20, height: 20)
+                    .contentShape(.circle)
             }
             .buttonStyle(.plain)
             .help(transfer.state.isFinished || transfer.state.isStaged ? "Remove" : "Cancel")
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
-        .glass(.floating, cornerRadius: 8)
+        // Panel glass, not the interactive kind: a row is not a control. Interactive glass
+        // takes the press for its own highlight, and the Retry and remove buttons inside
+        // the row stopped answering clicks.
+        .glass(.panel, cornerRadius: 8)
     }
 
     private var isFailed: Bool {

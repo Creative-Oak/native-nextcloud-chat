@@ -85,7 +85,9 @@ final class FileBodyPump: @unchecked Sendable {
         beginRead()
         let handle = try? FileHandle(forReadingFrom: file)
         endRead()
-        guard let handle else { return fail(.fileNotAttachable) }
+        guard let handle else {
+            return fail(FileManager.default.fileExists(atPath: file.path) ? .fileNotAttachable : .fileMissing)
+        }
         defer { try? handle.close() }
 
         while !stopped {

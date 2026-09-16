@@ -25,6 +25,9 @@ enum TalkError: Error, Sendable, Equatable {
     // Attachments
     /// Not a regular file on this Mac — a link, a folder, a pipe, a device, or nothing at all.
     case fileNotAttachable
+    /// The file was there when it was attached and isn't now — moved, deleted, or on a
+    /// share that has since been unmounted.
+    case fileMissing
     /// The disk the file is on stopped answering: a network share whose server has gone.
     case fileNotAnswering
 
@@ -100,6 +103,8 @@ enum TalkError: Error, Sendable, Equatable {
             "\(host) tried to send this request somewhere else. kvidr only talks to your own server."
         case .fileNotAttachable:
             "Only files on this Mac can be attached."
+        case .fileMissing:
+            "That file isn’t there anymore."
         case .fileNotAnswering:
             "The disk that file is on isn’t answering."
         case .unauthorized:
