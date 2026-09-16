@@ -135,7 +135,7 @@ struct AttachmentUploadGuardTests {
         let link = try #require(URL(string: "http://169.254.169.254/latest/meta-data/"))
         let transfer = FileTransfer(fileURL: link, byteCount: 0)
 
-        await #expect(throws: TalkError.unexpectedResponse("Only files on this Mac can be attached")) {
+        await #expect(throws: TalkError.fileNotAttachable) {
             _ = try await service.upload(transfer, folder: "/Talk", progress: { _ in })
         }
         // The point of the test: nothing was fetched and nothing was put in the user's Files.
@@ -161,7 +161,7 @@ struct AttachmentUploadGuardTests {
         )
 
         let transfer = FileTransfer(fileURL: root, byteCount: 0)
-        await #expect(throws: TalkError.unexpectedResponse("Only files on this Mac can be attached")) {
+        await #expect(throws: TalkError.fileNotAttachable) {
             _ = try await service.upload(transfer, folder: "/Talk", progress: { _ in })
         }
         #expect(transport.requestCount == 0)

@@ -380,7 +380,7 @@ final class AttachmentQueue {
             // Shown rather than dropped: the user chose this file and should hear why it
             // isn't going. Retrying asks again, so a share that comes back just works.
             var transfer = FileTransfer(fileURL: url, byteCount: 0)
-            transfer.state = .failed("The disk it’s on isn’t answering")
+            transfer.state = .failed(TalkError.fileNotAnswering.userMessage)
             return transfer
         }
     }

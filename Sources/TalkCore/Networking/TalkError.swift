@@ -22,6 +22,12 @@ enum TalkError: Error, Sendable, Equatable {
     /// A redirect wanted to leave the origin the request was aimed at, and was refused.
     case redirectRefused(host: String)
 
+    // Attachments
+    /// Not a regular file on this Mac — a link, a folder, a pipe, a device, or nothing at all.
+    case fileNotAttachable
+    /// The disk the file is on stopped answering: a network share whose server has gone.
+    case fileNotAnswering
+
     // HTTP / OCS
     case unauthorized
     case forbidden(message: String?)
@@ -92,6 +98,10 @@ enum TalkError: Error, Sendable, Equatable {
             "The server sent far more data than that should need."
         case .redirectRefused(let host):
             "\(host) tried to send this request somewhere else. kvidr only talks to your own server."
+        case .fileNotAttachable:
+            "Only files on this Mac can be attached."
+        case .fileNotAnswering:
+            "The disk that file is on isn’t answering."
         case .unauthorized:
             "Your session has expired. Sign in again to continue."
         case .forbidden(let message):

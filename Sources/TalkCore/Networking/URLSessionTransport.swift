@@ -20,7 +20,12 @@ final class URLSessionTransport: HTTPTransport, @unchecked Sendable {
     private static let longPollThreshold: TimeInterval = 45
     private static let transferThreshold: TimeInterval = 120
 
-    init(userAgent: String) {
+    /// How long one read of an attachment may take before its disk counts as gone. A local
+    /// disk answers in microseconds and a healthy share in milliseconds.
+    private let fileReadStallLimit: TimeInterval
+
+    init(userAgent: String, fileReadStallLimit: TimeInterval = 30) {
+        self.fileReadStallLimit = fileReadStallLimit
         // `timeoutIntervalForResource` is a session-wide ceiling that silently overrides
         // whatever the caller asked for, so each session's ceiling sits above every request
         // timeout that can be routed to it. A 600-second upload used to land on a session
@@ -66,9 +71,19 @@ final class URLSessionTransport: HTTPTransport, @unchecked Sendable {
 
         let policed = policedSession(for: request)
         let body = request.body
-        let bodyFile = request.bodyFile
         let wantsProgress = progress != nil && body != nil
-        if !wantsProgress && bodyFile == nil { urlRequest.httpBody = body }
+        // A file body is read by a pump thread into a stream, never by `URLSession` itself —
+        // see ``FileBodyPump`` for what went wrong the other way.
+        let filePump: FileBodyPump?
+        if let bodyFile = request.bodyFile {
+            let (stream, pump) = FileBodyPump.make(file: bodyFile, stallLimit: fileReadStallLimit)
+            urlRequest.httpBodyStream = stream
+            filePump = pump
+        } else {
+            filePump = nil
+            if !wantsProgress { urlRequest.httpBody = body }
+        }
+        defer { filePump?.stop() }
 
         let outgoing = urlRequest
         let limit = request.maximumResponseSize
@@ -77,10 +92,10 @@ final class URLSessionTransport: HTTPTransport, @unchecked Sendable {
             return try await withTaskCancellationHandler {
                 try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<HTTPResponse, any Error>) in
                     let task: URLSessionTask
-                    if let bodyFile {
+                    if filePump != nil {
                         // Same delegate, same redirect refusal and response ceiling: an upload
                         // task is a data task as far as the callbacks are concerned.
-                        task = policed.session.uploadTask(with: outgoing, fromFile: bodyFile)
+                        task = policed.session.uploadTask(withStreamedRequest: outgoing)
                     } else if wantsProgress, let body {
                         task = policed.session.uploadTask(with: outgoing, from: body)
                     } else {
@@ -92,6 +107,10 @@ final class URLSessionTransport: HTTPTransport, @unchecked Sendable {
                         progress: progress,
                         continuation: continuation
                     )
+                    filePump?.start { [delegate = policed.delegate] error in
+                        delegate.fail(task, with: error)
+                        task.cancel()
+                    }
                     task.resume()
                     // Cancellation that arrived while the task was being built still has to
                     // stop it. Either way the task is running, so `didCompleteWithError`
@@ -271,6 +290,15 @@ private final class TransportDelegate: NSObject, URLSessionDataDelegate, @unchec
     ) {
         lock.withLock {
             pending[task.taskIdentifier] = Pending(limit: limit, progress: progress, continuation: continuation)
+        }
+    }
+
+    /// Ends a task with a failure of the app's own making — a file that stopped answering —
+    /// rather than whatever `URLSession` reports once the task is cancelled.
+    func fail(_ task: URLSessionTask, with error: TalkError) {
+        lock.withLock {
+            guard let entry = pending[task.taskIdentifier], entry.failure == nil else { return }
+            entry.failure = error
         }
     }
 

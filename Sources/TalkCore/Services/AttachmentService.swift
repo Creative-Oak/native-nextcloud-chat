@@ -152,21 +152,21 @@ actor AttachmentService {
         // asked elsewhere, under a deadline, and the bytes are read by the transport as it
         // sends them.
         guard transfer.fileURL.isLocalFile else {
-            throw .unexpectedResponse("Only files on this Mac can be attached")
+            throw .fileNotAttachable
         }
         let byteCount: Int?
         switch await FileInspection.inspect(transfer.fileURL) {
         case .regularFile(let size):
             byteCount = size
         case .notAttachable:
-            throw .unexpectedResponse("Only files on this Mac can be attached")
+            throw .fileNotAttachable
         case .notAnswering:
-            throw .unexpectedResponse("Couldn’t read \(transfer.fileName): the disk it’s on isn’t answering")
+            throw .fileNotAnswering
         }
         // The file can still change between that answer and the read — replaced by a pipe,
-        // or its mount wedging now rather than a moment ago. That read happens on
-        // `URLSession`'s threads under the request's timeout, so the worst it costs is this
-        // one transfer, not the actor.
+        // or its mount wedging now rather than a moment ago. The transport reads it on a
+        // thread of its own and gives up on a read that stops answering, so the worst that
+        // costs is this one transfer.
         return try await upload(.file(transfer.fileURL), byteCount: byteCount, fileName: transfer.fileName, folder: folder, progress: progress)
     }
 
@@ -216,7 +216,12 @@ actor AttachmentService {
                 // Only create; never replace someone's existing file.
                 "If-None-Match": "*"
             ]
-            if let byteCount { headers["OC-Total-Length"] = String(byteCount) }
+            if let byteCount {
+                headers["OC-Total-Length"] = String(byteCount)
+                // A streamed body has no length of its own, and without one it goes out
+                // chunked, which not every proxy in front of a Nextcloud accepts on a PUT.
+                if case .file = body { headers["Content-Length"] = String(byteCount) }
+            }
 
             var request = HTTPRequest(
                 method: .put,
