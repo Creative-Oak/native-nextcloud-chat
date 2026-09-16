@@ -20,6 +20,7 @@ enum Endpoint {
     static func room(_ token: String) -> String { "\(spreedV4)/room/\(segment(token))" }
     static let noteToSelf = "\(spreedV4)/room/note-to-self"
     static func favorite(_ token: String) -> String { "\(spreedV4)/room/\(segment(token))/favorite" }
+    static func archive(_ token: String) -> String { "\(spreedV4)/room/\(segment(token))/archive" }
     static func notify(_ token: String) -> String { "\(spreedV4)/room/\(segment(token))/notify" }
     static func participants(_ token: String) -> String { "\(spreedV4)/room/\(segment(token))/participants" }
     static func activeParticipants(_ token: String) -> String { "\(spreedV4)/room/\(segment(token))/participants/active" }
@@ -153,7 +154,7 @@ enum Endpoint {
     private static let routeWords: Set<String> = [
         "ocs", "v2.php", "index.php", "remote.php", "apps", "spreed", "api", "v1", "v2", "v4",
         "cloud", "capabilities", "user", "core", "apppassword", "login", "autocomplete", "get",
-        "room", "note-to-self", "favorite", "notify", "participants", "active", "state",
+        "room", "note-to-self", "favorite", "archive", "notify", "participants", "active", "state",
         "avatar", "dark", "chat", "read", "context", "mentions", "reaction", "poll",
         "search", "providers", "preview", "files_sharing", "shares", "dav", "files",
         "attendees", "share", "overview", "call",

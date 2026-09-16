@@ -496,6 +496,11 @@ final class AppModel {
         conversationList?.toggleFavorite(conversation)
     }
 
+    func toggleArchiveOnSelection() {
+        guard let token = selectedToken, let conversation = conversationList?[token] else { return }
+        conversationList?.toggleArchived(conversation)
+    }
+
     func openSelectionInBrowser() {
         guard let token = selectedToken, let conversation = conversationList?[token] else { return }
         conversationList?.openInBrowser(conversation)

@@ -57,12 +57,18 @@ struct ConversationListView: View {
                 // The only heading. Messages has none, and "Conversations" over the
                 // conversations said nothing; archived ones are the one group that
                 // needs to be told apart from the rest.
+                //
+                // It folds, closed to begin with, and says how much is in it while closed.
                 case .archived where !model.isFiltering:
-                    Section {
+                    Section(isExpanded: $model.isArchiveExpanded) {
                         rows(group.items)
                     } header: {
-                        Text(group.section.title)
-                            .font(.caption)
+                        Text(model.isArchiveExpanded ? group.section.title : "\(group.section.title) (\(group.items.count))")
+                            // The size of a row's timestamp. The list sets its headings 13pt
+                            // in from the sidebar's edge (measured, macOS 26.6); pulled out
+                            // to the 10pt the selection highlight keeps.
+                            .font(.system(size: 12))
+                            .padding(.leading, -3)
                     }
 
                 default:
@@ -75,8 +81,9 @@ struct ConversationListView: View {
         // sidebar. `.searchable` on this list gives the toolbar's small field, which
         // cannot be restyled.
         .safeAreaInset(edge: .top, spacing: 0) {
+            // 10pt in from each side, the margin the selection highlight keeps.
             SidebarSearchField(text: $model.filterText, isFocused: $isSearchFocused)
-                .padding(.horizontal, 12)
+                .padding(.horizontal, 10)
                 .padding(.top, 6)
                 .padding(.bottom, 8)
         }
@@ -249,10 +256,10 @@ private struct PinnedConversations: View {
                 .accessibilityAddTraits(isSelected ? .isSelected : [])
             }
         }
-        // Out past the list's own content inset, so the faces sit a little nearer the
-        // sidebar's edge than the rows' avatars do and the selected block lands level
-        // with a selected row's highlight — which is how Messages sets its grid.
-        .padding(.horizontal, -10)
+        // Out past the list's own content inset, so the selected block lands level with a
+        // selected row's highlight. Measured on macOS 26.6: a row's content starts 16pt
+        // from the sidebar's edge and its highlight 10pt, so the grid reaches out by 6.
+        .padding(.horizontal, -6)
         .padding(.vertical, 6)
     }
 

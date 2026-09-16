@@ -89,6 +89,8 @@ struct AppCommandRegistry {
         var canMarkUnread = false
         var isSidebarCompact = false
         var isSelectionFavorite = false
+        var isSelectionArchived = false
+        var canArchive = false
 
         var newConversation: () -> Void = {}
         var refresh: () -> Void = {}
@@ -105,6 +107,7 @@ struct AppCommandRegistry {
         var editLatest: () -> Void = {}
         var markUnread: () -> Void = {}
         var toggleFavorite: () -> Void = {}
+        var toggleArchive: () -> Void = {}
         var toggleInspector: () -> Void = {}
         var openInBrowser: () -> Void = {}
         var showKeyboardShortcuts: () -> Void = {}
@@ -216,7 +219,14 @@ struct AppCommandRegistry {
                 id: "conversation.favorite", title: c.isSelectionFavorite ? "Remove from Favourites" : "Add to Favourites",
                 aliases: ["favourite", "favorite", "star", "pin"],
                 symbolName: c.isSelectionFavorite ? "star.slash" : "star", shortcut: KeyboardShortcut("d", modifiers: [.command, .shift]),
-                placement: .conversation, endsGroup: true, isEnabled: selection, disabledReason: noSelection, perform: c.toggleFavorite
+                placement: .conversation, isEnabled: selection, disabledReason: noSelection, perform: c.toggleFavorite
+            ),
+            AppCommand(
+                id: "conversation.archive", title: c.isSelectionArchived ? "Unarchive" : "Archive",
+                aliases: ["archive", "unarchive", "hide", "file away"],
+                symbolName: c.isSelectionArchived ? "archivebox.fill" : "archivebox", placement: .conversation,
+                endsGroup: true, isEnabled: selection && c.canArchive,
+                disabledReason: c.hasSelection ? "This server does not archive conversations" : noSelection, perform: c.toggleArchive
             ),
             AppCommand(
                 id: "conversation.details", title: "Show Conversation Details", aliases: ["inspector", "info", "people", "files", "settings"],

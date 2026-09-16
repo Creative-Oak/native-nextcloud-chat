@@ -5,7 +5,8 @@ import SwiftUI
 /// The same `List` with the same selection as the full list, so the arrow keys, Return
 /// and the context menu behave the same; only the row is different. The groups keep their
 /// order — favourites, then everything else, then archived — separated by the sidebar's
-/// own section spacing, since there is no room for a heading. No search field either:
+/// own section spacing, since there is no room for a heading. With no heading there is
+/// nothing to fold either, so the archive shows here only while it is open in the full list. No search field either:
 /// ⌘F widens the sidebar first, see `RootView`.
 struct CompactConversationListView: View {
     @Bindable var model: ConversationListModel
@@ -14,7 +15,7 @@ struct CompactConversationListView: View {
 
     var body: some View {
         List(selection: $selection) {
-            ForEach(model.sections) { group in
+            ForEach(model.sections.filter { $0.section != .archived || model.isArchiveExpanded }) { group in
                 Section {
                     ForEach(group.items) { conversation in
                         CompactConversationRow(conversation: conversation, isSelected: selection == conversation.token)

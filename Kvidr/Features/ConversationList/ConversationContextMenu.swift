@@ -15,6 +15,12 @@ struct ConversationContextMenu: View {
             model.toggleFavorite(conversation)
         }
 
+        if model.hasArchive {
+            Button(conversation.isArchived ? "Unarchive" : "Archive") {
+                model.toggleArchived(conversation)
+            }
+        }
+
         if model.hasMarkUnread {
             Button("Mark as Unread") { model.markUnread(conversation) }
                 .disabled(conversation.unreadMessages > 0)

@@ -63,6 +63,15 @@ actor ConversationService {
         _ = try await client.send(request, as: EmptyResponse.self)
     }
 
+    /// Cap `archived-conversations-v2`. Archiving is the user's own filing: it moves the
+    /// conversation out of the way for them and changes nothing for anyone else in it.
+    func setArchived(_ isArchived: Bool, token: String) async throws(TalkError) {
+        let request = isArchived
+            ? OCSRequest.post(Endpoint.archive(token))
+            : OCSRequest.delete(Endpoint.archive(token))
+        _ = try await client.send(request, as: EmptyResponse.self)
+    }
+
     func setNotificationLevel(_ level: NotificationLevel, token: String) async throws(TalkError) {
         _ = try await client.send(
             OCSRequest.post(Endpoint.notify(token), form: ["level": String(level.rawValue)]),

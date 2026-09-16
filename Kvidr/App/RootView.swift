@@ -79,6 +79,8 @@ struct RootView: View {
         context.canMarkUnread = app.chat?.capabilities.canMarkUnread == true
         context.isSidebarCompact = preferences.sidebarMode == .compact
         context.isSelectionFavorite = app.selectedToken.flatMap { app.conversationList?[$0]?.isFavorite } ?? false
+        context.isSelectionArchived = app.selectedToken.flatMap { app.conversationList?[$0]?.isArchived } ?? false
+        context.canArchive = app.conversationList?.hasArchive == true
         context.newConversation = { app.newMessage() }
         context.refresh = { app.refreshNow() }
         context.findConversation = requestSearchFocus
@@ -94,6 +96,7 @@ struct RootView: View {
         context.editLatest = { app.chat?.beginEditingLatestOwnMessage() }
         context.markUnread = { app.markSelectedUnread() }
         context.toggleFavorite = { app.toggleFavoriteOnSelection() }
+        context.toggleArchive = { app.toggleArchiveOnSelection() }
         context.toggleInspector = toggleInspector
         context.openInBrowser = { app.openSelectionInBrowser() }
         context.showKeyboardShortcuts = { openWindow(id: TalkWindow.keyboardShortcuts) }

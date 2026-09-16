@@ -66,6 +66,20 @@ struct ServiceRequestTests {
         #expect(transport.lastRequest?.method == .delete)
     }
 
+    @Test("Archive uses POST to archive and DELETE to bring back")
+    func archive() async throws {
+        let transport = StubTransport(json: ocsEnvelope("[]"))
+        let service = ConversationService(client: try client(transport))
+
+        try await service.setArchived(true, token: "tok")
+        #expect(transport.lastRequest?.method == .post)
+        #expect(transport.lastRequest?.url.path == "/ocs/v2.php/apps/spreed/api/v4/room/tok/archive")
+
+        try await service.setArchived(false, token: "tok")
+        #expect(transport.lastRequest?.method == .delete)
+        #expect(Endpoint.redacted(Endpoint.archive("tok")) == "/ocs/v2.php/apps/spreed/api/v4/room/…/archive")
+    }
+
     @Test("Notification level posts the documented integer")
     func notificationLevel() async throws {
         let transport = StubTransport(json: ocsEnvelope("[]"))

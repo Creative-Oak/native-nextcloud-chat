@@ -14,6 +14,12 @@ final class ConversationListModel {
     /// The ⌘F filter string.
     var filterText = ""
     private(set) var isLoadingFirstTime = false
+    /// Whether the Archived section at the foot of the sidebar is open. Closed until opened,
+    /// since archiving is putting something out of the way, and remembered after that.
+    var isArchiveExpanded = UserDefaults.standard.bool(forKey: ConversationListModel.archiveExpandedKey) {
+        didSet { UserDefaults.standard.set(isArchiveExpanded, forKey: Self.archiveExpandedKey) }
+    }
+    private static let archiveExpandedKey = "sidebarArchiveExpanded"
 
     let session: Session
     private let notifications: NotificationController
@@ -35,11 +41,15 @@ final class ConversationListModel {
 
     /// Grouped for the sidebar. While filtering, the results are shown as one flat list —
     /// section headings during a search are noise.
+    ///
+    /// Unfiltered, the archive is included as its own section. `conversations` leaves it out,
+    /// which is right for moving through the list with the keyboard and wrong here: without
+    /// it, archiving something made it vanish with no way back to it.
     var sections: [ConversationIndex.SectionGroup] {
         guard !isFiltering else {
             return [ConversationIndex.SectionGroup(section: .conversations, items: conversations)]
         }
-        return ConversationIndex.sections(for: conversations)
+        return ConversationIndex.sections(for: index.allConversations)
     }
 
     var totalUnreadCount: Int { index.totalUnreadCount }
@@ -128,6 +138,27 @@ final class ConversationListModel {
                 // Put it back: the sidebar must never disagree with the server for long.
                 self?.index.update(token: token) { $0.isFavorite = !newValue }
                 Log.ui.warning("Couldn’t change favourite: \(error.userMessage)")
+            }
+        }
+    }
+
+    /// Moves the conversation into the Archived section, or back out. It stays selected if
+    /// it was: filing something away is not a reason to close it.
+    func toggleArchived(_ conversation: Conversation) {
+        guard hasArchive else { return }
+        let newValue = !conversation.isArchived
+        index.update(token: conversation.token) { $0.isArchived = newValue }
+        persist(token: conversation.token)
+
+        let service = session.conversations
+        let token = conversation.token
+        Task { [weak self] in
+            do throws(TalkError) {
+                try await service.setArchived(newValue, token: token)
+            } catch {
+                self?.index.update(token: token) { $0.isArchived = !newValue }
+                self?.persist(token: token)
+                Log.ui.warning("Couldn’t change archive: \(error.userMessage)")
             }
         }
     }
@@ -231,6 +262,9 @@ extension ConversationListModel {
     /// Whether the server supports Mark as Unread. The menu item is hidden when it doesn't,
     /// rather than offered and then failing.
     var hasMarkUnread: Bool { session.capabilitySnapshot.canMarkUnread }
+
+    /// Whether the server can archive conversations. Hidden, not disabled, when it can't.
+    var hasArchive: Bool { session.capabilitySnapshot.supportsArchive }
 
     /// The conversation's URL in the Nextcloud web UI.
     func webURL(for conversation: Conversation) -> URL {

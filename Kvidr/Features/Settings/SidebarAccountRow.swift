@@ -49,8 +49,11 @@ struct SidebarAccountRow: View {
         }
         .buttonStyle(.plain)
         .onHover { isHovering = $0 }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
+        // The 10pt margin a selected conversation's highlight keeps, on the sides and below,
+        // so the block sits level with the rows above it and clear of the window's foot.
+        .padding(.horizontal, 10)
+        .padding(.top, 6)
+        .padding(.bottom, 10)
         .help("Settings (⌘,)")
         .accessibilityLabel("Settings, signed in as \(profile.displayName)")
         .task { await profile.loadStatus() }
