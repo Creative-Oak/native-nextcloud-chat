@@ -129,16 +129,16 @@ target is compiled by CI on a macOS runner. Anything not yet green on CI is mark
 
 ## Known gaps
 
-- **Built by Xcode, but barely run.** It was written on Linux, where no macOS SDK exists;
-  Xcode 26.3 now builds it clean, which closed out SwiftData's macros and the Keychain —
-  the two things that had no stand-in. Everything in `Sources/TalkCore` is built and tested
-  on every change; where there is no macOS SDK, `Kvidr/` is **type-checked** against stand-in
-  SwiftUI, AppKit, SwiftData, Combine and UserNotifications modules (`Tools/uicheck`) under
-  Swift 6, which is what catches a wrong argument label, a missing member or an isolation
-  mistake before a compiler does. What no build settles is how Liquid Glass actually renders,
-  and anything that is a runtime behaviour rather than a type. See docs/MAC_HANDOVER.md.
-- **Not yet run against a real server.** Every request shape is verified against the
-  documentation and against fixtures, but no live Nextcloud has answered one of them.
+- **Mac only.** It was written on Linux, and for a while `Kvidr/` was type-checked there
+  against stand-in SwiftUI and AppKit modules. That harness and its CI job are gone
+  (2026-09-16): CI builds the app with Xcode and runs the `TalkCore` tests on macOS, and
+  `Tools/check_core_layering.sh` keeps UI frameworks out of `Sources/TalkCore`. What no build
+  settles is how Liquid Glass renders, and anything that is a runtime behaviour rather than a
+  type. See docs/MAC_HANDOVER.md.
+- **Signing needs Keychain Sharing.** The app password and the cache keys live in the
+  data-protection keychain, which a Mac app can only use with a keychain access group. Xcode's
+  automatic signing handles it for development; a Developer ID build needs a provisioning
+  profile with the same capability, or sign-in fails.
 
 ## Backlog — deferred on purpose
 
@@ -155,10 +155,6 @@ rediscovered. Not bugs and not gaps: each of these works as built.
   disappears, or a message is deleted — but nothing prunes by age or count, and paging back
   through history deepens the cache permanently. Fine at chat-message sizes; unbounded by
   omission rather than by decision.
-- **The cache is plain SQLite.** The app password is in the Keychain and the README is
-  emphatic about it, but message *content* sits unencrypted in the container, readable from a
-  disk or a backup of one. Whether FileVault is enough is a decision worth making deliberately,
-  given how carefully the credentials were handled.
 - **The models live in the app target.** `ChatModel`, `ConversationListModel`,
   `InspectorModel`, `ConversationDraft` and `PollStore` are `@Observable` and nearly
   platform-free, but they sit in `Kvidr/` beside AppKit. Extracting them into a shared layer is
@@ -179,7 +175,53 @@ rediscovered. Not bugs and not gaps: each of these works as built.
   420×140. It is honestly that shape; letting width exceed the cap for extreme ratios would be
   the fix if panoramas turn out to be common.
 
+## Security audit follow-up — done 2026-09-16
+
+The audit (PR #1) closed with three items named as open. All three are fixed, and testing the
+fixes on a real Mac turned up four more.
+
+- **The cache is encrypted.** Messages, conversations, drafts and account details are sealed
+  with AES-GCM under a per-account key in the data-protection keychain; only ids, tokens,
+  timestamps and counts stay readable. Signing out destroys the key, so what SQLite keeps in
+  the file's free pages, or a backup kept, can't be opened. A plaintext cache is rebuilt into
+  a new file at launch rather than encrypted in place — in place, the old rows stay readable
+  in the free pages, which a test confirms. Accounts and drafts are carried; the rest resyncs.
+  *(`279578d`)* This replaces the backlog item that asked whether FileVault was enough.
+- **Cache keys can't collide.** Keys were their parts joined with `|`, and an account id
+  already contains one, so two different rows could share a unique key and overwrite each
+  other. Parts are escaped now. *(`edee9e7`)*
+- **A wedged network mount costs one upload, not the app.** Nothing touches an attachment on
+  the main actor or the upload actor: the file is checked off-actor under a 10-second deadline,
+  and read by a thread of the app's own into a stream (`FileBodyPump`), with a watchdog that
+  fails a read stuck past 30 seconds. Verified against a paused SMB share: other uploads carry
+  on and the stuck one fails with "The disk that file is on isn't answering".
+  *(`235c1b7`, `78900f8`, `4d00978`, `6e9a97d`)*
+- **Found on the way: new sign-ins were broken by the audit itself.** It moved credentials to
+  the data-protection keychain without the keychain access group a Mac app needs to use it.
+  Existing sign-ins survived only through the legacy read fallback; a new one failed to store
+  its app password and said "The server sent something unexpected". *(`b48bb9e`)*
+- **Found on the way: the upload tray's buttons did nothing.** Interactive glass on each row
+  took the click, so a failed upload could never be retried or cleared. *(`5aa7350`)*
+- **Found on the way: switching conversations emptied the upload tray.** Each visit built a
+  fresh queue while the old upload carried on unseen. Queues now live for the session.
+  *(`eb8372e`)*
+- **Found on the way: attachment failures all read "The server sent something unexpected".**
+  They were sent as `unexpectedResponse`, whose message is fixed. They have their own errors
+  now, including one for a file that has since disappeared. *(`4d00978`, `5aa7350`)*
+
 ## Discovered work (append as found)
+
+- `uploadTask(with:fromFile:)` reads the file on `URLSession`'s own threads, so a read that
+  never returns stalls every transfer in the process. And a named pipe is no stand-in for a
+  stuck file there: `URLSession` takes it for an empty file and never reads it. *(2026-09-16)*
+- SQLite keeps deleted and overwritten rows in the file's free pages and the write-ahead log.
+  Encrypting a cache in place, or deleting rows on sign-out, leaves the old content on disk.
+  *(2026-09-16)*
+- `glassEffect(.regular.interactive())` on a container swallows clicks meant for the buttons
+  inside it. Interactive glass belongs on a control, not on a row holding controls.
+  *(2026-09-16)*
+- A Mac app without `keychain-access-groups` gets `errSecMissingEntitlement` (-34018) from the
+  data-protection keychain on every call. *(2026-09-16)*
 
 - Unified search types `attributes` as an array of strings, but the server builds it as a
   PHP associative array — so it arrives as an object, and it is the only machine-readable
