@@ -16,6 +16,10 @@ struct MessageLinkSafetyTests {
         URL(string: string)?.isWebLink ?? false
     }
 
+    private func isOpenable(_ string: String) -> Bool {
+        URL(string: string)?.isOpenableLink ?? false
+    }
+
     // MARK: - The scheme allowlist
 
     @Test("Only http and https are web links")
@@ -67,6 +71,43 @@ struct MessageLinkSafetyTests {
     }
 
     // MARK: - Rich objects
+
+    // MARK: - What a click is allowed to hand to the system
+
+    @Test("Writing to a person is openable, though it is not a web link")
+    func addressSchemesAreOpenable() {
+        // The distinction the two predicates exist to keep: openable, never fetchable.
+        for string in ["mailto:someone@example.com", "MAILTO:someone@example.com",
+                       "tel:+4512345678", "TEL:+4512345678",
+                       "mailto:a@example.com?subject=Invoice"] {
+            #expect(isOpenable(string), "\(string) should be openable")
+            #expect(!isWebLink(string), "\(string) must still not be a web link")
+        }
+    }
+
+    @Test("Widening the open list did not widen anything else")
+    func openingDoesNotAdmitTheRest() {
+        // Every scheme the allowlist exists to stop is still stopped at the click, and a
+        // scheme that addresses nobody is not worth opening either.
+        for string in ["smb://198.51.100.7/public/deck",
+                       "file:///Applications/Calculator.app",
+                       "shortcuts://run-shortcut?name=Wipe%20Downloads",
+                       "javascript:alert(1)",
+                       "data:text/html;base64,PHNjcmlwdD4=",
+                       "x-apple.systempreferences:com.apple.preference.security",
+                       "mailto:", "tel:"] {
+            #expect(!isOpenable(string), "\(string) must not be openable")
+        }
+    }
+
+    @Test("Everything openable as a web link is still openable")
+    func webLinksRemainOpenable() {
+        for string in ["https://cloud.example.com/s/Q3-deck", "http://example.com", "HTTPS://example.com/a"] {
+            #expect(isOpenable(string))
+        }
+        // And what `isWebLink` refuses inside http(s) it still refuses here.
+        #expect(!isOpenable("https://cloud.example.com@evil.tld/"))
+    }
 
     @Test("A rich object whose link is not a web link has no link at all")
     func richObjectLinkIsValidated() {

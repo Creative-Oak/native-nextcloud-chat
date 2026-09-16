@@ -209,11 +209,11 @@ private extension [InlineNode] {
 extension URL {
     /// Something a browser can open — and a preview can be fetched for.
     ///
-    /// This is the only answer to that question in the app. Every place that opens a URL
-    /// somebody else put in a message, or turns one into something clickable, asks here
-    /// and nowhere else: a second list kept somewhere near the thing it guards drifts from
-    /// this one, and the gap between them is exactly where `smb://`, `file://` and
-    /// `shortcuts://` would walk through.
+    /// This is the app's answer to that question, and the only one. A second list kept
+    /// somewhere near the thing it guards drifts from this one, and the gap between them
+    /// is exactly where `smb://`, `file://` and `shortcuts://` would walk through.
+    /// ``isOpenableLink`` is the one permitted relative of it, and is written in terms of
+    /// it rather than beside it, for the same reason.
     ///
     /// Credentials in the authority are refused with them. `https://cloud.example.com@evil.tld`
     /// goes to `evil.tld`, and a reader being shown where a link goes should not have to
@@ -223,6 +223,26 @@ extension URL {
         guard let host = host(), !host.isEmpty else { return false }
         guard let components = URLComponents(url: self, resolvingAgainstBaseURL: false) else { return false }
         return components.user == nil && components.password == nil
+    }
+
+    /// Something this app will hand to the system when a reader clicks it.
+    ///
+    /// Everything ``isWebLink`` allows, plus the two schemes that address a *person* rather
+    /// than a machine. They are worth separating from the rest: `mailto:` opens a compose
+    /// window and `tel:` a call the reader still has to confirm, where `smb:` mounts a
+    /// filesystem, `file:` reads the disk, and `shortcuts:` and a third-party scheme run
+    /// whatever the app that claimed it decides to run. "Email me at …" is ordinary traffic
+    /// in a chat client, and refusing it bought nothing.
+    ///
+    /// Deliberately *not* the same question as ``isWebLink``, which also decides what gets
+    /// fetched: a preview request for a `mailto:` is meaningless, and this predicate must
+    /// never widen that one. It is defined in terms of it so the two cannot drift apart.
+    var isOpenableLink: Bool {
+        if isWebLink { return true }
+        guard let scheme = scheme?.lowercased(), scheme == "mailto" || scheme == "tel" else { return false }
+        // A scheme and nothing after it addresses nobody, and `mailto:` has no authority to
+        // hide a second destination in — but an empty one is still not worth opening.
+        return !(resourceSpecifier ?? "").isEmpty
     }
 
     /// A link worth fetching a preview for.

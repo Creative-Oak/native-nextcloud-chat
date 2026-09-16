@@ -1,11 +1,12 @@
 import Foundation
 
-/// A run with no link is not a refused one. Everything else is measured against the single
-/// allowlist, ``Foundation/URL/isWebLink`` — a second list kept next to the thing it guards
-/// is a list that drifts.
+/// A run with no link is not a refused one. Everything else is measured against
+/// ``Foundation/URL/isOpenableLink`` — the same question the click itself asks, so a link
+/// that survives the strip is one that will open and a link that would not open never
+/// becomes clickable in the first place.
 private func isRefusedLink(_ url: URL?) -> Bool {
     guard let url else { return false }
-    return !url.isWebLink
+    return !url.isOpenableLink
 }
 
 extension AttributedString {

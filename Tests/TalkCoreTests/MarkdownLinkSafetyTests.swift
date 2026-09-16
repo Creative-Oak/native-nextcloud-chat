@@ -73,6 +73,24 @@ struct MarkdownLinkSafetyTests {
         #expect(String(cleaned.characters) == "Open the deck")
     }
 
+    @Test("Writing to a person survives the strip", arguments: [
+        "mailto:magnus@example.com",
+        "mailto:magnus@example.com?subject=Q3",
+        "tel:+4512345678"
+    ])
+    func keepsAddressLinks(_ destination: String) {
+        // The regression this pins: the strip once measured against `isWebLink`, so an
+        // `[email me](mailto:…)` in a chat client lost its link for no security gain.
+        var string = AttributedString("Write to ")
+        string.append(linked("Magnus", to: destination))
+
+        let cleaned = string.withoutRefusedLinks
+        let kept = cleaned.runs.compactMap { $0.link }
+        #expect(kept.count == 1)
+        #expect(kept.first == URL(string: destination))
+        #expect(String(cleaned.characters) == "Write to Magnus")
+    }
+
     @Test("One refused link does not take the others with it")
     func stripsOnlyTheRefusedOne() {
         var string = AttributedString("see ")

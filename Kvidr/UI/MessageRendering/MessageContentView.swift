@@ -105,7 +105,7 @@ private struct MessageBlockView: View {
 enum MessageLink {
     @MainActor
     static func open(_ url: URL) {
-        guard url.isWebLink else {
+        guard url.isOpenableLink else {
             // The URL itself is message content and does not go in the log.
             Log.ui.warning("Refused to open a message link with scheme \(url.scheme ?? "none")")
             return
@@ -174,7 +174,7 @@ enum MessageAttributedString {
             // instead, and `InlineText` puts the destination in a tooltip, which is the
             // only thing here that says where the words actually go.
             var text = AttributedString(label.withoutInvisibleMarks)
-            if url.isWebLink { text.link = url }
+            if url.isOpenableLink { text.link = url }
             if isFromMe { text.foregroundColor = .white }
             return text
 
