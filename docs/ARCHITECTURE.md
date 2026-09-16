@@ -28,15 +28,15 @@ Hard rules:
 
 1. **No `URLSession` outside `Sources/TalkCore/Networking`.**
 2. **No OCS DTO ever reaches a view.** Services return domain models.
-3. **No SwiftUI/AppKit import inside `Sources/TalkCore`** (it must keep compiling on
-   Linux so the test suite can run anywhere).
+3. **No SwiftUI/AppKit import inside `Sources/TalkCore`** — `Tools/check_core_layering.sh`
+   enforces it, in CI and in preflight.
 4. **Nothing blocks the main actor.** Networking and persistence are actors.
 5. **Secrets live only in the Keychain.** Never `UserDefaults`, never SwiftData, never logs.
 
 ## Repository layout
 
 ```
-Package.swift                  swift build / swift test — core + tests, runs on Linux & macOS
+Package.swift                  swift build / swift test — core + tests
 Sources/TalkCore/              Foundation-only. The whole non-UI application.
   Models/                      Domain models (Account, Conversation, Message, …)
   Networking/                  OCSClient, OCSError, endpoints, DTOs
@@ -79,8 +79,8 @@ why:
 
 In the Xcode build everything is one module (`Kvidr`). In the SwiftPM build,
 `TalkCore` is its own module and the tests use `@testable import TalkCore`. The SwiftPM
-build is what enforces the layering: if a core file ever reaches for a UI type, or
-imports SwiftUI, `swift build` fails on Linux immediately.
+package is what keeps the layering visible: a core file that reaches for a UI type has to
+import a UI framework to do it, and `Tools/check_core_layering.sh` refuses that import.
 
 Consequence: core types stay `internal` (not `public`). `@testable import` gives the
 tests access, and the app target doesn't need the access level at all.
@@ -232,20 +232,12 @@ a name instead of sending a half-typed message.
 
 `@all` is filtered out when the server's `mentionPermissions` restricts it to moderators.
 
-## Verification, without a Mac
+## Verification
 
-This repository was largely written on Linux, which has no macOS SDK. Three things stand in
-for the compiler on the UI layer:
-
-1. `swift build` / `swift test` compile and run **all** of `Sources/TalkCore` — which is why
-   as much logic as possible lives there, including transcript grouping, previews, relative
-   timestamps and mention syntax, none of which are inherently UI.
-2. `swiftc -parse` over `Kvidr/**` catches syntax errors.
-3. `Tools/validate_pbxproj.py` parses the hand-written Xcode project as an OpenStep plist
-   and checks for dangling references and malformed targets, so the worst failure —
-   "the project won't open" — is caught without Xcode.
-
-The macOS CI job is what actually type-checks the SwiftUI layer.
+`./Tools/preflight.sh` runs what CI runs: the layering check above, `swift test` over all of
+`Sources/TalkCore` — which is why as much logic as possible lives there, including transcript
+grouping, previews, relative timestamps and mention syntax, none of which are inherently UI —
+and an `xcodebuild` of the app.
 
 ## Logging
 

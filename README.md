@@ -25,13 +25,11 @@ open Kvidr.xcodeproj      # then ⌘R
 The project uses Xcode 16+ synchronized folder groups, so new files under `Kvidr/`
 and `Sources/TalkCore/` are picked up automatically — there is no file list to maintain.
 
-`./Tools/preflight.sh` is the check to run before pushing: the core build and its tests, the
-framework-import check, and the Xcode project's integrity — plus the app target, which it
-builds with Xcode on a Mac and type-checks against stand-in SwiftUI/AppKit modules where
-there is no macOS SDK. All of it runs in CI too, on both platforms.
+`./Tools/preflight.sh` is the check to run before pushing: that the core imports no UI
+framework, the core's tests, and a build of the app. CI runs the same on macOS.
 
 The non-UI half of the app is also a Swift package, so it builds and tests from the
-command line — including on Linux, which is what keeps the layering honest:
+command line:
 
 ```sh
 swift build
@@ -99,9 +97,8 @@ server doesn't support is hidden rather than broken.
 
 This was written without a macOS SDK, so for most of its life Xcode had never built it. It
 does now, clean under Xcode 26.3, which settled the two parts no stand-in could reach:
-SwiftData's macros and the Keychain. Where there is no macOS SDK — on Linux, and in CI —
-`Tools/uicheck` stands in modules named SwiftUI, AppKit and SwiftData and runs the real
-sources through the Swift 6 type checker against them instead. What no compiler settles is
+SwiftData's macros and the Keychain. It is a Mac app, and it is built and checked only on a
+Mac. What no compiler settles is
 how Liquid Glass actually renders, or anything that needs a real server to answer.
 [`docs/MAC_HANDOVER.md`](docs/MAC_HANDOVER.md) is the handover: what has been verified and
 how, how to build and sign it, what to do when something goes wrong, and what is worth

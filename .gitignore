@@ -3,9 +3,6 @@
 .swiftpm/
 Package.resolved
 
-# The stub-module type-check scratch tree (Tools/uicheck)
-.uicheck/
-
 # Xcode
 *.xcuserdatad/
 xcuserdata/

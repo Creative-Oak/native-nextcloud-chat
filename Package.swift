@@ -4,8 +4,7 @@ import PackageDescription
 // The macOS app target in Kvidr.xcodeproj compiles Sources/TalkCore directly
 // (see docs/ARCHITECTURE.md § The one-module trick), so nothing in this repository
 // ever writes `import TalkCore`. This package exists so the whole non-UI application
-// can be built and tested from the command line — including on Linux CI, which is
-// what keeps the layering honest.
+// can be built and tested from the command line.
 let package = Package(
     name: "Kvidr",
     platforms: [.macOS("26.0")],

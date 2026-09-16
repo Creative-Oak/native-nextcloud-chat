@@ -10,38 +10,6 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  core:
-    # The whole non-UI application builds and tests here, which is what keeps the layering
-    # honest: if anything in Sources/TalkCore reaches for SwiftUI or AppKit, this fails.
-    name: Core (Linux)
-    runs-on: ubuntu-latest
-    container: swift:6.1
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      - name: Install Python
-        # The Swift image stopped shipping it. Both checks below are Python, and they run
-        # before the build — so without this the whole job fails at the first step and the
-        # build and tests are skipped, which reads as "imports broken" rather than "nothing
-        # was compiled at all".
-        run: apt-get update -qq && apt-get install -y -qq --no-install-recommends python3
-      - name: Check imports
-        # A missing `import AppKit` in a SwiftUI file is invisible on Linux and an instant
-        # error on a Mac, so it is worth checking where there is no Xcode to tell us.
-        run: python3 Tools/check_imports.py
-      - name: Validate the Xcode project
-        # Parses project.pbxproj as an OpenStep plist and checks for the things that make
-        # Xcode refuse to open a project. Runs on Linux, where there is no Xcode to ask.
-        run: python3 Tools/validate_pbxproj.py Kvidr.xcodeproj/project.pbxproj
-      - name: Build
-        run: swift build
-      - name: Test
-        run: swift test
-      - name: Type check the app target
-        # The app is type-checked against stand-in SwiftUI/AppKit modules (Tools/uicheck),
-        # so a wrong argument label or an isolation mistake fails here rather than in the
-        # macOS job ten minutes later.
-        run: ./Tools/uicheck/run.sh
-
   app:
     name: App (macOS)
     runs-on: macos-26
@@ -51,6 +19,10 @@ jobs:
         run: |
           xcodebuild -version
           swift --version
+      - name: Keep the core free of UI
+        # On a Mac, SwiftUI and AppKit are always there to import, so no build fails when
+        # Sources/TalkCore reaches for one. This is the check that does.
+        run: ./Tools/check_core_layering.sh
       - name: Build the app
         run: >
           xcodebuild build
@@ -60,6 +32,5 @@ jobs:
           -destination 'platform=macOS'
           -quiet
           CODE_SIGNING_ALLOWED=NO
-      - name: Test the core package on macOS
-        # Also compiles the SwiftData-backed code paths, which the Linux job skips.
+      - name: Test the core package
         run: swift test

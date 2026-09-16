@@ -19,7 +19,7 @@ A v1.0 native macOS client for Nextcloud Talk's text chat — 91 Swift files and
 
 | | |
 | --- | --- |
-| `Sources/TalkCore/` | Everything that isn't UI: models, OCS networking, services, the two sync engines, message rendering, the SwiftData cache, the Keychain wrapper. A Swift package, so it builds and tests on Linux — which is what has kept it free of any UI dependency. |
+| `Sources/TalkCore/` | Everything that isn't UI: models, OCS networking, services, the two sync engines, message rendering, the SwiftData cache, the Keychain wrapper. A Swift package, so it builds and tests from the command line; `Tools/check_core_layering.sh` keeps it free of any UI dependency. |
 | `Kvidr/` | SwiftUI and AppKit. The app target. |
 
 Both are in the Xcode target through Xcode 16+ **synchronized folder groups**, so there is
@@ -33,54 +33,19 @@ lists what is in 1.0 and what deliberately isn't.
 
 ## 2. What has been verified, and how
 
-`./Tools/preflight.sh` runs everything that can be checked without a Mac. It passes, and
-the same checks run in CI on every push. On a Mac it builds the app target with Xcode in
-place of the stub type-check, which proves strictly more — see the note under the table:
+`./Tools/preflight.sh` runs the same checks as CI:
 
 | Check | What it proves |
 | --- | --- |
-| `swift build && swift test` — **228 tests** | The whole non-UI application is correct against recorded fixtures: OCS decoding, the merge rules, both sync engines, read-state policy, login flow, message parsing, every service's request shape. |
-| `Tools/uicheck/run.sh` | **The app target type-checks under Swift 6**, against stand-in SwiftUI/AppKit/SwiftData modules. |
-| `Tools/check_imports.py` | Every file importing a framework it actually uses. Caught four certain errors. |
-| `Tools/validate_pbxproj.py` | The Xcode project parses and its synchronized groups are intact. |
+| `swift test` | The whole non-UI application is correct against recorded fixtures: OCS decoding, the merge rules, both sync engines, read-state policy, login flow, message parsing, every service's request shape. |
+| `xcodebuild build` | The app target compiles against the real SDK. |
+| `Tools/check_core_layering.sh` | `Sources/TalkCore` imports no UI framework. |
 
-### About the type-check
+### What no compiler can check
 
-`Tools/uicheck` builds modules *named* SwiftUI, AppKit, SwiftData, Combine,
-UniformTypeIdentifiers and UserNotifications. They are not implementations — they are a
-declaration of the API surface this app uses, deliberately faithful about **names, argument
-labels and actor isolation**, because those are what break a build. The real app sources
-are then type-checked against them with `-swift-version 6`.
-
-It found nineteen errors that would each have been an error in Xcode, among them a
-recursive `some View` whose opaque type was defined in terms of itself, an `EnvironmentKey`
-whose `defaultValue` held a non-Sendable closure, and an actor-isolated method trying to
-satisfy a nonisolated protocol requirement.
-
-**When the stub and your SDK disagree, your SDK is right.** Fix the app, then fix
-`Tools/uicheck/stubs/SwiftUI.swift` to match, so the next run catches the same thing.
-
-**`Tools/uicheck` cannot run on a Mac, and does not need to.** A module named `Combine`
-built alongside a real macOS SDK is a circular dependency against that SDK's own
-Foundation, which no flag gets around — the harness only works where the frameworks it
-stands in for are absent. `preflight.sh` therefore builds the app with `xcodebuild` on a
-Mac and runs the stub type-check only off Darwin; CI does the same, split across its two
-jobs. Keep the stubs in repair anyway: the Linux job is the only thing checking the app
-target there, and it is what keeps `Sources/TalkCore` free of any UI dependency.
-
-### What no amount of Linux can check
-
-Four areas, and the first build's errors will be concentrated in them:
-
-1. **SwiftData** — `Sources/TalkCore/Persistence/CacheModels.swift`. Macros can't be
-   stood in for, so this file is only *parsed* here. The schema is deliberately tiny: five
-   models, scalar columns plus an encoded payload.
-2. **The Keychain** — `Sources/TalkCore/Security/KeychainStore.swift`. Security.framework,
-   same reason.
-3. **Liquid Glass** — the declarations are type-checked against the stub, but how
-   `glassEffect`, `GlassEffectContainer` and `.buttonStyle(.glass)` actually *render* is
-   not. `Kvidr/UI/Design/GlassStyle.swift` is the single place to adjust them.
-4. **Runtime behaviour** — layout, animation, scroll position, focus, and every
+1. **Liquid Glass** — how `glassEffect`, `GlassEffectContainer` and `.buttonStyle(.glass)`
+   actually *render*. `Kvidr/UI/Design/GlassStyle.swift` is the single place to adjust them.
+2. **Runtime behaviour** — layout, animation, scroll position, focus, and every
    interaction with a real server. No type checker has an opinion about these.
 
 ---
@@ -102,13 +67,6 @@ open Kvidr.xcodeproj
 ```
 
 ⌘B.
-
-If Xcode refuses to open the project at all, that is a different problem from a build
-error. Run the validator and send me its output:
-
-```sh
-python3 Tools/validate_pbxproj.py Kvidr.xcodeproj/project.pbxproj
-```
 
 While the app target is broken you can still work on everything else with
 `open Package.swift`, which opens only `Sources/TalkCore` and its tests.
@@ -166,12 +124,9 @@ for a public host. That is the only way to get this app to speak plain HTTP, on 
 
 | Symptom | Likely cause |
 | --- | --- |
-| SwiftData macro errors in `CacheModels.swift` | The likeliest place to need a fix — macros can't be stood in for, so this file is only parsed here |
-| `KeychainStore.swift` errors | Same reason: Security.framework has no stand-in |
-| Anything about `glassEffect`, `GlassEffectContainer`, `.buttonStyle(.glass)` | The Liquid Glass APIs. Declarations came from Apple's documentation rather than memory and are checked against the stub, but they are new; `UI/Design/GlassStyle.swift` is the single place to adjust them |
+| Anything about `glassEffect`, `GlassEffectContainer`, `.buttonStyle(.glass)` | The Liquid Glass APIs. They are new; `UI/Design/GlassStyle.swift` is the single place to adjust them |
 | `cannot find type 'X' in scope` in `Kvidr/` | A core type that didn't make it into the target — check the synchronized group still covers `Sources/TalkCore` |
-| A SwiftUI signature mismatch anywhere else | The stub said one thing and your SDK says another. Fix the app, then the stub |
-| `main actor-isolated ... cannot be referenced` | Swift 6 concurrency. The stub models isolation, so this should be rare; the fix is almost always a capture list, not a `@preconcurrency` import |
+| `main actor-isolated ... cannot be referenced` | Swift 6 concurrency. The fix is almost always a capture list, not a `@preconcurrency` import |
 
 Send me the first 20 or so errors rather than one at a time — they come in families, and a
 batch is usually one fix repeated.
@@ -200,20 +155,7 @@ credential is ever logged, in any mode.
 
 ### If you change code
 
-On a Mac, Xcode is the authority — a real build beats any of this. But CI still runs the
-Linux checks on every push, so keep them passing:
-
-```sh
-swift build && swift test                # works anywhere
-python3 Tools/check_imports.py           # works anywhere
-python3 Tools/validate_pbxproj.py Kvidr.xcodeproj/project.pbxproj
-```
-
-`Tools/uicheck/run.sh` is the odd one out: it exists for machines with no macOS SDK, and it
-cannot run on a Mac at all — see *About the type-check* above for why. There is nothing to
-remember, because `preflight.sh` builds the app with Xcode instead when it runs on Darwin.
-If you add a SwiftUI API the stubs don't declare, the Linux CI job will tell you, and the
-fix is to add it to `Tools/uicheck/stubs/`, never to change the app to suit the stub.
+Run `./Tools/preflight.sh` before pushing; it is what CI runs.
 
 ---
 
