@@ -122,7 +122,9 @@ target is compiled by CI on a macOS runner. Anything not yet green on CI is mark
 - [x] Server-side message search (⇧⌘F) through Talk's unified search provider, scoped to
       one conversation or all of them, reaching history older than the local cache
 - [ ] Pins, reminders, voice messages, polls (rendered, not yet interactive)
-- [ ] Typing indicators and user-status editing (both need signaling or the status API)
+- [x] Settings in the window, with the Nextcloud profile: status, picture, profile details
+      (read-only), this Mac's sign-in, and the preferences — see below
+- [ ] Typing indicators (needs Talk's signaling API)
 - [ ] Calls — deliberately out of scope; see ARCHITECTURE.md § Room for calls
 
 ---
@@ -209,7 +211,35 @@ fixes on a real Mac turned up four more.
   They were sent as `unexpectedResponse`, whose message is fixed. They have their own errors
   now, including one for a file that has since disappeared. *(`4d00978`, `5aa7350`)*
 
-## Discovered work (append as found)
+## Settings and profile — done 2026-09-16
+
+Design: `docs/plans/2026-09-16-settings-profile-design.md`. Settings left its own window
+and became a page in the messages column, opened from the account row at the foot of the
+sidebar or ⌘,. *(`a16f8e3`, `9dd3524`, `ce2c183`, `e1f3f70`, `b6d1c45`)*
+
+- **Status** — presence (Busy when the server offers it), a message with an emoji from the
+  system palette, a clear-after time, and the server's suggestions. Saved as it changes,
+  shown at once, put back with the server's reason if refused.
+- **Picture** — from Photos or a file, squared and previewed before upload; removable. The
+  avatar cache forgets the old one everywhere at once.
+- **Profile** — the Personal info fields with who can see each, read-only, with Edit in
+  Nextcloud… and View Profile…. Reloads when kvidr comes back to the front.
+- **This Mac** — server, versions, connection, Manage Devices in Nextcloud…, Remove Account….
+- **Preferences** — the old window's General, Notifications and Advanced, as cards.
+- Drawn with the inspector's own cards and round buttons, so the two read as one design.
+
+### Left out of Settings, on purpose
+
+- **Editing profile details in the app.** `PUT /cloud/users/{id}` requires a password
+  confirmed in the last 30 minutes, and a request made with an app password never has one.
+  Doing it would mean asking for the account password — which the login flow exists to keep
+  out of the app, and which SSO accounts don't have.
+- **A list of devices.** Nextcloud has no endpoint that lists app passwords, and every one
+  that changes them refuses a session that is itself an app password. The browser does it.
+- **Crop and zoom for the picture.** It is centre-cropped; the preview shows the result.
+- **Status that updates live** when it changes on another device. It is read when Settings
+  opens and when kvidr comes to the front.
+
 
 - `uploadTask(with:fromFile:)` reads the file on `URLSession`'s own threads, so a read that
   never returns stalls every transfer in the process. And a named pipe is no stand-in for a
@@ -220,6 +250,18 @@ fixes on a real Mac turned up four more.
 - `glassEffect(.regular.interactive())` on a container swallows clicks meant for the buttons
   inside it. Interactive glass belongs on a control, not on a row holding controls.
   *(2026-09-16)*
+- An app password can't edit the profile: `#[PasswordConfirmationRequired]` wants
+  `last-password-confirm` in the session, and `Session::logClientIn` only sets it for a real
+  password. The same app password can set status and the picture, which don't ask.
+  *(2026-09-16)*
+- The avatar upload is a front-page route with a CSRF check; `OCS-APIRequest: true` is what
+  lets a request without a browser session through. A square image is stored as sent; any
+  other shape comes back as a temporary file waiting for a crop request. *(2026-09-16)*
+- A predefined status comes back with `messageId` and no `message` — its words have to be
+  looked up in the predefined list. *(2026-09-16)*
+- A text field that saves when it loses focus will save over whatever the click that took
+  focus away was choosing, unless that choice changes the model before the focus change is
+  handled. *(2026-09-16)*
 - A Mac app without `keychain-access-groups` gets `errSecMissingEntitlement` (-34018) from the
   data-protection keychain on every call. *(2026-09-16)*
 

@@ -179,8 +179,7 @@ The things that most need your eye, because they are exactly what I could not se
 
 - **Calls** are deliberately out of scope for v1. `docs/ARCHITECTURE.md` § Room for calls
   describes what is left open for them.
-- Typing indicators and user-status editing need Talk's signaling API, which is not a
-  documented stable client API.
+- Typing indicators need Talk's signaling API, which is not a documented stable client API.
 - Polls and voice messages are *shown*, not yet answered or played. Pins and reminders are
   not implemented.
 - Licensed MIT. The one piece not written here is `.agents/skills/swiftui-pro/`, which is
