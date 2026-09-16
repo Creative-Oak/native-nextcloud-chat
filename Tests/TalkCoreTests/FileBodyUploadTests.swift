@@ -99,11 +99,50 @@ struct FileBodyUploadTests {
         #expect(failure == TalkError.fileNotAnswering)
         #expect(ContinuousClock.now - started < .seconds(5))
     }
+
+    @Test("A file that stops answering partway through is given up on too")
+    func stallsMidFile() async throws {
+        let root = try scratchDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        // The shape a share that dies mid-upload has: some of the file arrives, then a read
+        // that never returns. The writer sends a megabyte and then holds the pipe open.
+        let stuck = root.appendingPathComponent("stuck.bin")
+        try #require(mkfifo(stuck.path, 0o600) == 0)
+        let writer = Tally()
+        Thread {
+            let fd = open(stuck.path, O_WRONLY)
+            let megabyte = [UInt8](repeating: 7, count: 1 << 20)
+            _ = megabyte.withUnsafeBytes { write(fd, $0.baseAddress, $0.count) }
+            writer.hold(fd)
+        }.start()
+        defer { writer.release() }
+
+        let server = try LoopbackHTTPServer()
+        let transport = URLSessionTransport(userAgent: "kvidr-tests", fileReadStallLimit: 0.5)
+        let started = ContinuousClock.now
+        let sent = Tally()
+
+        await #expect(throws: TalkError.fileNotAnswering) {
+            _ = try await transport.upload(put(stuck, to: server.url("/stuck"), byteCount: 300 << 20)) { _ in
+                sent.add()
+            }
+        }
+        #expect(sent.value > 0, "some of the file went out before it stopped")
+        #expect(ContinuousClock.now - started < .seconds(5))
+    }
 }
 
 private final class Tally: @unchecked Sendable {
     private let lock = NSLock()
     private var count = 0
+    private var descriptor: Int32 = -1
     func add() { lock.withLock { count += 1 } }
     var value: Int { lock.withLock { count } }
+    /// Keeps a pipe's write end open until ``release()``.
+    func hold(_ fd: Int32) { lock.withLock { descriptor = fd } }
+    func release() {
+        let fd = lock.withLock { () -> Int32 in defer { descriptor = -1 }; return descriptor }
+        if fd >= 0 { close(fd) }
+    }
 }
