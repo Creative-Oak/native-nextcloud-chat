@@ -548,6 +548,7 @@ public struct GlassEffectTransition: Sendable {
     public func foregroundStyle(_ style: some ShapeStyle) -> Text { self }
     public func foregroundStyle(_ primary: some ShapeStyle, _ secondary: some ShapeStyle) -> Text { self }
     public func bold() -> Text { self }
+    public func fontWeight(_ weight: Font.Weight?) -> Text { self }
     public func italic(_ isActive: Bool = true) -> Text { self }
     public func monospacedDigit() -> Text { self }
     public func strikethrough(_ isActive: Bool = true) -> Text { self }
@@ -707,6 +708,13 @@ public struct TextFieldStyleShim: Sendable {
     public static let plain = TextFieldStyleShim()
     public static let roundedBorder = TextFieldStyleShim()
     public static let squareBorder = TextFieldStyleShim()
+}
+
+public struct ToggleStyleShim: Sendable {
+    public static let automatic = ToggleStyleShim()
+    public static let button = ToggleStyleShim()
+    public static let `switch` = ToggleStyleShim()
+    public static let checkbox = ToggleStyleShim()
 }
 
 public struct ListStyleShim: Sendable {
@@ -929,6 +937,12 @@ public struct ScrollEdgeEffectStyle: Sendable {
     public init(@ViewBuilder content: () -> Content) where SelectionValue == Never {}
     public init(selection: Binding<SelectionValue?>, @ViewBuilder content: () -> Content) {}
     public init(selection: Binding<Set<SelectionValue>>, @ViewBuilder content: () -> Content) {}
+    /// The row-per-element form. Real SwiftUI asks the element to be `Identifiable`; the
+    /// stub does not need to, and saying so here would only make a correct call site fail.
+    public init<Data: RandomAccessCollection>(
+        _ data: Data,
+        @ViewBuilder rowContent: @escaping (Data.Element) -> Content
+    ) where SelectionValue == Never {}
     public var body: StubView { StubView() }
 }
 
@@ -1089,6 +1103,7 @@ extension View {
     public func backgroundExtensionEffect() -> StubView { StubView() }
 
     public func buttonStyle(_ style: ButtonStyleShim) -> StubView { StubView() }
+    public func toggleStyle(_ style: ToggleStyleShim) -> StubView { StubView() }
     public func buttonBorderShape(_ shape: ButtonBorderShape) -> StubView { StubView() }
     public func menuStyle(_ style: MenuStyleShim) -> StubView { StubView() }
     public func menuIndicator(_ visibility: Visibility) -> StubView { StubView() }
