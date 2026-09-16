@@ -80,6 +80,8 @@ final class AppModel {
 
     /// A message a search result wants shown, applied once the conversation is live.
     private var pendingReveal: Int?
+    /// A message to quote once the one-to-one with its author has opened.
+    private var pendingPrivateReply: Message?
 
     private var networkTask: Task<Void, Never>?
     private var conversationSyncTask: Task<Void, Never>?
@@ -310,7 +312,39 @@ final class AppModel {
             await previous?.deactivate()
             await model.activate()
             await self.applyPendingReveal(to: model)
+            self.applyPendingPrivateReply(to: model)
         }
+    }
+
+    /// Reply Privately: the one-to-one with the message's author — the one in the sidebar,
+    /// or a new one, which Talk hands back as the existing one if there is one it hadn't
+    /// told us about — opened with the message quoted in the composer.
+    func replyPrivately(to message: Message) async {
+        guard let session, let list = conversationList else { return }
+        pendingPrivateReply = message
+        if let existing = list.index.conversations.first(where: { $0.type == .oneToOne && $0.name == message.actor.id }) {
+            selectedToken = existing.token
+            return
+        }
+        do {
+            let created = try await session.conversations.create(.oneToOne(with: message.actor.id)).conversation
+            if list[created.token] == nil {
+                conversationCreated(created)
+            } else {
+                selectedToken = created.token
+            }
+        } catch {
+            pendingPrivateReply = nil
+            Log.ui.warning("Couldn’t open a conversation for a private reply: \(error.userMessage)")
+        }
+    }
+
+    private func applyPendingPrivateReply(to model: ChatModel) {
+        guard let message = pendingPrivateReply, model.token == selectedToken,
+              model.conversation.isOneToOne, model.conversation.name == message.actor.id
+        else { return }
+        pendingPrivateReply = nil
+        model.beginReply(to: message)
     }
 
     /// Shows a searched-for message once its conversation has finished opening.

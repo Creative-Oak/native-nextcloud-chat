@@ -20,6 +20,8 @@ struct ChatView: View {
     /// The conversation as the sidebar last synced it. `model.conversation` is the snapshot
     /// the conversation opened with, and a call starting or ending doesn't reach it.
     var liveConversation: Conversation?
+    /// Reply Privately: opens the one-to-one with the author, with the message quoted.
+    var onReplyPrivately: (Message) -> Void = { _ in }
 
     @State private var highlightedMessageID: Int?
     @State private var didInitialScroll = false
@@ -380,6 +382,7 @@ struct ChatView: View {
                 isFromMe: model.isFromMe(message),
                 capabilities: model.capabilities,
                 onReply: { model.beginReply(to: $0); composerFocused = true },
+                onReplyPrivately: model.canReplyPrivately(to: message) ? onReplyPrivately : nil,
                 onEdit: { model.beginEdit($0); composerFocused = true },
                 onDelete: { model.delete($0) },
                 onReact: { emoji, message in model.toggleReaction(emoji, on: message) },

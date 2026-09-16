@@ -132,6 +132,8 @@ struct MessageMenuActions {
     var hasReactions: Bool
     var myReactions: Set<String>
     var onReply: () -> Void
+    /// Nil where a private reply isn't possible.
+    var onReplyPrivately: (() -> Void)?
     var onEdit: () -> Void
     var onDelete: () -> Void
     var onCopy: () -> Void
@@ -219,6 +221,9 @@ enum MessageMenu {
 
         if actions.canReply {
             menu.addItem(ClosureMenuItem("Reply", symbol: "arrowshape.turn.up.left", action: actions.onReply))
+        }
+        if let onReplyPrivately = actions.onReplyPrivately {
+            menu.addItem(ClosureMenuItem("Reply Privately", symbol: "person.fill", action: onReplyPrivately))
         }
         menu.addItem(ClosureMenuItem("Copy", symbol: "doc.on.doc", action: actions.onCopy))
         for link in actions.links {

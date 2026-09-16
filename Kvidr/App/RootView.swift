@@ -272,7 +272,13 @@ struct RootView: View {
                             model: chat,
                             composerFocused: $composerFocused,
                             isHeaderAlwaysFrosted: isSidebarYieldingToInspector,
-                            liveConversation: app.conversationList?[chat.token]
+                            liveConversation: app.conversationList?[chat.token],
+                            onReplyPrivately: { message in
+                                Task {
+                                    await app.replyPrivately(to: message)
+                                    focusComposerOnceOpen()
+                                }
+                            }
                         )
                             // A fresh view per conversation: no state bleeds between them.
                             .id(chat.token)

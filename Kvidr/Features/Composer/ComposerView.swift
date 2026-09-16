@@ -26,7 +26,9 @@ struct ComposerView: View {
             if let replyingTo = model.replyingTo {
                 ComposerContextBar(
                     symbol: "arrowshape.turn.up.left",
-                    title: "Replying to \(replyingTo.actor.resolvedDisplayName)",
+                    title: model.isReplyingPrivately
+                        ? "Replying privately to \(replyingTo.actor.resolvedDisplayName)"
+                        : "Replying to \(replyingTo.actor.resolvedDisplayName)",
                     detail: model.content(for: replyingTo).preview,
                     onCancel: { model.cancelReply() }
                 )

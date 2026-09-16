@@ -170,6 +170,21 @@ struct ServiceRequestTests {
         #expect(message.messageID == 42)
     }
 
+    @Test("A private reply names the conversation the quoted message is in")
+    func sendPrivateReply() async throws {
+        let transport = StubTransport(json: ocsEnvelope(messageJSON, statuscode: 201))
+        let service = ChatService(client: try client(transport))
+
+        _ = try await service.send(token: "dm", message: "just us", replyTo: 41, replyToToken: "group")
+        #expect(form(transport.lastRequest) == ["message": "just us", "replyTo": "41", "replyToToken": "group"])
+
+        // The same conversation is an ordinary reply, and no reply sends no token.
+        _ = try await service.send(token: "dm", message: "here", replyTo: 41, replyToToken: "dm")
+        #expect(form(transport.lastRequest) == ["message": "here", "replyTo": "41"])
+        _ = try await service.send(token: "dm", message: "none", replyToToken: "group")
+        #expect(form(transport.lastRequest) == ["message": "none"])
+    }
+
     @Test("A reply to nothing doesn't send replyTo at all")
     func sendWithoutReply() async throws {
         let transport = StubTransport(json: ocsEnvelope(messageJSON, statuscode: 201))

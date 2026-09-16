@@ -93,6 +93,15 @@ struct Message: Sendable, Hashable, Identifiable, Codable {
         !isSystem && !isDeleted && kind != .commentDeleted
     }
 
+    /// Whether this message can be answered in a one-to-one with its author, as Talk allows
+    /// it: from a conversation that isn't already that one-to-one, to a person's message
+    /// that isn't your own, as a user yourself. The server checks all of it again.
+    func canBeRepliedToPrivately(in conversation: Conversation, myUserID: String) -> Bool {
+        guard isReplyable, !isSystem, !isDeleted, kind != .commentDeleted, messageID > 0 else { return false }
+        guard !conversation.isOneToOne, !conversation.isNoteToSelf else { return false }
+        return actor.kind == .users && actor.id != myUserID
+    }
+
     var isEditable: Bool {
         kind == .comment && !isDeleted && !isSystem
     }
@@ -165,13 +174,17 @@ struct ParentMessage: Sendable, Hashable, Codable {
     var parameters: [String: RichObject]
     var isDeleted: Bool
     var timestamp: Date
+    /// The conversation the parent is in, when that is not the reply's own — a private
+    /// reply. Nil otherwise, and for anything cached before it was kept.
+    var token: String?
 
-    init(messageID: Int, actor: MessageActor, text: String, parameters: [String: RichObject] = [:], isDeleted: Bool = false, timestamp: Date = .distantPast) {
+    init(messageID: Int, actor: MessageActor, text: String, parameters: [String: RichObject] = [:], isDeleted: Bool = false, timestamp: Date = .distantPast, token: String? = nil) {
         self.messageID = messageID
         self.actor = actor
         self.text = text
         self.parameters = parameters
         self.isDeleted = isDeleted
         self.timestamp = timestamp
+        self.token = token
     }
 }

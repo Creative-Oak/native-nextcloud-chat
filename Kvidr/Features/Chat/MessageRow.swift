@@ -15,6 +15,8 @@ struct MessageRow: View {
     let capabilities: TalkCapabilities
 
     var onReply: (Message) -> Void
+    /// Nil where the message can't be answered privately.
+    var onReplyPrivately: ((Message) -> Void)?
     var onEdit: (Message) -> Void
     var onDelete: (Message) -> Void
     var onReact: (String, Message) -> Void
@@ -271,6 +273,7 @@ struct MessageRow: View {
             hasReactions: !message.reactions.isEmpty,
             myReactions: message.myReactions,
             onReply: { onReply(message) },
+            onReplyPrivately: onReplyPrivately.map { handler in { handler(message) } },
             onEdit: { onEdit(message) },
             onDelete: { onDelete(message) },
             onCopy: {

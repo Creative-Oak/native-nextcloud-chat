@@ -52,7 +52,9 @@ extension ChatModel {
         // a message of their own.
         // See docs/plans/2026-09-15-attachments-photos-polls-design.md § 1.
         if attachments.hasStaged {
-            attachments.send(caption: text, replyTo: replyingTo?.messageID)
+            // A file's share can't quote a message from another conversation, so a private
+            // reply with a file goes without the quote.
+            attachments.send(caption: text, replyTo: replyingTo.flatMap { $0.token == token ? $0.messageID : nil })
             draftText = ""
             replyingTo = nil
             return
@@ -60,6 +62,7 @@ extension ChatModel {
 
         let reference = ReferenceID.generate()
         let replyTo = replyingTo?.messageID
+        let replyToToken = replyingTo.flatMap { $0.token != token ? $0.token : nil }
         let optimistic = Message(
             messageID: 0,
             localID: ReferenceID.localID(for: reference),
@@ -77,7 +80,8 @@ extension ChatModel {
                     text: parent.text,
                     parameters: parent.parameters,
                     isDeleted: parent.isDeleted,
-                    timestamp: parent.timestamp
+                    timestamp: parent.timestamp,
+                    token: replyToToken
                 )
             },
             // Talk only renders Markdown when it says so; assume it for our own message so
@@ -92,7 +96,7 @@ extension ChatModel {
         saveDraftNow()
         isScrolledToLatest = true
 
-        transmit(optimistic, replyTo: replyTo)
+        transmit(optimistic, replyTo: replyTo, replyToToken: replyToToken)
     }
 
     /// Retries a send that failed. Same reference id, so a message the server actually did
@@ -100,7 +104,7 @@ extension ChatModel {
     func retry(_ message: Message) {
         guard message.deliveryState.isPending else { return }
         mutateTimeline { $0.updateDeliveryState(localID: message.localID, to: .sending) }
-        transmit(message, replyTo: message.parent?.messageID)
+        transmit(message, replyTo: message.parent?.messageID, replyToToken: message.parent?.token)
     }
 
     func discard(_ message: Message) {
@@ -112,7 +116,7 @@ extension ChatModel {
         Task { await store.deleteMessage(localID: message.localID, token: token, accountID: accountID) }
     }
 
-    private func transmit(_ optimistic: Message, replyTo: Int?) {
+    private func transmit(_ optimistic: Message, replyTo: Int?, replyToToken: String?) {
         // Only send a reference id the server knows what to do with.
         let referenceID = capabilities.supportsReferenceIDs ? optimistic.referenceID : nil
 
@@ -125,6 +129,7 @@ extension ChatModel {
                     token: token,
                     message: optimistic.text,
                     replyTo: replyTo,
+                    replyToToken: replyToToken,
                     referenceID: referenceID
                 )
                 // The long poll may have delivered this already; the timeline handles both
@@ -149,9 +154,25 @@ extension ChatModel {
 
     func beginReply(to message: Message) {
         guard capabilities.supportsReplies, message.isReplyable, conversation.canPostMessages else { return }
+        // A message from elsewhere is a private reply, which this conversation has to be the
+        // one-to-one with its author for.
+        if message.token != token {
+            guard capabilities.supportsPrivateReply, conversation.isOneToOne, conversation.name == message.actor.id else { return }
+        }
         editing = nil
         replyingTo = message
         saveDraftNow()
+    }
+
+    /// Whether the message's menu offers Reply Privately.
+    func canReplyPrivately(to message: Message) -> Bool {
+        capabilities.supportsPrivateReply
+            && message.canBeRepliedToPrivately(in: conversation, myUserID: session.account.userID)
+    }
+
+    /// Whether the reply being written quotes a message from another conversation.
+    var isReplyingPrivately: Bool {
+        replyingTo.map { $0.token != token } ?? false
     }
 
     func cancelReply() {

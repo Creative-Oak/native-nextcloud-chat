@@ -54,6 +54,8 @@ struct TalkCapabilities: Sendable, Hashable, Codable {
     var showsReadStatus: Bool { has("chat-read-status") }
     var supportsReferenceIDs: Bool { has("chat-reference-id") }
     var supportsReplies: Bool { has("chat-replies") }
+    /// A reply in a one-to-one can quote a message from a group conversation you share.
+    var supportsPrivateReply: Bool { has("private-reply") }
     var supportsMessageContext: Bool { has("chat-get-context") }
     var supportsReactions: Bool { has("reactions") }
     var supportsMarkdown: Bool { has("markdown-messages") }

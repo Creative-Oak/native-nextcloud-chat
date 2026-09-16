@@ -129,4 +129,21 @@ struct MessageDecodingTests {
         #expect(actor.isFederated)
         #expect(actor.federationServer == "other.example.com")
     }
+
+    @Test("A private reply is offered to someone else's message in a group, and nowhere else")
+    func privateReplyRules() {
+        let group = Conversation(token: "g", type: .group)
+        let dm = Conversation(token: "d", type: .oneToOne)
+        func message(from actor: MessageActor, replyable: Bool = true) -> Message {
+            Message(messageID: 7, token: "g", actor: actor, timestamp: Date(), text: "hi", isReplyable: replyable)
+        }
+        let bob = MessageActor(kind: .users, id: "bob", displayName: "Bob")
+
+        #expect(message(from: bob).canBeRepliedToPrivately(in: group, myUserID: "alice"))
+        #expect(!message(from: bob).canBeRepliedToPrivately(in: dm, myUserID: "alice"))
+        #expect(!message(from: bob).canBeRepliedToPrivately(in: group, myUserID: "bob"))
+        #expect(!message(from: bob, replyable: false).canBeRepliedToPrivately(in: group, myUserID: "alice"))
+        let guest = MessageActor(kind: .guests, id: "g1", displayName: "Guest")
+        #expect(!message(from: guest).canBeRepliedToPrivately(in: group, myUserID: "alice"))
+    }
 }

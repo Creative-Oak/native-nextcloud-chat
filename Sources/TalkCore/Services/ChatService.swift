@@ -137,11 +137,17 @@ actor ChatService {
         token: String,
         message: String,
         replyTo: Int? = nil,
+        replyToToken: String? = nil,
         referenceID: String? = nil,
         silent: Bool = false
     ) async throws(TalkError) -> Message {
         var form = ["message": message]
-        if let replyTo, replyTo > 0 { form["replyTo"] = String(replyTo) }
+        if let replyTo, replyTo > 0 {
+            form["replyTo"] = String(replyTo)
+            // A private reply: the quoted message is in another conversation. Cap
+            // `private-reply`, and only into the one-to-one with the message's author.
+            if let replyToToken, replyToToken != token { form["replyToToken"] = replyToToken }
+        }
         if let referenceID { form["referenceId"] = referenceID }
         if silent { form["silent"] = "true" }
 
