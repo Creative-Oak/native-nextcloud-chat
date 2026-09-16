@@ -167,6 +167,84 @@ struct AttachmentUploadGuardTests {
         #expect(transport.requestCount == 0)
     }
 
+    @Test("A real file is streamed from disk, not read into the request")
+    func uploadStreamsFile() async throws {
+        let manager = FileManager.default
+        let root = manager.temporaryDirectory.appendingPathComponent("kvidr-tests-\(UUID().uuidString)")
+        try manager.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? manager.removeItem(at: root) }
+        let file = root.appendingPathComponent("report.pdf")
+        try Data("hello".utf8).write(to: file)
+
+        let transport = StubTransport(json: "", status: 201)
+        let server = try ServerAddress.parse("https://cloud.example.com")
+        let credentials = Credentials(loginName: "alice", appPassword: "pw")
+        let service = AttachmentService(
+            server: server,
+            credentials: credentials,
+            userID: "alice",
+            transport: transport,
+            client: OCSClient(server: server, credentials: credentials, transport: transport)
+        )
+
+        // The byte count the transfer carries is stale on purpose: the one sent is asked fresh.
+        let path = try await service.upload(FileTransfer(fileURL: file, byteCount: 999), folder: "/Talk", progress: { _ in })
+
+        let request = try #require(transport.lastRequest)
+        #expect(path == "/Talk/report.pdf")
+        #expect(request.bodyFile == file)
+        #expect(request.body == nil)
+        #expect(request.headers["OC-Total-Length"] == "5")
+    }
+
+    // MARK: - FileInspection
+
+    @Test("A file system that never answers is given up on at the deadline")
+    func inspectionGivesUp() async {
+        let release = DispatchSemaphore(value: 0)
+        defer { release.signal() }
+        let started = ContinuousClock.now
+
+        let answer = await FileInspection.inspect(
+            URL(fileURLWithPath: "/Volumes/share/report.pdf"),
+            deadline: 0.1,
+            probe: { _ in
+                // Stands in for a `stat` on a wedged mount: blocks until the test is over.
+                release.wait()
+                return .regularFile(byteCount: 1)
+            }
+        )
+
+        #expect(answer == .notAnswering)
+        #expect(ContinuousClock.now - started < .seconds(5))
+    }
+
+    @Test("An answer before the deadline is the answer")
+    func inspectionAnswers() async {
+        let answer = await FileInspection.inspect(
+            URL(fileURLWithPath: "/Users/alice/report.pdf"),
+            deadline: 10,
+            probe: { _ in .regularFile(byteCount: 42) }
+        )
+        #expect(answer == .regularFile(byteCount: 42))
+    }
+
+    @Test("The probe sizes a file and refuses a pipe")
+    func probe() throws {
+        let manager = FileManager.default
+        let root = manager.temporaryDirectory.appendingPathComponent("kvidr-tests-\(UUID().uuidString)")
+        try manager.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? manager.removeItem(at: root) }
+
+        let file = root.appendingPathComponent("report.pdf")
+        try Data("hello".utf8).write(to: file)
+        #expect(FileInspection.probe(file) == .regularFile(byteCount: 5))
+
+        let fifo = root.appendingPathComponent("pipe.pdf")
+        try #require(mkfifo(fifo.path, 0o600) == 0)
+        #expect(FileInspection.probe(fifo) == .notAttachable)
+    }
+
     // MARK: - isContained(in:)
 
     @Test("A file inside the directory is contained")

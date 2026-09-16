@@ -66,8 +66,9 @@ final class URLSessionTransport: HTTPTransport, @unchecked Sendable {
 
         let policed = policedSession(for: request)
         let body = request.body
+        let bodyFile = request.bodyFile
         let wantsProgress = progress != nil && body != nil
-        if !wantsProgress { urlRequest.httpBody = body }
+        if !wantsProgress && bodyFile == nil { urlRequest.httpBody = body }
 
         let outgoing = urlRequest
         let limit = request.maximumResponseSize
@@ -76,7 +77,11 @@ final class URLSessionTransport: HTTPTransport, @unchecked Sendable {
             return try await withTaskCancellationHandler {
                 try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<HTTPResponse, any Error>) in
                     let task: URLSessionTask
-                    if wantsProgress, let body {
+                    if let bodyFile {
+                        // Same delegate, same redirect refusal and response ceiling: an upload
+                        // task is a data task as far as the callbacks are concerned.
+                        task = policed.session.uploadTask(with: outgoing, fromFile: bodyFile)
+                    } else if wantsProgress, let body {
                         task = policed.session.uploadTask(with: outgoing, from: body)
                     } else {
                         task = policed.session.dataTask(with: outgoing)

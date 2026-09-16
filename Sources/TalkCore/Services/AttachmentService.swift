@@ -140,32 +140,58 @@ actor AttachmentService {
         folder: String,
         progress: @escaping @Sendable (Double) -> Void
     ) async throws(TalkError) -> String {
-        // The guard is what makes the read below safe, so it sits directly on top of it.
-        // `Data(contentsOf:)` reads whatever kind of URL it is handed: given `https://…` it
-        // performs a blocking, untimed, unbounded GET on this actor and answers with the
-        // body — which would then be uploaded to the user’s Nextcloud and shared into a
-        // conversation. Given a named pipe it blocks on this actor until the app is quit.
-        // Staging refuses both too, but a second place to stage from is one edit away, and
-        // the read is here.
-        guard transfer.fileURL.isAttachableFile else {
+        // The guard is what makes the read safe, so it sits directly before it. Handed
+        // `https://…`, a read would be a GET from inside the user's network whose answer is
+        // then posted into a conversation; handed a named pipe, it never finishes. Staging
+        // refuses both too, but a second place to stage from is one edit away, and the read
+        // starts here.
+        //
+        // And nothing on this actor touches the file system. Even asking what the file is —
+        // a `stat` — can block forever on a wedged network mount, and this actor is the one
+        // every later upload, share, delete and preview goes through. So the question is
+        // asked elsewhere, under a deadline, and the bytes are read by the transport as it
+        // sends them.
+        guard transfer.fileURL.isLocalFile else {
             throw .unexpectedResponse("Only files on this Mac can be attached")
         }
-
-        let data: Data
-        do {
-            data = try Data(contentsOf: transfer.fileURL)
-        } catch {
-            throw .unexpectedResponse("Couldn’t read \(transfer.fileName)")
+        let byteCount: Int?
+        switch await FileInspection.inspect(transfer.fileURL) {
+        case .regularFile(let size):
+            byteCount = size
+        case .notAttachable:
+            throw .unexpectedResponse("Only files on this Mac can be attached")
+        case .notAnswering:
+            throw .unexpectedResponse("Couldn’t read \(transfer.fileName): the disk it’s on isn’t answering")
         }
-        return try await upload(data, fileName: transfer.fileName, folder: folder, progress: progress)
+        // The file can still change between that answer and the read — replaced by a pipe,
+        // or its mount wedging now rather than a moment ago. That read happens on
+        // `URLSession`'s threads under the request's timeout, so the worst it costs is this
+        // one transfer, not the actor.
+        return try await upload(.file(transfer.fileURL), byteCount: byteCount, fileName: transfer.fileName, folder: folder, progress: progress)
     }
 
     // MARK: - WebDAV
 
-    /// Uploads, without ever silently overwriting: `If-None-Match: *` makes the PUT
-    /// conditional on the name being free, and a clash gets a numbered name instead.
+    /// Uploads bytes already in memory. See ``upload(_:byteCount:fileName:folder:progress:)``.
     func upload(
         _ data: Data,
+        fileName: String,
+        folder: String,
+        progress: @escaping @Sendable (Double) -> Void
+    ) async throws(TalkError) -> String {
+        try await upload(.data(data), byteCount: data.count, fileName: fileName, folder: folder, progress: progress)
+    }
+
+    private enum UploadBody {
+        case data(Data)
+        case file(URL)
+    }
+
+    /// Uploads, without ever silently overwriting: `If-None-Match: *` makes the PUT
+    /// conditional on the name being free, and a clash gets a numbered name instead.
+    private func upload(
+        _ body: UploadBody,
+        byteCount: Int?,
         fileName: String,
         folder: String,
         progress: @escaping @Sendable (Double) -> Void
@@ -190,16 +216,19 @@ actor AttachmentService {
                 // Only create; never replace someone's existing file.
                 "If-None-Match": "*"
             ]
-            headers["OC-Total-Length"] = String(data.count)
+            if let byteCount { headers["OC-Total-Length"] = String(byteCount) }
 
-            let request = HTTPRequest(
+            var request = HTTPRequest(
                 method: .put,
                 url: server.url(path: Endpoint.webDAV(userID: userID, path: path)),
                 headers: headers,
-                body: data,
                 // Big files need a long leash.
                 timeout: 600
             )
+            switch body {
+            case .data(let data): request.body = data
+            case .file(let url): request.bodyFile = url
+            }
 
             let response = try await transport.upload(request, progress: progress)
             switch response.status {
@@ -376,9 +405,10 @@ extension URL {
     /// it is a network fetch with this process's latency at the other end's mercy — but the
     /// user mounted it and the user picked the file, and refusing to attach from a work share
     /// would break something people legitimately do all day. The residual risk is a stall
-    /// rather than a disclosure: a wedged mount hangs this actor exactly as a FIFO would, and
-    /// the only real answer to that is to stream the upload from the file URL under a
-    /// timeout, which is a change to the transport rather than to this predicate.
+    /// rather than a disclosure, and it applies to this predicate too: on a wedged mount the
+    /// `stat` below never returns. The upload path therefore asks through
+    /// ``FileInspection``, off its actor and under a deadline, and streams the bytes rather
+    /// than reading them itself.
     var isAttachableFile: Bool {
         guard isLocalFile else { return false }
         if let isRegularFile = (try? resourceValues(forKeys: [.isRegularFileKey]))?.isRegularFile {
@@ -407,5 +437,72 @@ extension URL {
         // never what a per-item cleanup meant.
         guard candidate.count > container.count else { return false }
         return Array(candidate.prefix(container.count)) == container
+    }
+}
+
+// MARK: - Asking the file system, with a way out
+
+/// What a file turned out to be, asked somewhere a hang can't reach the caller.
+///
+/// A `stat` on a network mount whose server has gone away blocks in the kernel, and nothing
+/// in Swift concurrency can interrupt it. So the question goes to a GCD thread, and the
+/// caller stops waiting at the deadline. The thread may stay stuck until the mount recovers
+/// or is force-unmounted; that is the price, and it is one thread rather than the actor.
+/// The cooperative pool is deliberately not used: it has a thread per core, and a few
+/// stuck ones would starve the whole app.
+enum FileInspection: Sendable, Equatable {
+    /// Readable as an attachment. The size is `nil` when the file system wouldn't say.
+    case regularFile(byteCount: Int?)
+    /// Not a regular local file — a link, a directory, a pipe, a device, or nothing at all.
+    case notAttachable
+    /// No answer before the deadline.
+    case notAnswering
+
+    /// A local disk answers in microseconds and a healthy share in milliseconds; ten
+    /// seconds is well past both, and still short enough that a stuck upload says so.
+    static let deadline: TimeInterval = 10
+
+    static func inspect(
+        _ url: URL,
+        deadline: TimeInterval = FileInspection.deadline,
+        probe: @escaping @Sendable (URL) -> FileInspection = FileInspection.probe
+    ) async -> FileInspection {
+        await withCheckedContinuation { continuation in
+            let answer = FirstAnswer(continuation)
+            DispatchQueue.global(qos: .userInitiated).async { answer.give(probe(url)) }
+            DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + deadline) {
+                answer.give(.notAnswering)
+            }
+        }
+    }
+
+    /// The blocking question itself.
+    static func probe(_ url: URL) -> FileInspection {
+        guard url.isAttachableFile else { return .notAttachable }
+        if let size = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize {
+            return .regularFile(byteCount: size)
+        }
+        // The same fallback ``URL/isAttachableFile`` makes, for a Foundation that doesn't
+        // answer the resource key.
+        let size = (try? FileManager.default.attributesOfItem(atPath: url.resolvingSymlinksInPath().path))?[.size] as? NSNumber
+        return .regularFile(byteCount: size?.intValue)
+    }
+
+    /// Resumes a continuation with whichever answer arrives first, and ignores the other.
+    private final class FirstAnswer: @unchecked Sendable {
+        private let lock = NSLock()
+        private var continuation: CheckedContinuation<FileInspection, Never>?
+
+        init(_ continuation: CheckedContinuation<FileInspection, Never>) {
+            self.continuation = continuation
+        }
+
+        func give(_ result: FileInspection) {
+            let continuation = lock.withLock { () -> CheckedContinuation<FileInspection, Never>? in
+                defer { self.continuation = nil }
+                return self.continuation
+            }
+            continuation?.resume(returning: result)
+        }
     }
 }

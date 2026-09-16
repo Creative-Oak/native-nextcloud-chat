@@ -61,6 +61,13 @@ struct HTTPRequest: Sendable {
     var url: URL
     var headers: HTTPHeaders = .init()
     var body: Data?
+    /// A body read from disk by the transport as it sends, in place of ``body``.
+    ///
+    /// For attachments. Reading the file up front meant a blocking read on whoever built the
+    /// request — and a file on a wedged network mount blocks that read indefinitely. Handed
+    /// over as a path, the bytes are pulled by `URLSession` on its own threads, under the
+    /// request's timeout, and the file is never held in memory whole.
+    var bodyFile: URL?
     /// Long polls need a much longer timeout than ordinary calls.
     var timeout: TimeInterval = 30
     /// How many bytes of response body the transport will accumulate before giving up.
