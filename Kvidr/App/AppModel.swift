@@ -40,6 +40,14 @@ final class AppModel {
     /// `ChatModel` being built. Its files may still be going up, so it is handed over rather
     /// than left to be collected with the draft.
     @ObservationIgnored private var attachmentsInTransit: (token: String, queue: AttachmentQueue)?
+    /// Each conversation's upload tray, kept for as long as the session is.
+    ///
+    /// A conversation is opened into a new `ChatModel` every time it is selected, and the
+    /// tray used to be made fresh with it. Switching away mid-upload then took the row off
+    /// screen for good while the upload carried on unseen — its failure landed in a queue
+    /// nothing showed, and files staged but not yet sent were simply gone. Queues with
+    /// nothing in them are let go when another conversation is opened.
+    @ObservationIgnored private var attachmentQueues: [String: AttachmentQueue] = [:]
 
     var selectedToken: String? {
         didSet {
@@ -164,6 +172,8 @@ final class AppModel {
         guard let session else { return }
         await chat?.deactivate()
         chat = nil
+        // They belong to this session's server and credentials.
+        attachmentQueues = [:]
         conversationSyncTask?.cancel()
         conversationSyncTask = nil
         await session.shutdown()
@@ -264,7 +274,9 @@ final class AppModel {
         let previous = chat
         // A conversation that has just come from a draft takes the draft's queue with it,
         // files and all. Anything else gets one of its own.
-        let inherited = attachmentsInTransit?.token == conversation.token ? attachmentsInTransit?.queue : nil
+        let inherited = attachmentsInTransit?.token == conversation.token
+            ? attachmentsInTransit?.queue
+            : attachmentQueues[conversation.token]
         attachmentsInTransit = nil
 
         let model = ChatModel(
@@ -278,6 +290,8 @@ final class AppModel {
             }
         )
         chat = model
+        attachmentQueues = attachmentQueues.filter { !$0.value.isEmpty }
+        attachmentQueues[conversation.token] = model.attachments
 
         Task {
             // Tear the old one down *completely* first: the long-poll engine is shared, so

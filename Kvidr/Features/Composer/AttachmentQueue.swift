@@ -49,6 +49,12 @@ final class AttachmentQueue {
         transfers.contains { !$0.state.isFinished }
     }
 
+    /// Nothing in the tray and nothing waiting to be acknowledged — a queue that can be let
+    /// go without losing anything.
+    var isEmpty: Bool {
+        transfers.isEmpty && pendingPastedFiles.isEmpty
+    }
+
     var canAttach: Bool {
         session.capabilitySnapshot.attachmentsAllowed
     }
