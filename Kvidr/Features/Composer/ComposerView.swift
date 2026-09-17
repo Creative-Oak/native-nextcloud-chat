@@ -128,7 +128,11 @@ struct ComposerView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .sheet(isPresented: $isShowingNewPoll) {
-            NewPollSheet(session: model.session, token: model.conversation.token) {
+            NewPollSheet(
+                session: model.session,
+                token: model.conversation.token,
+                conversationSoFar: pollSourceText
+            ) {
                 // Nothing to insert here: creating a poll posts the message itself, and the
                 // sync loop brings it back like anyone else's.
             }
@@ -287,6 +291,24 @@ struct ComposerView: View {
         guard model.sendLater == nil, model.editing == nil, model.editingScheduled == nil else { return nil }
         guard !model.trimmedDraft.isEmpty, !model.attachments.hasStaged else { return nil }
         return model.absence?.firstMorningBack()
+    }
+
+    /// The recent conversation as plain lines, for the poll sheet to read a question out of.
+    ///
+    /// Nil rather than empty when there is nothing to read: the sheet hides its suggestion
+    /// button entirely rather than offering one that can only disappoint. Sensitive
+    /// conversations are never read.
+    private var pollSourceText: (() -> String)? {
+        guard !model.conversation.isSensitive else { return nil }
+        let recent = model.messages
+            .filter { !$0.isSystem && !$0.isDeleted && !$0.text.isEmpty }
+            .suffix(20)
+        guard recent.count >= 3 else { return nil }
+        return {
+            recent
+                .map { "\($0.actor.resolvedDisplayName): \($0.text.prefix(300))" }
+                .joined(separator: "\n")
+        }
     }
 
     /// A suggested reply goes into the field with the caret after it, never straight to

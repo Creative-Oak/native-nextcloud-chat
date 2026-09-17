@@ -248,3 +248,28 @@ If a digest appears when only one or two conversations were involved, or an ordi
 message is ever late, that is a bug — the whole point is that the common case is untouched.
 
 ---
+
+## 9. Turn a thread into a poll
+
+**Precondition:** Apple Intelligence **on**; a group or public conversation on a server with
+polls (`talk-polls`), and at least three messages in it.
+
+Set it up by having two accounts go back and forth about a decision — "skal vi tage mødet
+tirsdag eller onsdag?", "tirsdag passer mig bedst", "onsdag er bedre for mig".
+
+| # | Do this | Expect |
+| --- | --- | --- |
+| 9.1 | Click + in the composer → Poll… | The poll sheet, with **"Fill in from the conversation"** under the question field |
+| 9.2 | Click it | It says "Reading the conversation…", then the question and options fill in |
+| 9.3 | Read what it wrote | **The options are the ones people actually said** — Tuesday and Wednesday, not invented extras, no "other" |
+| 9.4 | Check the language | Danish conversation, Danish poll |
+| 9.5 | Change a word, add an option | All the fields are ordinary editable fields — nothing is locked |
+| 9.6 | Press Create | The poll is posted, as before this work |
+| 9.7 | **Do not** press Create — press Cancel instead | **Nothing was posted.** The model only ever fills the fields in |
+| 9.8 | Open the sheet in a room where nobody is deciding anything | Clicking it says "Couldn't find a decision in the conversation." — and the fields are left alone |
+| 9.9 | Click the button twice quickly | One run, not two |
+| 9.10 | With Apple Intelligence off | **The button isn't there at all.** The poll sheet is exactly as it was |
+| 9.11 | In a sensitive conversation | The button isn't there |
+| 9.12 | In a brand-new conversation with one message | The button isn't there — there is nothing to read |
+
+---
