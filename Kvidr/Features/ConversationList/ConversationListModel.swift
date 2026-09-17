@@ -21,6 +21,11 @@ final class ConversationListModel {
     }
     private static let archiveExpandedKey = "sidebarArchiveExpanded"
 
+    /// The favourites' order as the user arranged it, by token. Talk has no order of its own
+    /// for favourites, so it is kept on this Mac, per account.
+    private(set) var favoriteOrder: [String] = []
+    private var favoriteOrderKey: String { "favoriteOrder.\(CacheKey.fileName(session.account.id))" }
+
     let session: Session
     private let notifications: NotificationController
     /// Tokens we have already notified about, so a re-fetch doesn't re-announce old news.
@@ -33,6 +38,7 @@ final class ConversationListModel {
     init(session: Session, notifications: NotificationController) {
         self.session = session
         self.notifications = notifications
+        favoriteOrder = UserDefaults.standard.stringArray(forKey: favoriteOrderKey) ?? []
     }
 
     var conversations: [Conversation] {
@@ -49,7 +55,22 @@ final class ConversationListModel {
         guard !isFiltering else {
             return [ConversationIndex.SectionGroup(section: .conversations, items: conversations)]
         }
-        return ConversationIndex.sections(for: index.allConversations)
+        return ConversationIndex.sections(for: index.allConversations).map { group in
+            guard group.section == .favorites else { return group }
+            var arranged = group
+            arranged.items = ConversationIndex.arrange(favorites: group.items, by: favoriteOrder)
+            return arranged
+        }
+    }
+
+    /// Drops a favourite onto another's place.
+    func moveFavorite(_ token: String, onto target: String) {
+        // Start from what is on screen, so favourites never placed by hand are placed now.
+        let current = sections.first { $0.section == .favorites }?.items.map(\.token) ?? []
+        let order = ConversationIndex.move(token, onto: target, in: current)
+        guard order != current else { return }
+        favoriteOrder = order
+        UserDefaults.standard.set(order, forKey: favoriteOrderKey)
     }
 
     var totalUnreadCount: Int { index.totalUnreadCount }

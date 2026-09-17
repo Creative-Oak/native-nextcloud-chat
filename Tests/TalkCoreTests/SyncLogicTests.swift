@@ -280,3 +280,23 @@ struct SidebarSectionTests {
         #expect(index.archivedCount == 1)
     }
 }
+
+@Suite("Favourite order")
+struct FavoriteOrderTests {
+    private func favorite(_ token: String) -> Conversation {
+        Conversation(token: token, displayName: token, isFavorite: true)
+    }
+
+    @Test("Favourites keep the arranged order, and new ones follow")
+    func arranged() {
+        let incoming = ["c", "new", "a", "b"].map(favorite)
+        #expect(ConversationIndex.arrange(favorites: incoming, by: ["a", "b", "c"]).map(\.token) == ["a", "b", "c", "new"])
+    }
+
+    @Test("Dropping onto another's place takes it, forwards and backwards")
+    func move() {
+        #expect(ConversationIndex.move("a", onto: "c", in: ["a", "b", "c", "d"]) == ["b", "c", "a", "d"])
+        #expect(ConversationIndex.move("d", onto: "b", in: ["a", "b", "c", "d"]) == ["a", "d", "b", "c"])
+        #expect(ConversationIndex.move("a", onto: "a", in: ["a", "b"]) == ["a", "b"])
+    }
+}

@@ -203,4 +203,27 @@ struct ConversationIndex: Sendable, Equatable {
             indexByToken[conversations[index].token] = index
         }
     }
+
+    /// Favourites in the order the user arranged them, rather than by activity: a face that
+    /// jumps along the row whenever someone writes is one you can't find by where it is.
+    /// Tokens in `order` come first, in that order; favourites not in it yet follow, in the
+    /// order they arrive.
+    static func arrange(favorites: [Conversation], by order: [String]) -> [Conversation] {
+        let position = Dictionary(order.enumerated().map { ($1, $0) }, uniquingKeysWith: { first, _ in first })
+        let placed = favorites.filter { position[$0.token] != nil }.sorted { position[$0.token]! < position[$1.token]! }
+        let unplaced = favorites.filter { position[$0.token] == nil }
+        return placed + unplaced
+    }
+
+    /// The order after dragging `moved` onto `target`: it takes the target's place, and the
+    /// rest shuffle along.
+    static func move(_ moved: String, onto target: String, in order: [String]) -> [String] {
+        guard moved != target, order.contains(moved), let targetIndex = order.firstIndex(of: target) else { return order }
+        let movingForward = (order.firstIndex(of: moved) ?? 0) < targetIndex
+        var result = order.filter { $0 != moved }
+        let insertAt = (result.firstIndex(of: target) ?? result.count) + (movingForward ? 1 : 0)
+        result.insert(moved, at: min(insertAt, result.count))
+        return result
+    }
 }
+

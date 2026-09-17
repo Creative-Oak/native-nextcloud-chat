@@ -221,6 +221,8 @@ private struct PinnedConversations: View {
     @Binding var selection: String?
     /// The face whose menu is open.
     @State private var menuToken: String?
+    /// The face a dragged favourite is over.
+    @State private var dropTarget: String?
 
     /// Three across at the sidebar's ideal width, as in Messages.
     private let columns = [GridItem(.adaptive(minimum: 72), spacing: 2)]
@@ -282,6 +284,19 @@ private struct PinnedConversations: View {
                         )
                     )
                 }
+                // Drag a face onto another's place to rearrange them, as in Messages.
+                .draggable(FavoriteDrag(token: conversation.token)) {
+                    AvatarView(conversation: conversation, size: 62)
+                }
+                .dropDestination(for: FavoriteDrag.self) { items, _ in
+                    guard let moved = items.first?.token else { return false }
+                    withAnimation(.smooth(duration: 0.25)) { model.moveFavorite(moved, onto: conversation.token) }
+                    return true
+                } isTargeted: { targeted in
+                    dropTarget = targeted ? conversation.token : (dropTarget == conversation.token ? nil : dropTarget)
+                }
+                .scaleEffect(dropTarget == conversation.token ? 1.06 : 1)
+                .animation(.smooth(duration: 0.15), value: dropTarget)
                 .help(conversation.displayName)
                 .accessibilityLabel(label(for: conversation))
                 .accessibilityAddTraits(isSelected ? .isSelected : [])
@@ -388,7 +403,12 @@ struct ConversationRow: View {
                 }
             }
         }
-        .padding(.vertical, 7)
+        // Uneven on purpose. The line box of the 15pt name starts well above its capitals and
+        // the preview's ends close under its descenders, so even padding left the separator
+        // about 9pt under one row's text and 17pt over the next's. These put it halfway —
+        // about 15pt each way, measured on the rendered rows — as Messages spaces its list.
+        .padding(.top, 5)
+        .padding(.bottom, 13)
         // Without this, only the drawn glyphs are hit-testable: the gaps the Spacers open
         // up between name, timestamp and preview swallow clicks, and the row reads as
         // having dead patches in it.
@@ -481,8 +501,21 @@ private struct DraftRow: View {
                 .accessibilityLabel("Discard this message")
             }
         }
-        .padding(.vertical, 7)
+        .padding(.top, 5)
+        .padding(.bottom, 13)
         .contentShape(.rect)
         .onHover { isHovering = $0 }
     }
 }
+
+/// A favourite being dragged to a new place in the grid. Carried as a small JSON object — an
+/// app-specific type would need declaring in an Info.plist this project generates — and only
+/// something that decodes as one is accepted, so text or a file dropped on a face is refused.
+struct FavoriteDrag: Codable, Transferable {
+    let token: String
+
+    static var transferRepresentation: some TransferRepresentation {
+        CodableRepresentation(contentType: .json)
+    }
+}
+
