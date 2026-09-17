@@ -73,6 +73,10 @@ final class AppModel {
     /// The High Performance Backend connection's state, for Settings to show.
     private(set) var signalingState: SignalingConnection.State = .idle
     private var signalingStateTask: Task<Void, Never>?
+    private var signalingInboundTask: Task<Void, Never>?
+    /// The conversation this client is in on the signaling server, as the server last said.
+    /// Nil when another device took it over — see ``joinLive(_:)``.
+    private var liveRoom: String?
 
     /// Window/app activation, which gates read state. See `ReadStatePolicy`.
     var isApplicationActive = true { didSet { activationChanged() } }
@@ -216,7 +220,10 @@ final class AppModel {
         notificationPoller = nil
         signalingStateTask?.cancel()
         signalingStateTask = nil
+        signalingInboundTask?.cancel()
+        signalingInboundTask = nil
         signalingState = .idle
+        liveRoom = nil
     }
 
     /// The server's Talk configuration changed — refetch capabilities and rebuild around
@@ -307,7 +314,10 @@ final class AppModel {
             let previous = chat
             chat = nil
             inspector = nil
-            Task { await previous?.deactivate() }
+            Task {
+                await previous?.deactivate()
+                if let previous { await self.leaveLive(previous.token) }
+            }
             return
         }
 
@@ -342,9 +352,11 @@ final class AppModel {
             // Tear the old one down *completely* first: the long-poll engine is shared, so
             // overlapping activate/stop would leave the new conversation without a sync loop.
             await previous?.deactivate()
+            if let previous, previous.token != model.token { await self.leaveLive(previous.token) }
             await model.activate()
             await self.applyPendingReveal(to: model)
             self.applyPendingPrivateReply(to: model)
+            await self.joinLive(model.token)
         }
     }
 
@@ -438,14 +450,25 @@ final class AppModel {
         let context = currentReadContext(isScrolledToLatest: chat?.isScrolledToLatest ?? false)
         let isActive = isApplicationActive
         let chat = self.chat
+        let isLooking = isApplicationActive && isWindowKey
 
         Task {
             await session.chatSync.setReadContext(context)
+            // Joined to a conversation, Nextcloud counts this client as reading it and holds
+            // back its notifications — the phone's too. Away from the window, say so.
+            if let token = chat?.token, self.liveRoom == token, session.capabilitySnapshot.supportsSessionState {
+                try? await session.conversations.setSessionState(active: isLooking, token: token)
+            }
             if isActive {
                 // Coming back to the app is the moment to notice anything we missed.
                 await session.conversationSync.applicationDidBecomeActive()
                 await chat?.applicationDidBecomeActive()
                 await self.reminders?.load()
+                // Back in front after another device took the conversation over: take it back,
+                // now that this is where the user is.
+                if let token = chat?.token, self.liveRoom != token, case .connected = self.signalingState {
+                    await self.joinLive(token)
+                }
             } else {
                 await session.conversationSync.applicationDidResignActive()
             }
@@ -589,7 +612,50 @@ final class AppModel {
                 self?.signalingState = state
             }
         }
+        signalingInboundTask?.cancel()
+        let sync = session.conversationSync
+        signalingInboundTask = Task { [weak self] in
+            for await message in await signaling.inbound() {
+                guard let self else { return }
+                switch message {
+                case .roomList(let change, _):
+                    // Added, removed, renamed, a lobby or a call changed: the sidebar at once.
+                    // Only a full refresh can take a conversation away.
+                    let full = change == .removed || change == .deleted
+                    Log.sync.info("Live: a conversation changed (\(String(describing: change))), refreshing")
+                    await sync.refreshNow(full: full)
+                case .participantsChanged(let token) where token == self.selectedToken:
+                    await sync.refreshNow(full: false)
+                case .room(let roomID):
+                    self.liveRoom = roomID.isEmpty ? nil : roomID
+                default:
+                    break
+                }
+            }
+        }
         Task { await signaling.start() }
+    }
+
+    /// Joins the open conversation on Nextcloud and on the signaling server — what Talk's own
+    /// apps do, and what typing indicators need. `force` takes the conversation over from
+    /// another device that has it open, as those apps do; that device is moved out.
+    private func joinLive(_ token: String) async {
+        guard let session, selectedToken == token else { return }
+        do throws(TalkError) {
+            guard let sessionID = try await session.conversations.joinSession(token: token, force: true),
+                  selectedToken == token
+            else { return }
+            await session.signaling.join(roomID: token, sessionID: sessionID)
+        } catch {
+            Log.sync.info("Couldn’t join the conversation live: \(error.userMessage)")
+        }
+    }
+
+    private func leaveLive(_ token: String) async {
+        guard let session else { return }
+        liveRoom = nil
+        await session.signaling.leaveRoom()
+        try? await session.conversations.leave(token: token)
     }
 
     /// The Mac woke from sleep: the socket may have died without saying so.

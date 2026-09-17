@@ -148,6 +148,10 @@ struct ChatView: View {
         .onChange(of: liveConversation?.hiddenPinnedID) { _, id in
             if let id { model.hiddenPinChangedElsewhere(id) }
         }
+        // Name, picture and permissions follow the sidebar as it syncs.
+        .onChange(of: liveConversation) { _, fresh in
+            if let fresh { model.conversationChanged(fresh) }
+        }
         // Drop anywhere in the conversation, not just on the composer — that is where
         // people aim, and aiming at a 30pt field with a file in hand is a chore.
         .dropDestination(for: URL.self) { urls, _ in

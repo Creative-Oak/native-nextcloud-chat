@@ -136,6 +136,19 @@ final class ChatModel {
         }
     }
 
+    /// The sidebar synced a newer copy of this conversation — a rename, a new picture, changed
+    /// permissions. Taken over, except for what this model has moved on itself: how far it has
+    /// read.
+    func conversationChanged(_ fresh: Conversation) {
+        guard fresh.token == conversation.token, fresh != conversation else { return }
+        var merged = fresh
+        if conversation.lastReadMessageID > fresh.lastReadMessageID {
+            merged.lastReadMessageID = conversation.lastReadMessageID
+            merged.unreadMessages = conversation.unreadMessages
+        }
+        conversation = merged
+    }
+
     func rebuildRows() {
         rows = ChatRow.build(messages: timeline.messages, firstUnreadMessageID: firstUnreadMessageID)
     }

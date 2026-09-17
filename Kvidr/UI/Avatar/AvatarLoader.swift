@@ -88,7 +88,7 @@ final class AvatarLoader {
         }
         if let sealed = await diskCache.read(key: key, maximumAge: maximumAge),
            let data = sealer.open(sealed),
-           let image = NSImage(data: data) {
+           let image = Self.image(from: data, size: size) {
             store(image, for: key)
             return image
         }
@@ -117,7 +117,7 @@ final class AvatarLoader {
                 Log.ui.debug("Avatar response was far too large to be a profile picture")
                 return nil
             }
-            guard let image = NSImage(data: response.body) else { return nil }
+            guard let image = Self.image(from: response.body, size: size) else { return nil }
             // Not after a purge: a fetch still in flight when the account signed out must
             // not put back what the purge has just cleared away.
             guard !Task.isCancelled else { return nil }
@@ -130,6 +130,23 @@ final class AvatarLoader {
             // An avatar is decoration; a failure is never worth surfacing to the user.
             Log.ui.debug("Avatar fetch failed")
             return nil
+        }
+    }
+
+    /// A picture from the server's bytes. An emoji picture Talk made is drawn here from its
+    /// colour and emoji — see ``EmojiAvatar`` for why its SVG isn't used as it is.
+    private static func image(from data: Data, size: Int) -> NSImage? {
+        guard let emoji = EmojiAvatar.parse(data) else { return NSImage(data: data) }
+        let side = CGFloat(max(size, 32))
+        let rgb = emoji.rgb
+        return NSImage(size: NSSize(width: side, height: side), flipped: false) { rect in
+            NSColor(srgbRed: rgb.red, green: rgb.green, blue: rgb.blue, alpha: 1).setFill()
+            rect.fill()
+            let font = NSFont.systemFont(ofSize: side * 0.5)
+            let text = NSAttributedString(string: emoji.emoji, attributes: [.font: font])
+            let bounds = text.size()
+            text.draw(at: NSPoint(x: rect.midX - bounds.width / 2, y: rect.midY - bounds.height / 2))
+            return true
         }
     }
 

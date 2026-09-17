@@ -35,6 +35,9 @@ actor SignalingConnection {
     private var resumeID: String?
     private var nextID = 1
     private var wakeRequested = false
+    /// The conversation to be in, and the Nextcloud session to be in it with. Sent again after
+    /// every fresh sign-in; a resumed session is still in it.
+    private var desiredRoom: (roomID: String, sessionID: String)?
     private let backoff: @Sendable (Int) -> Duration
 
     static let pingInterval: Duration = .seconds(30)
@@ -91,6 +94,22 @@ actor SignalingConnection {
         channel = nil
         resumeID = nil
         state = .idle
+    }
+
+    /// Joins a conversation on the signaling server, leaving whichever it was in. The session
+    /// is Nextcloud's, from joining the conversation there first.
+    func join(roomID: String, sessionID: String) async {
+        desiredRoom = (roomID, sessionID)
+        guard case .connected = state, let channel else { return }
+        try? await channel.send(SignalingOutbound.room(id: makeID(), roomID: roomID, sessionID: sessionID).encoded())
+    }
+
+    /// Leaves the conversation it is in, if any.
+    func leaveRoom() async {
+        let had = desiredRoom
+        desiredRoom = nil
+        guard had != nil, case .connected = state, let channel else { return }
+        try? await channel.send(SignalingOutbound.room(id: makeID(), roomID: "", sessionID: "").encoded())
     }
 
     /// The Mac woke, or the network came back: don't wait out the pause, and drop a socket
@@ -154,8 +173,10 @@ actor SignalingConnection {
         }
 
         let sessionID: String
-        if let resumeID, let resumed = try? await hello(.resume(id: makeID(), resumeID: resumeID), on: channel) {
-            sessionID = resumed.sessionID
+        var resumed = false
+        if let resumeID, let result = try? await hello(.resume(id: makeID(), resumeID: resumeID), on: channel) {
+            sessionID = result.sessionID
+            resumed = true
         } else {
             resumeID = nil
             let request: SignalingOutbound
@@ -176,6 +197,11 @@ actor SignalingConnection {
 
         state = .connected(sessionID: sessionID)
         onSignedIn()
+
+        // A new session isn't in any conversation yet.
+        if !resumed, let desiredRoom {
+            try? await channel.send(SignalingOutbound.room(id: makeID(), roomID: desiredRoom.roomID, sessionID: desiredRoom.sessionID).encoded())
+        }
 
         try await withThrowingTaskGroup(of: Void.self) { group in
             group.addTask { try await self.keepAlive(channel) }

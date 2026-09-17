@@ -166,9 +166,10 @@ struct ComposerView: View {
                         .monospacedDigit()
                         .foregroundStyle(remaining < 0 ? .red : .secondary)
                 }
-                if showsRecordButton {
-                    // An empty field records instead, as it does in Messages; the send arrow
-                    // comes back with the first character typed.
+                // Both buttons are always laid out, one of them invisible, so the field is the
+                // same height either way. Swapping one for the other changed it by a few points,
+                // and the bottom-anchored transcript jumped when the first letter was typed.
+                ZStack {
                     Button {
                         startRecording()
                     } label: {
@@ -181,7 +182,10 @@ struct ComposerView: View {
                     .buttonStyle(.plain)
                     .help("Record a voice message")
                     .accessibilityLabel("Record a voice message")
-                } else {
+                    .opacity(showsRecordButton ? 1 : 0)
+                    .allowsHitTesting(showsRecordButton)
+                    .accessibilityHidden(!showsRecordButton)
+
                     Button(action: { model.send() }) {
                         Image(systemName: "arrow.up")
                             .font(.system(size: 13, weight: .semibold))
@@ -193,6 +197,9 @@ struct ComposerView: View {
                     .disabled(!model.canSend)
                     .keyboardShortcut(.return, modifiers: .command)
                     .help(sendHelp)
+                    .opacity(showsRecordButton ? 0 : 1)
+                    .allowsHitTesting(!showsRecordButton)
+                    .accessibilityHidden(showsRecordButton)
                 }
             }
         }

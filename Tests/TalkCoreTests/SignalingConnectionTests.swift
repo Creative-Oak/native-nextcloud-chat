@@ -212,4 +212,41 @@ struct SignalingConnectionTests {
             if case .other(let type, _) = $0 { type == "event" } else { false }
         } == true)
     }
+
+    @Test("Conversation events are sorted by what changed")
+    func decodesEvents() {
+        func decode(_ json: String) -> SignalingInbound? { SignalingInbound.decode(Data(json.utf8)) }
+        #expect(decode(#"{"type":"event","event":{"target":"roomlist","type":"invite","invite":{"roomid":"abc","properties":{}}}}"#) == .roomList(.added, token: "abc"))
+        #expect(decode(#"{"type":"event","event":{"target":"roomlist","type":"disinvite","disinvite":{"roomid":"abc"}}}"#) == .roomList(.removed, token: "abc"))
+        #expect(decode(#"{"type":"event","event":{"target":"roomlist","type":"update","update":{"roomid":"abc","properties":{"name":"New"}}}}"#) == .roomList(.updated, token: "abc"))
+        #expect(decode(#"{"type":"event","event":{"target":"roomlist","type":"delete","delete":{"roomid":"abc"}}}"#) == .roomList(.deleted, token: "abc"))
+        #expect(decode(#"{"type":"event","event":{"target":"participants","type":"update","update":{"roomid":"abc","users":[]}}}"#) == .participantsChanged(token: "abc"))
+        #expect(decode(#"{"type":"event","event":{"target":"room","type":"message","message":{"roomid":"abc","data":{"type":"chat","chat":{"refresh":true}}}}}"#) == .roomMessage(token: "abc"))
+        #expect(decode(#"{"type":"room","room":{"roomid":"abc","properties":{}}}"#) == .room(roomID: "abc"))
+    }
+
+    @Test("The conversation it should be in is joined on sign-in, and again after a fresh one")
+    func joinsRoom() async throws {
+        let transport = FakeTransport { index, socket, message in
+            guard let body = hello(message) else { return }
+            if body["resumeid"] != nil {
+                await socket.deliver(#"{"type":"error","error":{"code":"no_such_session","message":"gone"}}"#)
+                return
+            }
+            await socket.deliver(#"{"type":"hello","hello":{"sessionid":"s\#(index)","resumeid":"r","version":"2.0"}}"#)
+            if index == 0 { Task { try? await Task.sleep(for: .milliseconds(80)); await socket.close() } }
+        }
+        let signaling = connection(transport)
+        await signaling.join(roomID: "abc", sessionID: "nc-session")
+        await signaling.start()
+        try await wait(for: signaling) { $0 == .connected(sessionID: "s1") }
+        try await Task.sleep(for: .milliseconds(30))
+
+        for socket in transport.sockets {
+            let rooms = await socket.sent.compactMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
+                .compactMap { $0["room"] as? [String: String] }
+            #expect(rooms == [["roomid": "abc", "sessionid": "nc-session"]])
+        }
+        await signaling.stop()
+    }
 }

@@ -110,6 +110,13 @@ actor ConversationService {
         return try await client.require(request, as: ConversationDTO.self).value.model()
     }
 
+    /// Joins the conversation and answers the Nextcloud session id it was given — which the
+    /// signaling server needs to put this client in the same conversation.
+    func joinSession(token: String, force: Bool = true) async throws(TalkError) -> String? {
+        let request = OCSRequest.post(Endpoint.activeParticipants(token), form: force ? ["force": "true"] : [:])
+        return try await client.require(request, as: JoinedSessionDTO.self).value.sessionId
+    }
+
     func leave(token: String) async throws(TalkError) {
         _ = try await client.send(OCSRequest.delete(Endpoint.activeParticipants(token)), as: EmptyResponse.self)
     }
@@ -334,4 +341,9 @@ enum RemindersToken {
     static let value = "#reminders"
 
     static func isReminders(_ token: String?) -> Bool { token == value }
+}
+
+/// The one field of a joined conversation the signaling server needs.
+struct JoinedSessionDTO: Decodable, Sendable {
+    let sessionId: String?
 }
