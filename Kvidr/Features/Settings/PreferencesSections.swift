@@ -41,6 +41,11 @@ struct PreferencesCards: View {
                 caption: "With a pile of unread messages, the “New messages” line offers to summarise them — four lines about what you missed, written on this Mac. Nothing is summarised until you ask. Needs Apple Intelligence.",
                 isOn: $preferences.offersCatchUp
             )
+            PreferenceToggle(
+                title: "Mark what needs you",
+                caption: "Puts a mark in the sidebar on conversations whose newest message asks you something, beyond the ones that spell out your name. Questions and plain requests are found on this Mac; Apple Intelligence, when it is there, decides the ones that could go either way.",
+                isOn: $preferences.marksWhatNeedsYou
+            )
             ReminderDestinationPicker(preferences: preferences)
             IntelligenceStatusNote()
         }

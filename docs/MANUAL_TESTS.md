@@ -190,3 +190,32 @@ The card must never be mistakable for a message: no bubble, no avatar, a sparkle
 a caption. If it reads as something somebody said, that is a bug worth stopping for.
 
 ---
+
+## 7. What needs you, in the sidebar
+
+**Precondition:** Settings → Intelligence → "Mark what needs you" on. The first half works
+with Apple Intelligence off — check it that way first.
+
+| # | Do this | Expect |
+| --- | --- | --- |
+| 7.1 | From the other account, send `Kan du nå at kigge på rapporten inden fredag?` to a conversation you are not looking at | **An orange `?` appears on that row in the sidebar, immediately** |
+| 7.2 | Open that conversation | The orange mark goes at once — not on the next sync |
+| 7.3 | Have them send `ok, tak!` to another conversation | **No mark.** An acknowledgement is not a question |
+| 7.4 | Have them send `👍` | No mark |
+| 7.5 | Have them send `Husk at få den godkendt` (no question mark) | Marked — a plain request counts |
+| 7.6 | Have them `@mention` you | The `@` badge shows, as before, and takes precedence over the orange `?` |
+| 7.7 | Send something to yourself in Note to self | No mark — your own message can't be waiting on you |
+| 7.8 | Look at a sensitive conversation with unread | **No mark** |
+| 7.9 | Turn the setting off | Every orange mark goes |
+| 7.10 | With Apple Intelligence off, repeat 7.1 and 7.3 | Both still behave — those are the table's, not the model's |
+
+**With Apple Intelligence on**, the ambiguous ones get a second opinion:
+
+| # | Do this | Expect |
+| --- | --- | --- |
+| 7.11 | Have them send `jeg har lagt den i mappen` | Probably no mark — it is an announcement |
+| 7.12 | Have them send `jeg mangler stadig dit input på den her inden vi sender` | Marked — somebody is blocked on you |
+| 7.13 | In a **group**, have them ask somebody else a question by name | Ideally no mark. Worth watching over a few days: a marker that fires on everything is worse than none |
+| 7.14 | Watch Activity Monitor while a sync brings in twenty conversations | **One burst of work, not twenty** — the whole sidebar is one question |
+
+---

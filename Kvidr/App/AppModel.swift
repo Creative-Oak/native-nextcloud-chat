@@ -58,6 +58,7 @@ final class AppModel {
                 dependencies.preferences.lastSelectedToken = selectedToken
             }
             openSelectedConversation()
+            if let selectedToken { attention.markHandled(selectedToken) }
         }
     }
 
@@ -72,6 +73,8 @@ final class AppModel {
     /// Apple Intelligence, asked once for the whole app rather than per conversation — a
     /// session is expensive to make and its availability is a property of the Mac.
     let intelligence = OnDeviceIntelligence()
+    /// Which conversations are waiting on this user — see `AttentionModel`.
+    let attention = AttentionModel()
     private var notificationPoller: NotificationPoller?
     /// The High Performance Backend connection's state, for Settings to show.
     private(set) var signalingState: SignalingConnection.State = .idle
@@ -174,9 +177,13 @@ final class AppModel {
         reminders.conversation = { [weak list] token in list?[token] }
         self.reminders = reminders
 
+        attention.intelligence = intelligence
+        attention.isEnabled = dependencies.preferences.marksWhatNeedsYou
+
         // Paint from the cache *before* going to `.ready`, so the window never flashes an
         // empty "No Conversations" state on the way in.
         await list.loadFromCache()
+        refreshAttention(from: list)
         phase = .ready
 
         // The server tells us its Talk configuration changed by changing this hash; that is
@@ -504,6 +511,7 @@ final class AppModel {
                 case .conversations(let result):
                     await list.apply(result)
                     self.notifications.updateBadge(count: list.totalUnreadCount)
+                    self.refreshAttention(from: list)
                 case .offline(let isOffline):
                     self.connection = isOffline ? .offline : .online
                 case .failed(let error) where error.requiresReauthentication:
@@ -513,6 +521,13 @@ final class AppModel {
                 }
             }
         }
+    }
+
+    /// Judged from the last message the sidebar already holds, so this costs nothing until
+    /// the model is asked — and it is only asked about what the table couldn't call.
+    func refreshAttention(from list: ConversationListModel) {
+        attention.isEnabled = dependencies.preferences.marksWhatNeedsYou
+        attention.update(with: list.index.allConversations, currentUserID: session?.account.userID ?? "")
     }
 
     private func observeNetwork() {

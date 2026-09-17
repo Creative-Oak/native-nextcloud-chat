@@ -20,6 +20,7 @@ private enum Key {
     static let messageSuggestions = "intelligence.messageSuggestions"
     static let smartReplies = "intelligence.smartReplies"
     static let catchUp = "intelligence.catchUp"
+    static let needsYou = "intelligence.needsYou"
     static let reminderDestination = "reminders.destination"
     static let transcriptionLanguage = "voice.transcriptionLanguage"
 }
@@ -104,6 +105,12 @@ final class Preferences {
         didSet { defaults.set(offersCatchUp, forKey: Key.catchUp) }
     }
 
+    /// Marks the conversations in the sidebar whose newest message is waiting on you.
+    /// The obvious ones are found without a model; Apple Intelligence settles the rest.
+    var marksWhatNeedsYou: Bool {
+        didSet { defaults.set(marksWhatNeedsYou, forKey: Key.needsYou) }
+    }
+
     /// Where "Remind Me" puts a reminder.
     var reminderDestination: ReminderDestination {
         didSet { defaults.set(reminderDestination.rawValue, forKey: Key.reminderDestination) }
@@ -154,6 +161,7 @@ final class Preferences {
             Key.messageSuggestions: true,
             Key.smartReplies: true,
             Key.catchUp: true,
+            Key.needsYou: true,
             Key.reminderDestination: ReminderDestination.talk.rawValue,
             Key.allowInsecureLocalServers: false,
             Key.developerMode: false
@@ -170,6 +178,7 @@ final class Preferences {
         showsMessageSuggestions = defaults.bool(forKey: Key.messageSuggestions)
         suggestsReplies = defaults.bool(forKey: Key.smartReplies)
         offersCatchUp = defaults.bool(forKey: Key.catchUp)
+        marksWhatNeedsYou = defaults.bool(forKey: Key.needsYou)
         reminderDestination = defaults.string(forKey: Key.reminderDestination)
             .flatMap(ReminderDestination.init(rawValue:)) ?? .talk
         transcriptionLanguage = defaults.string(forKey: Key.transcriptionLanguage)

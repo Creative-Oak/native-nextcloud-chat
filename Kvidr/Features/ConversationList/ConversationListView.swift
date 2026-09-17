@@ -18,6 +18,10 @@ struct ConversationListView: View {
     var reminderCount = 0
 
     @FocusState private var isSearchFocused: Bool
+    /// Read rather than passed in: which conversations are waiting on you is a property of
+    /// the whole sidebar, and threading it through this view's initialiser would mean
+    /// every caller knowing about it.
+    @Environment(AppModel.self) private var app
 
     init(
         model: ConversationListModel,
@@ -148,7 +152,8 @@ struct ConversationListView: View {
             ConversationRow(
                 conversation: conversation,
                 isSelected: selection == conversation.token,
-                precedesSelection: precedesSelection
+                precedesSelection: precedesSelection,
+                needsYou: app.attention.needsYou.contains(conversation.token)
             )
                 .tag(conversation.token)
                 .contextMenu { ConversationContextMenu(model: model, conversation: conversation) }
@@ -401,6 +406,8 @@ struct ConversationRow: View {
     /// The row below this one is the selected one, so this row's separator would be drawn in
     /// the gap above its highlight.
     var precedesSelection = false
+    /// The newest message here is waiting on this user — see `AttentionModel`.
+    var needsYou = false
 
     /// The gutter the unread dot lives in, plus the avatar and the gap after it — the
     /// separator between rows starts where the text does, as it does in Messages.
@@ -455,6 +462,14 @@ struct ConversationRow: View {
                                 .font(.system(size: 12))
                                 .foregroundStyle(isSelected ? .white : Color.accentColor)
                                 .help("You were mentioned")
+                        } else if needsYou {
+                            // Orange rather than the accent colour, so it reads as a
+                            // different kind of thing from an unread count — this is not
+                            // "there is something here", it is "somebody is waiting".
+                            Image(systemName: "questionmark.circle.fill")
+                                .font(.system(size: 12))
+                                .foregroundStyle(isSelected ? .white : .orange)
+                                .help("Somebody is waiting on you here")
                         } else if conversation.unreadMessages > 1 {
                             unreadCount
                         }
@@ -508,6 +523,7 @@ struct ConversationRow: View {
         var parts = [conversation.displayName]
         if conversation.unreadMessages > 0 { parts.append("\(conversation.unreadMessages) unread") }
         if conversation.unreadMention { parts.append("mentions you") }
+        if needsYou { parts.append("waiting on you") }
         if conversation.hasCall { parts.append("call in progress") }
         parts.append(preview)
         return parts.joined(separator: ", ")
