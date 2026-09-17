@@ -120,6 +120,7 @@ your judgement once it runs.
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — layers, concurrency, data flow
 - [`docs/NEXTCLOUD_API.md`](docs/NEXTCLOUD_API.md) — every endpoint and capability relied on, verified against the official docs
 - [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) — the plan, and what is done
+- [`docs/MANUAL_TESTS.md`](docs/MANUAL_TESTS.md) — what to click on a dev machine, and what should happen
 - [`docs/MAC_HANDOVER.md`](docs/MAC_HANDOVER.md) — **start here on a Mac**: building, signing, signing in, and what to send back when something breaks
 
 ## Development against your own server

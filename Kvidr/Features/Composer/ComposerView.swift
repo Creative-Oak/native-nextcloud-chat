@@ -14,6 +14,9 @@ struct ComposerView: View {
     /// draft rather than of the conversation.
     @State private var composerIntelligence = ComposerIntelligence()
     @State private var smartReplies = SmartReplyModel()
+    /// Waved away for this conversation: the out-of-office suggestion doesn't come back
+    /// until you open it again.
+    @State private var didDismissAbsenceSuggestion = false
     @State private var isShowingNewPoll = false
     /// Made the first time the record button is pressed.
     @State private var recorder: VoiceRecorder?
@@ -56,7 +59,15 @@ struct ComposerView: View {
                         model.cancelReply()
                     }
                 } else {
-                    if !smartReplies.replies.isEmpty {
+                    if let sendAt = suggestedAbsenceSendTime, let absence = model.absence {
+                        AbsenceSendLaterBar(
+                            name: model.conversation.displayName,
+                            absence: absence,
+                            sendAt: sendAt,
+                            onSchedule: { model.beginSendLater(at: sendAt) },
+                            onDismiss: { didDismissAbsenceSuggestion = true }
+                        )
+                    } else if !smartReplies.replies.isEmpty {
                         SmartReplyBar(replies: smartReplies.replies, onPick: useSuggestedReply)
                     }
                     editor
@@ -238,6 +249,7 @@ struct ComposerView: View {
         }
         .animation(.smooth(duration: 0.2), value: model.sendLater != nil)
         .animation(.smooth(duration: 0.2), value: model.armedReminder)
+        .animation(.smooth(duration: 0.2), value: suggestedAbsenceSendTime)
         .padding(.leading, 12)
         .padding(.trailing, 6)
         .padding(.vertical, 5)
@@ -258,9 +270,23 @@ struct ComposerView: View {
         composerIntelligence.isEnabled = preferences?.suggestsTimes ?? true
         composerIntelligence.update(for: model.draftText)
 
+        didDismissAbsenceSuggestion = false
+
         smartReplies.intelligence = app.intelligence
         smartReplies.isEnabled = preferences?.suggestsReplies ?? true
         smartReplies.update(for: model)
+    }
+
+    /// When to offer holding this message until the person you are writing to is back.
+    ///
+    /// Only once there is something to hold, and only while it would actually be sent into
+    /// their absence: with Send Later already open, or the composer in the middle of an
+    /// edit, there is nothing helpful to say.
+    private var suggestedAbsenceSendTime: Date? {
+        guard !didDismissAbsenceSuggestion, model.canSchedule else { return nil }
+        guard model.sendLater == nil, model.editing == nil, model.editingScheduled == nil else { return nil }
+        guard !model.trimmedDraft.isEmpty, !model.attachments.hasStaged else { return nil }
+        return model.absence?.firstMorningBack()
     }
 
     /// A suggested reply goes into the field with the caret after it, never straight to

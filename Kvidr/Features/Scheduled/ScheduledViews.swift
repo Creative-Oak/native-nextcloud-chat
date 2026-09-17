@@ -152,10 +152,23 @@ struct SendLaterPresets: View {
     let model: ChatModel
 
     var body: some View {
+        // First, when there is one: the time that is actually about the person you are
+        // writing to, rather than about the clock.
+        if let back = model.absence?.firstMorningBack() {
+            Button("When \(firstName) is back — \(ReminderTime.text(back))") {
+                model.beginSendLater(at: back)
+            }
+            Divider()
+        }
         ForEach(ReminderPreset.presets()) { preset in
             Button("\(preset.title) — \(ReminderTime.text(preset.date))") {
                 model.beginSendLater(at: preset.date)
             }
         }
+    }
+
+    private var firstName: String {
+        let name = model.conversation.displayName
+        return name.split(separator: " ").first.map(String.init) ?? name
     }
 }

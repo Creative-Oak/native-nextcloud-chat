@@ -1,0 +1,162 @@
+# Manual tests
+
+What to click, and what should happen, for the parts of kvidr no compiler and no unit test
+can check. Written to be worked through on a dev machine with a real Nextcloud behind it.
+
+`swift test` covers the rules underneath most of this — date phrases, suggestion shapes,
+return times, triage scoring. What is listed here is everything those tests cannot see: the
+drawing, the timing, the permissions, and whether the thing is any good.
+
+## How to use this
+
+Each section is one feature: what has to be true before you start, the steps, and what
+should happen. **Bold** lines are the ones that matter most — if only one thing gets tested,
+test those.
+
+Two switches change nearly everything below, so know where they are:
+
+- **System Settings → Apple Intelligence & Siri** — on or off.
+- **kvidr → Settings → Intelligence** — the per-feature switches, and where reminders go.
+
+A good half of the work here is checking the app is still sensible with Apple Intelligence
+**off**. That is not an edge case: it is every Intel Mac, every Mac in a region where it
+hasn't shipped, and everyone who turned it off on purpose.
+
+### Setting up a second account
+
+Most of this needs somebody to talk to. The quickest way is a second user on the same
+Nextcloud, signed in on your phone or in a private browser window, in a one-to-one with
+your own account.
+
+---
+
+## 1. Times you type become reminders
+
+*Shipped 17 September 2026. Design: `plans/2026-09-17-apple-intelligence-design.md`.*
+
+**Precondition:** Settings → Intelligence → "Underline times you type" on. Works with Apple
+Intelligence on or off — do the first pass with it **off**, so you are testing the table.
+
+| # | Do this | Expect |
+| --- | --- | --- |
+| 1.1 | Type `lad os snakke om det i morgen` in the message field | **`i morgen` is blue and underlined. Nothing else is.** |
+| 1.2 | Click the underlined words | **A dashed pill appears in the field: "Remind me Tomorrow 09:00", with the phrase beside it** |
+| 1.3 | Press Return | The message sends; right-click it — it has a reminder on it, and the orange alarm line shows under the bubble |
+| 1.4 | Open Reminders in the sidebar | The reminder is listed, for tomorrow 09:00 |
+| 1.5 | Type the sentence again, click the phrase, then click the pill's × | The pill goes; sending sets no reminder |
+| 1.6 | Type `mødet er i morgen kl. 14` | The underline covers **all** of `i morgen kl. 14`, and the pill says 14:00 — not two underlines, not 09:00 |
+| 1.7 | Type `der er 14 tilmeldte` | **Nothing is underlined.** A bare number is not a time |
+| 1.8 | Type `lad os snakke om det` | Nothing is underlined |
+| 1.9 | Type `👍 i morgen` | The underline is under `i morgen`, not shifted one character right |
+| 1.10 | Type a sentence, then insert words *before* the phrase | The underline moves with its words as you type |
+| 1.11 | Put the caret just after an underlined phrase and keep typing | **The new text is normal colour, not blue** |
+| 1.12 | Double-click an underlined phrase | It selects the word, as in any text field — it does not fire the reminder twice |
+| 1.13 | Try `på fredag`, `om et par dage`, `i overmorgen`, `next week`, `in two hours`, `tomorrow at 2pm` | Each is underlined and resolves sensibly |
+
+**With Apple Intelligence on**, additionally:
+
+| # | Do this | Expect |
+| --- | --- | --- |
+| 1.14 | Type `lad os tage det på fredag efter frokost` and wait about a second | `på fredag efter frokost` underlined, resolving to Friday early afternoon |
+| 1.15 | Type quickly for ten seconds without pausing | No stutter in the field. The underline keeps up; nothing flickers |
+
+### Composer height — the risky one
+
+`updateHeight()` changed text stacks in this work. Check it directly:
+
+| # | Do this | Expect |
+| --- | --- | --- |
+| 1.16 | Type until the field wraps to 2, 3, 4 lines | **It grows line by line, smoothly** |
+| 1.17 | Keep going past six or seven lines | It stops growing and starts scrolling instead |
+| 1.18 | Delete back down to one line | It shrinks back; the transcript above does not jump |
+| 1.19 | Select some text, right-click → Writing Tools → Proofread | **Writing Tools opens and can change the text in place** |
+
+---
+
+## 2. One-tap suggestions under a message
+
+**Precondition:** Settings → Intelligence → "Suggest what to do with a message" on. Works
+with Apple Intelligence off.
+
+| # | Do this | Expect |
+| --- | --- | --- |
+| 2.1 | From the other account, send `Kan vi tales ved i morgen?` | **An "Add to Reminders" chip appears under that message** |
+| 2.2 | Click it | It becomes "Reminder set" and stops being clickable. The reminder is in the Reminders list |
+| 2.3 | Scroll away and back | It still says "Reminder set" |
+| 2.4 | From the other account, send a list: `Vi skal bruge:` then `- chips` `- tomater` `- ananas` on their own lines | **An "Add to Notes" chip appears** |
+| 2.5 | Click it | It becomes "Added to Notes". Open Note to self — the text is there, credited to the sender, with the conversation named |
+| 2.6 | Send `Vi skal bruge: chips, tomater, ananas, sodavand` on one line | Add to Notes appears — the inline list counts |
+| 2.7 | Send `Husk i morgen: chips, tomater, ananas, sodavand` | **Both chips appear** |
+| 2.8 | Send `ja, det lyder fint` | **No chips.** Ordinary chat gets none |
+| 2.9 | Scroll far up the conversation | No chips on old messages — only the newest handful carry them |
+| 2.10 | Send a message yourself that names a time | No chips on your own messages (except in Note to self) |
+| 2.11 | Mark a conversation sensitive in Nextcloud, repeat 2.1 | **No chips at all in that conversation** |
+| 2.12 | Turn the setting off in Settings, reopen the conversation | No chips anywhere |
+| 2.13 | Hover a chip | The tooltip names the phrase it read and the time it resolved to |
+
+---
+
+## 3. Suggested replies
+
+**Precondition:** Apple Intelligence **on**; Settings → Intelligence → "Suggest replies" on.
+
+| # | Do this | Expect |
+| --- | --- | --- |
+| 3.1 | From the other account, send `Kan du nå at kigge på rapporten i dag?` | **Two or three reply chips appear above the message field, within a second or two** |
+| 3.2 | Read them | **They are in Danish** — the language the question was asked in |
+| 3.3 | Click one | It goes **into the field**, with the caret after it. Nothing is sent |
+| 3.4 | Press Return | It sends as an ordinary message |
+| 3.5 | Have them send another message, then start typing yourself | The chips disappear as soon as you type |
+| 3.6 | Start a reply (⇧⌘R), then look | No chips while a reply is being composed |
+| 3.7 | Send a message yourself so you spoke last | No chips — there is nothing to answer |
+| 3.8 | Read the suggestions over a few conversations | **None of them invents a commitment** — no "I'll send it at 2", no prices, no dates you didn't agree to |
+| 3.9 | Switch Apple Intelligence off in System Settings, reopen kvidr | **No reply chips at all, and no empty space where they were.** Everything in §1 and §2 still works |
+| 3.10 | Open Settings → Intelligence with it off | A line explains why, and says the rest still works |
+
+---
+
+## 4. Where reminders go
+
+**Precondition:** Settings → Intelligence → "Reminders go to".
+
+| # | Do this | Expect |
+| --- | --- | --- |
+| 4.1 | Leave it on **Nextcloud**. Right-click a message → Remind Me → In 1 Hour | The reminder appears in kvidr's Reminders list, and in Talk on your phone |
+| 4.2 | Switch to **Apple Reminders**. Set another reminder | **macOS asks for permission to your reminders, once** |
+| 4.3 | Allow it, open Reminders.app | The reminder is in the default list, titled `Sender: the message`, with an alarm at the time |
+| 4.4 | Check kvidr's Reminders list | It is **not** there — you chose Apple |
+| 4.5 | Switch to **Both**, set another | It is in both places |
+| 4.6 | Refuse permission at step 4.2 instead, then open Settings → Intelligence | An orange line explains, and points at System Settings |
+| 4.7 | With a sensitive conversation, set an Apple reminder | **The message text is not in Reminders.app** — only that there is one |
+| 4.8 | On a server too old for `remind-me-later`, with Apple chosen | Remind Me still works, going to Apple |
+
+If 4.2 never prompts and nothing appears, the signed build is missing either the
+`com.apple.security.personal-information.calendars` entitlement or
+`NSRemindersFullAccessUsageDescription`.
+
+---
+
+## 5. Send Later, when they are away
+
+*No model involved — this is the server's own out-of-office data.*
+
+**Precondition:** a one-to-one with somebody who has set an out-of-office in Nextcloud
+(Settings → Availability → Absence) that is **current**, and a server supporting scheduled
+messages.
+
+| # | Do this | Expect |
+| --- | --- | --- |
+| 5.1 | Open the one-to-one. The out-of-office bar shows at the top | As before this work — unchanged |
+| 5.2 | Type anything | **A bar appears over the field: "Heine is away until Fri 19 Sep · Send Mon 22 Sep 08:00"** |
+| 5.3 | Click the Send… link | Send Later's dashed pill appears in the field, already set to that morning |
+| 5.4 | Press Return | It is scheduled, not sent — it appears at the foot of the conversation in outline |
+| 5.5 | Set their absence to end on a **Friday**, reopen | **The suggestion says Monday morning, not Saturday** |
+| 5.6 | Click the bar's × | It goes, and stays gone for this conversation. Return sends normally |
+| 5.7 | Switch conversation and come back | The suggestion is offered again |
+| 5.8 | Clear the draft | The bar goes with it — there is nothing to hold |
+| 5.9 | Stage a file, type a caption | No suggestion: files cannot be scheduled |
+| 5.10 | Open the + menu → Send Later | **"When Heine is back — Mon 08:00" is the first item, above the usual times** |
+| 5.11 | In a conversation with nobody away, open the same menu | Only the usual times. No absence item |
+| 5.12 | With an absence that ends **today** | No suggestion — the morning after has already been |
+
+---
