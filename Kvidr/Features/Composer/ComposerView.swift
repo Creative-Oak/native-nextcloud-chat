@@ -269,7 +269,7 @@ struct ComposerView: View {
         app.intelligence.refreshReadiness()
         // A session carries its conversation with it, and the next conversation is none of
         // the last one's business.
-        app.intelligence.forgetContext()
+        app.intelligence.forgetConversationContext()
 
         composerIntelligence.intelligence = app.intelligence
         composerIntelligence.isEnabled = preferences?.suggestsTimes ?? true

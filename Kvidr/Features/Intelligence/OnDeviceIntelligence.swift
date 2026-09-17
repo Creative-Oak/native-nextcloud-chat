@@ -44,6 +44,9 @@ final class OnDeviceIntelligence {
         case poll
         case search
         case voice
+
+        /// The ones whose context is one conversation.
+        static let perConversation: Set<Purpose> = [.dates, .replies, .catchUp, .poll]
     }
 
     @ObservationIgnored private var sessions: [Purpose: LanguageModelSession] = [:]
@@ -63,7 +66,8 @@ final class OnDeviceIntelligence {
         } else {
             readiness = .unavailable("Apple Intelligence isn’t available right now.")
         }
-        if !readiness.isReady { sessions = [:] }
+        // A model that went away takes its sessions with it.
+        if !readiness.isReady { forgetContext() }
     }
 
     // MARK: - Asking
@@ -190,6 +194,16 @@ final class OnDeviceIntelligence {
 
     /// Thrown away when the conversation changes, so nothing one room said is in the
     /// context of the next. A transcript is cheap to rebuild and a leak between rooms is not.
+    ///
+    /// Only the sessions whose context *is* a conversation. The sidebar's triage, the
+    /// notification digest and the search reader are about the app as a whole; re-priming
+    /// their instructions every time somebody clicks a different room would be waste for
+    /// its own sake.
+    func forgetConversationContext() {
+        for purpose in Purpose.perConversation { sessions[purpose] = nil }
+    }
+
+    /// Everything, for signing out or losing the model.
     func forgetContext() {
         sessions = [:]
     }

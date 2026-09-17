@@ -1,8 +1,11 @@
 import Foundation
 import Observation
-import Translation
 
 /// Translating a message into the language you read in.
+///
+/// The `Translation` framework itself is only reachable from a SwiftUI view — a session
+/// comes from `.translationTask` and nowhere else — so this holds the state and the
+/// transcript does the work. See `ChatView.translate(with:)`.
 ///
 /// Not the language model — Apple's `Translation` framework, which is the right tool and a
 /// much smaller one. It runs on this Mac, it does not need Apple Intelligence at all, and
