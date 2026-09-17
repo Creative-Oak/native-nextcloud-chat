@@ -19,6 +19,7 @@ private enum Key {
     static let suggestTimes = "intelligence.suggestTimes"
     static let messageSuggestions = "intelligence.messageSuggestions"
     static let smartReplies = "intelligence.smartReplies"
+    static let catchUp = "intelligence.catchUp"
     static let reminderDestination = "reminders.destination"
     static let transcriptionLanguage = "voice.transcriptionLanguage"
 }
@@ -98,6 +99,11 @@ final class Preferences {
         didSet { defaults.set(suggestsReplies, forKey: Key.smartReplies) }
     }
 
+    /// The "Catch me up on 47" button on the new-messages line. Needs Apple Intelligence.
+    var offersCatchUp: Bool {
+        didSet { defaults.set(offersCatchUp, forKey: Key.catchUp) }
+    }
+
     /// Where "Remind Me" puts a reminder.
     var reminderDestination: ReminderDestination {
         didSet { defaults.set(reminderDestination.rawValue, forKey: Key.reminderDestination) }
@@ -147,6 +153,7 @@ final class Preferences {
             Key.suggestTimes: true,
             Key.messageSuggestions: true,
             Key.smartReplies: true,
+            Key.catchUp: true,
             Key.reminderDestination: ReminderDestination.talk.rawValue,
             Key.allowInsecureLocalServers: false,
             Key.developerMode: false
@@ -162,6 +169,7 @@ final class Preferences {
         suggestsTimes = defaults.bool(forKey: Key.suggestTimes)
         showsMessageSuggestions = defaults.bool(forKey: Key.messageSuggestions)
         suggestsReplies = defaults.bool(forKey: Key.smartReplies)
+        offersCatchUp = defaults.bool(forKey: Key.catchUp)
         reminderDestination = defaults.string(forKey: Key.reminderDestination)
             .flatMap(ReminderDestination.init(rawValue:)) ?? .talk
         transcriptionLanguage = defaults.string(forKey: Key.transcriptionLanguage)

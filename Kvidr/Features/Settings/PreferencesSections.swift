@@ -36,6 +36,11 @@ struct PreferencesCards: View {
                 caption: "Offers two or three replies above the message field, in the conversation’s language and in the way you write. Needs Apple Intelligence.",
                 isOn: $preferences.suggestsReplies
             )
+            PreferenceToggle(
+                title: "Offer to catch you up",
+                caption: "With a pile of unread messages, the “New messages” line offers to summarise them — four lines about what you missed, written on this Mac. Nothing is summarised until you ask. Needs Apple Intelligence.",
+                isOn: $preferences.offersCatchUp
+            )
             ReminderDestinationPicker(preferences: preferences)
             IntelligenceStatusNote()
         }

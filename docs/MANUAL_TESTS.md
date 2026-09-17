@@ -160,3 +160,33 @@ messages.
 | 5.12 | With an absence that ends **today** | No suggestion — the morning after has already been |
 
 ---
+
+## 6. Catch up on what you missed
+
+**Precondition:** Apple Intelligence **on**; Settings → Intelligence → "Offer to catch you
+up" on. You need a conversation with at least six unread messages from somebody else — the
+easiest way is to leave kvidr on another conversation while the second account sends a
+dozen.
+
+| # | Do this | Expect |
+| --- | --- | --- |
+| 6.1 | Open the conversation with the unread pile | The "New messages" line reads **"Catch me up on 12"** instead of "New messages" |
+| 6.2 | Do nothing for a minute | **Nothing is summarised.** No spinner, no inference, until you ask |
+| 6.3 | Click it | The line says "Catching you up…", then a card appears **under the line, above the unread messages** |
+| 6.4 | Read the card | A headline, two to four bullets, and a grey caption saying how many messages it read and that it happened on this Mac |
+| 6.5 | Check it against the messages themselves | **It names who said what, and invents nothing.** This is the one to be fussy about |
+| 6.6 | If somebody asked you something directly | An orange "Needs you" tag on the card |
+| 6.7 | Click the card's × | The card goes; the line goes back to offering |
+| 6.8 | Switch to another conversation and back | The summary is not carried over into the other room |
+| 6.9 | Open a conversation with 3 unread | **No offer** — reading three is quicker than summarising them |
+| 6.10 | Open one with no unread | The line isn't there at all, as before |
+| 6.11 | In a sensitive conversation with unread | **No offer** |
+| 6.12 | Turn the setting off | The line reads "New messages" again, everywhere |
+| 6.13 | With Apple Intelligence off | The line reads "New messages" — no offer, no empty button |
+| 6.14 | Have a Danish conversation | **The summary is in Danish** |
+| 6.15 | Click, then immediately switch conversations | No summary lands in the wrong room |
+
+The card must never be mistakable for a message: no bubble, no avatar, a sparkles symbol and
+a caption. If it reads as something somebody said, that is a bug worth stopping for.
+
+---

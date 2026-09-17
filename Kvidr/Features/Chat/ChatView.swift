@@ -48,6 +48,8 @@ struct ChatView: View {
     /// being over the header, and how far the frosted band reaches.
     @State private var toolbarDepth: CGFloat = 0
     @State private var isPointerOverHeader = false
+    /// What you missed, when you ask for it. One per conversation.
+    @State private var catchUp = CatchUpModel()
 
     /// The user's own Note to self conversation, where "Add to Notes" puts things.
     ///
@@ -418,6 +420,9 @@ struct ChatView: View {
     /// message it belongs to exists.
     private func configureSuggestions() {
         model.showsSuggestions = preferences?.showsMessageSuggestions ?? true
+        catchUp.intelligence = app.intelligence
+        catchUp.isEnabled = preferences?.offersCatchUp ?? true
+        catchUp.prepare(for: model)
         model.onArmedReminder = { [reminders] message, date in
             reminders?.remind(about: message, at: date)
         }
@@ -462,7 +467,12 @@ struct ChatView: View {
         case .daySeparator(let day):
             DaySeparator(day: day)
         case .unreadSeparator:
-            UnreadSeparator()
+            UnreadSeparatorRow(
+                state: catchUp.state,
+                unreadCount: catchUp.canOffer(for: model) ? model.unreadForCatchUp.count : nil,
+                onCatchUp: { catchUp.summarise(model) },
+                onDismiss: { catchUp.dismiss() }
+            )
         case .message(let message, let group):
             MessageRow(
                 message: message,
@@ -611,20 +621,6 @@ private struct DaySeparator: View {
     private var label: String { RelativeTimestamp.daySeparator(day) }
 }
 
-private struct UnreadSeparator: View {
-    var body: some View {
-        HStack(spacing: 8) {
-            Rectangle().fill(Color.accentColor.opacity(0.4)).frame(height: 1)
-            Text("New messages")
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(Color.accentColor)
-                .fixedSize()
-            Rectangle().fill(Color.accentColor.opacity(0.4)).frame(height: 1)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
-    }
-}
 
 /// Errors live here rather than in modal alerts: a chat client that interrupts you with a
 /// dialog every time the network hiccups is unusable.

@@ -31,10 +31,22 @@ final class OnDeviceIntelligence {
     private(set) var readiness: Readiness = .unavailable("Not checked yet.")
     var isReady: Bool { readiness.isReady }
 
-    /// Made on first use and kept: a session carries its instructions, and rebuilding one
-    /// per keystroke would pay for them every time.
-    @ObservationIgnored private var dateSession: LanguageModelSession?
-    @ObservationIgnored private var replySession: LanguageModelSession?
+    /// The kinds of work asked of the model. One session each, because a session carries
+    /// its instructions and rebuilding one per keystroke would pay for them every time —
+    /// and because a session asked two unrelated questions is a session with the first
+    /// one's answer still in its context.
+    enum Purpose: Hashable {
+        case dates
+        case replies
+        case catchUp
+        case triage
+        case notifications
+        case poll
+        case search
+        case voice
+    }
+
+    @ObservationIgnored private var sessions: [Purpose: LanguageModelSession] = [:]
 
     init() {
         refreshReadiness()
@@ -51,9 +63,36 @@ final class OnDeviceIntelligence {
         } else {
             readiness = .unavailable("Apple Intelligence isn’t available right now.")
         }
-        if !readiness.isReady {
-            dateSession = nil
-            replySession = nil
+        if !readiness.isReady { sessions = [:] }
+    }
+
+    // MARK: - Asking
+
+    /// Asks the model one question and gets a typed answer, or nothing.
+    ///
+    /// Every feature in the app goes through here, which is what keeps the failure
+    /// behaviour identical everywhere: a guardrail trip, a context overflow and a model
+    /// that went away mid-sentence all come back as `nil`, and every caller already knows
+    /// what to do without a model. There is no error to show a user, because there is
+    /// nothing they could do about it.
+    func answer<Content: Generable>(
+        _ type: Content.Type,
+        purpose: Purpose,
+        instructions: String,
+        prompt: String
+    ) async -> Content? {
+        guard isReady else { return nil }
+
+        let session = sessions[purpose] ?? LanguageModelSession { instructions }
+        sessions[purpose] = session
+        // One question at a time per purpose. The caller either debounces or doesn't care.
+        guard !session.isResponding else { return nil }
+
+        do {
+            return try await session.respond(to: prompt, generating: Content.self).content
+        } catch {
+            Log.ui.debug("On-device \(String(describing: purpose)) declined: \(error.localizedDescription)")
+            return nil
         }
     }
 
@@ -66,24 +105,16 @@ final class OnDeviceIntelligence {
     func refinedDates(in text: String, alreadyFound: [DateExpression], now: Date = Date()) async -> [DateExpression] {
         guard isReady, text.count >= 8, text.count <= 1000 else { return [] }
 
-        let session = dateSession ?? LanguageModelSession { Self.dateInstructions }
-        dateSession = session
-        guard !session.isResponding else { return [] }
-
-        let prompt = """
-        Today is \(Self.stamp.string(from: now)) (\(Self.weekday.string(from: now))).
-        Message: "\(text)"
-        """
-
-        let found: RefinedTimes
-        do {
-            found = try await session.respond(to: prompt, generating: RefinedTimes.self).content
-        } catch {
-            // A guardrail trip, a context overflow, the model going away mid-sentence: all
-            // of them mean the same thing here, which is that the table's answer stands.
-            Log.ui.debug("On-device date refinement declined: \(error.localizedDescription)")
-            return []
-        }
+        // Nothing to report is the normal answer here, and the table's reading stands.
+        guard let found = await answer(
+            RefinedTimes.self,
+            purpose: .dates,
+            instructions: Self.dateInstructions,
+            prompt: """
+            Today is \(Self.stamp.string(from: now)) (\(Self.weekday.string(from: now))).
+            Message: "\(text)"
+            """
+        ) else { return [] }
 
         let taken = alreadyFound.map(\.range)
         var refined: [DateExpression] = []
@@ -126,10 +157,6 @@ final class OnDeviceIntelligence {
     func replies(to transcript: String, inTheStyleOf ownMessages: [String]) async -> [String] {
         guard isReady, !transcript.isEmpty else { return [] }
 
-        let session = replySession ?? LanguageModelSession { Self.replyInstructions }
-        replySession = session
-        guard !session.isResponding else { return [] }
-
         let style = ownMessages.isEmpty
             ? "No examples available; keep it plain and friendly."
             : ownMessages.prefix(6).map { "- \($0)" }.joined(separator: "\n")
@@ -144,27 +171,27 @@ final class OnDeviceIntelligence {
         Suggest replies to the last message.
         """
 
-        do {
-            let replies = try await session.respond(to: prompt, generating: SuggestedReplies.self).content
-            return replies.replies
-                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-                .filter { !$0.isEmpty && $0.count <= 80 }
-                .reduce(into: [String]()) { unique, reply in
-                    if !unique.contains(where: { $0.caseInsensitiveCompare(reply) == .orderedSame }) { unique.append(reply) }
-                }
-                .prefix(3)
-                .map { $0 }
-        } catch {
-            Log.ui.debug("On-device replies declined: \(error.localizedDescription)")
-            return []
-        }
+        guard let suggested = await answer(
+            SuggestedReplies.self,
+            purpose: .replies,
+            instructions: Self.replyInstructions,
+            prompt: prompt
+        ) else { return [] }
+
+        return suggested.replies
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty && $0.count <= 80 }
+            .reduce(into: [String]()) { unique, reply in
+                if !unique.contains(where: { $0.caseInsensitiveCompare(reply) == .orderedSame }) { unique.append(reply) }
+            }
+            .prefix(3)
+            .map { $0 }
     }
 
     /// Thrown away when the conversation changes, so nothing one room said is in the
     /// context of the next. A transcript is cheap to rebuild and a leak between rooms is not.
     func forgetContext() {
-        dateSession = nil
-        replySession = nil
+        sessions = [:]
     }
 
     // MARK: - Instructions and formats
