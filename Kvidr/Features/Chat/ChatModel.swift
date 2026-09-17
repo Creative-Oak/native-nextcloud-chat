@@ -481,8 +481,19 @@ final class ChatModel {
         didSet {
             scheduleDraftSave()
             refreshMentionQuery()
+            // Typing, not a draft coming back or a message being edited.
+            if draftText != oldValue, !isRestoringDraft, editing == nil {
+                onDraftEdited?(draftText.isEmpty)
+            }
         }
     }
+
+    /// The user changed the text in the composer; whether it is now empty.
+    @ObservationIgnored var onDraftEdited: ((_ isEmpty: Bool) -> Void)?
+    @ObservationIgnored private var isRestoringDraft = false
+
+    /// Who is typing in this conversation right now, as the live connection hears it.
+    var typists: [TypingTracker.Typist] = []
 
     /// Caret offset in the composer, reported by the text view. Mention autocomplete needs
     /// it to know which `@…` the user is inside.
@@ -508,7 +519,9 @@ final class ChatModel {
 
     private func restoreDraft() async {
         guard let draft = await session.store.draft(token: token, accountID: session.account.id) else { return }
+        isRestoringDraft = true
         draftText = draft.text
+        isRestoringDraft = false
         if let replyTo = draft.replyToMessageID { replyingTo = timeline.message(id: replyTo) }
         if let editingID = draft.editingMessageID { editing = timeline.message(id: editingID) }
     }

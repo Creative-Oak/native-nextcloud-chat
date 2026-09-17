@@ -77,6 +77,8 @@ final class AppModel {
     /// The conversation this client is in on the signaling server, as the server last said.
     /// Nil when another device took it over — see ``joinLive(_:)``.
     private var liveRoom: String?
+    /// Typing indicators, both ways, while connected.
+    private var typing: LiveTyping?
 
     /// Window/app activation, which gates read state. See `ReadStatePolicy`.
     var isApplicationActive = true { didSet { activationChanged() } }
@@ -224,6 +226,8 @@ final class AppModel {
         signalingInboundTask = nil
         signalingState = .idle
         liveRoom = nil
+        typing?.tearDown()
+        typing = nil
     }
 
     /// The server's Talk configuration changed — refetch capabilities and rebuild around
@@ -344,6 +348,10 @@ final class AppModel {
         model.onHiddenPinChanged = { [weak self, token = conversation.token] id in
             self?.conversationList?.setHiddenPinnedID(id, token: token)
         }
+        model.onDraftEdited = { [weak self, token = conversation.token] isEmpty in
+            self?.typing?.draftEdited(token: token, isEmpty: isEmpty)
+        }
+        if let typing, typing.room == conversation.token { model.typists = typing.typists }
         chat = model
         attachmentQueues = attachmentQueues.filter { !$0.value.isEmpty }
         attachmentQueues[conversation.token] = model.attachments
@@ -602,14 +610,33 @@ final class AppModel {
         }
     }
 
-    /// Connects to the High Performance Backend, and follows its state. Nothing rides on the
-    /// connection yet; it is the groundwork for instant updates and typing.
+    /// Connects to the High Performance Backend, and follows its state: instant conversation
+    /// changes and typing indicators ride on it.
     private func startSignaling(session: Session) {
         let signaling = session.signaling
+        typing?.tearDown()
+        let typing = LiveTyping(
+            ownUserID: session.account.userID,
+            // Public typing privacy (0) — the user's own Talk setting.
+            isEnabled: { session.capabilitySnapshot.config.chatTypingPrivacy == 0 },
+            send: { to, isTyping in
+                await signaling.send(toSession: to, data: ["type": isTyping ? "startedTyping" : "stoppedTyping", "to": to])
+            }
+        )
+        typing.onChange = { [weak self, weak typing] typists in
+            guard let self, let chat = self.chat else { return }
+            chat.typists = chat.token == typing?.room ? typists : []
+        }
+        self.typing = typing
         signalingStateTask?.cancel()
         signalingStateTask = Task { [weak self] in
             for await state in await signaling.states() {
                 self?.signalingState = state
+                if case .connected(let sessionID) = state {
+                    typing.connected(sessionID: sessionID)
+                } else {
+                    typing.connected(sessionID: nil)
+                }
             }
         }
         signalingInboundTask?.cancel()
@@ -628,6 +655,13 @@ final class AppModel {
                     await sync.refreshNow(full: false)
                 case .room(let roomID):
                     self.liveRoom = roomID.isEmpty ? nil : roomID
+                    typing.roomChanged(roomID)
+                case .sessionsJoined(let sessions):
+                    typing.joined(sessions)
+                case .sessionsLeft(let ids):
+                    typing.left(ids)
+                case .typing(let from, let isTyping):
+                    typing.received(fromSession: from, isTyping: isTyping)
                 default:
                     break
                 }
@@ -653,6 +687,7 @@ final class AppModel {
 
     private func leaveLive(_ token: String) async {
         guard let session else { return }
+        typing?.stopTyping()
         liveRoom = nil
         await session.signaling.leaveRoom()
         try? await session.conversations.leave(token: token)

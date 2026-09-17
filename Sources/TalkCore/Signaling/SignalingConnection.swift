@@ -112,6 +112,12 @@ actor SignalingConnection {
         try? await channel.send(SignalingOutbound.room(id: makeID(), roomID: "", sessionID: "").encoded())
     }
 
+    /// Sends a message to one session, if connected; one that can't be sent is dropped.
+    func send(toSession session: String, data: [String: String]) async {
+        guard case .connected = state, let channel else { return }
+        try? await channel.send(SignalingOutbound.message(toSession: session, data: data).encoded())
+    }
+
     /// The Mac woke, or the network came back: don't wait out the pause, and drop a socket
     /// that may have died while nobody was looking.
     func reconnectNow() {

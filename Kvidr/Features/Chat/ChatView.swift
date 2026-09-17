@@ -221,6 +221,12 @@ struct ChatView: View {
                             .id("scheduled-\(message.id)")
                     }
 
+                    if !model.typists.isEmpty {
+                        TypingIndicatorRow(typists: model.typists, conversation: model.conversation)
+                            .id("typing")
+                            .transition(.opacity.combined(with: .scale(scale: 0.8, anchor: .bottomLeading)))
+                    }
+
                     // A little breathing room above the composer, and the anchor the
                     // "scroll to bottom" logic targets.
                     Color.clear
@@ -296,6 +302,12 @@ struct ChatView: View {
                 if scrolling, tapbackMessageID != nil { dismissTapback() }
             }
             .environment(\.isTranscriptScrolling, isScrolling)
+            // The bubble comes into view if the transcript was at the bottom, as a message would.
+            .animation(reduceMotion ? nil : .smooth(duration: 0.25), value: model.typists.isEmpty)
+            .onChange(of: model.typists.isEmpty) { _, isEmpty in
+                guard didInitialScroll, !isEmpty, model.isScrolledToLatest else { return }
+                scrollToBottom(proxy, animated: true)
+            }
             .onChange(of: model.rows.last?.id) { _, _ in
                 // `didInitialScroll` gates this as well as the initial positioning: when
                 // the first rows arrive both this and the isEmpty handler below fire in
