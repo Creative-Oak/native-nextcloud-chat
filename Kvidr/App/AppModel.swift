@@ -69,6 +69,7 @@ final class AppModel {
     /// row and the Settings page, so the two can never disagree.
     private(set) var profile: ProfileModel?
     private(set) var reminders: ReminderStore?
+    private var notificationPoller: NotificationPoller?
 
     /// Window/app activation, which gates read state. See `ReadStatePolicy`.
     var isApplicationActive = true { didSet { activationChanged() } }
@@ -174,6 +175,7 @@ final class AppModel {
         startConversationSync(session: session, list: list)
         await notifications.requestAuthorizationIfNeeded()
         await reminders.load()
+        startNotificationPolling(session: session)
     }
 
     /// Restores the previously open conversation, if it still exists.
@@ -206,6 +208,8 @@ final class AppModel {
         profile = nil
         reminders?.tearDown()
         reminders = nil
+        notificationPoller?.stop()
+        notificationPoller = nil
     }
 
     /// The server's Talk configuration changed — refetch capabilities and rebuild around
@@ -528,6 +532,35 @@ final class AppModel {
         }
         draft = nil
         conversationCreated(conversation)
+    }
+
+    /// See ``NotificationPoller``.
+    private func startNotificationPolling(session: Session) {
+        let sync = session.conversationSync
+        let poller = NotificationPoller(
+            service: session.serverNotifications,
+            handlers: .init(
+                chatActivity: {
+                    Task { await sync.refreshNow(full: false) }
+                },
+                callStarted: { [weak self] notification in
+                    guard let self, case .call(let token) = notification.kind else { return }
+                    // Looking at it already: the call bar says so, and a banner on top is noise.
+                    if self.selectedToken == token && self.isApplicationActive && self.isWindowKey { return }
+                    self.notifications.announceCall(
+                        notification,
+                        in: self.conversationList?[token],
+                        isDoNotDisturb: self.profile?.status?.status == .dnd
+                    )
+                    Task { await sync.refreshNow(full: false) }
+                },
+                gone: { [weak self] ids in
+                    self?.notifications.withdrawCalls(ids: ids)
+                }
+            )
+        )
+        notificationPoller = poller
+        poller.start()
     }
 
     func refreshNow() {

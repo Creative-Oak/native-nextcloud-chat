@@ -25,7 +25,19 @@ final class NotificationController: NSObject {
         self.preferences = preferences
         super.init()
         center.delegate = self
+        center.setNotificationCategories([
+            UNNotificationCategory(
+                identifier: Self.callCategory,
+                actions: [UNNotificationAction(identifier: Self.joinAction, title: "Join in Browser", options: [.foreground])],
+                intentIdentifiers: [],
+                options: []
+            )
+        ])
     }
+
+    nonisolated private static let callCategory = "call"
+    nonisolated private static let joinAction = "join"
+    private static let callPrefix = "call-"
 
     func requestAuthorizationIfNeeded() async {
         guard !hasRequestedAuthorization else { return }
@@ -78,6 +90,40 @@ final class NotificationController: NSObject {
         center.add(request) { error in
             if let error { Log.notification.warning("Couldn’t post notification: \(error.localizedDescription)") }
         }
+    }
+
+    // MARK: - Calls
+
+    /// Someone is calling, or a call started. The server has already worded it ("Bob wants to
+    /// talk with you"); the banner offers the way in, since kvidr can't join a call itself.
+    func announceCall(_ notification: ServerNotification, in conversation: Conversation?, isDoNotDisturb: Bool) {
+        guard preferences.showsNotifications else { return }
+        if let conversation {
+            guard conversation.notificationCalls != 0 else { return }
+            if isDoNotDisturb && !conversation.isImportant { return }
+        }
+
+        let content = UNMutableNotificationContent()
+        content.title = conversation?.displayName ?? "Call"
+        content.body = notification.subject.isEmpty ? "A call is waiting for you" : notification.subject
+        content.categoryIdentifier = Self.callCategory
+        content.interruptionLevel = .timeSensitive
+        if preferences.playsNotificationSound { content.sound = .default }
+        var info: [String: Any] = [:]
+        if case .call(let token) = notification.kind { info["token"] = token }
+        if let link = notification.link { info["link"] = link.absoluteString }
+        content.userInfo = info
+
+        let request = UNNotificationRequest(identifier: Self.callPrefix + String(notification.id), content: content, trigger: nil)
+        center.add(request) { error in
+            if let error { Log.notification.warning("Couldn’t post a call notification: \(error.localizedDescription)") }
+        }
+    }
+
+    /// Takes down the banners for calls that have been answered, ended or missed.
+    func withdrawCalls(ids: Set<Int>) {
+        let identifiers = ids.map { Self.callPrefix + String($0) }
+        center.removeDeliveredNotifications(withIdentifiers: identifiers)
     }
 
     // MARK: - Reminders
@@ -162,7 +208,16 @@ extension NotificationController: UNUserNotificationCenterDelegate {
         let userInfo = response.notification.request.content.userInfo
         let token = userInfo["token"] as? String
         let messageID = userInfo["messageID"] as? Int
+        // Only a web link, and only one the server gave — checked again here, since this
+        // is where it is opened.
+        let joinLink = response.actionIdentifier == Self.joinAction
+            ? (userInfo["link"] as? String).flatMap(URL.init(string:)).flatMap { $0.isWebLink ? $0 : nil }
+            : nil
         await MainActor.run { [weak self] in
+            if let joinLink {
+                NSWorkspace.shared.open(joinLink)
+                return
+            }
             NSApplication.shared.activate(ignoringOtherApps: true)
             guard let token else { return }
             if let messageID, let open = self?.onOpenMessage {

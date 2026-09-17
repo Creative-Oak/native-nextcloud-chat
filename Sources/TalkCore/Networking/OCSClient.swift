@@ -10,6 +10,9 @@ struct OCSRequest: Sendable {
     var form: [String: String]?
     var timeout: TimeInterval = 30
     var requiresAuthentication = true
+    /// Extra headers — `If-None-Match` for a poll that should cost nothing when nothing changed.
+    /// The ones this client sets itself (auth, OCS, content type) win over these.
+    var headers: HTTPHeaders = [:]
     /// How many bytes of response this particular call is willing to take.
     ///
     /// The default suits an OCS payload. A caller that knows better should say so: an
@@ -135,10 +138,9 @@ actor OCSClient {
     // MARK: - Plumbing
 
     private func perform(_ request: OCSRequest) async throws(TalkError) -> HTTPResponse {
-        var headers: HTTPHeaders = [
-            "OCS-APIRequest": "true",
-            "Accept": "application/json"
-        ]
+        var headers = request.headers
+        headers["OCS-APIRequest"] = "true"
+        headers["Accept"] = "application/json"
 
         if request.requiresAuthentication {
             guard let credentials else { throw .notAuthenticated }
