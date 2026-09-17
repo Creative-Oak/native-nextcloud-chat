@@ -67,6 +67,12 @@ struct PreferencesCards: View {
             PreferenceToggle(title: "Show message previews", isOn: $preferences.showsNotificationPreviews)
                 .disabled(!preferences.showsNotifications)
             PreferenceToggle(title: "Show unread count on the Dock icon", isOn: $preferences.showsDockBadge)
+            PreferenceToggle(
+                title: "Group a rush of notifications",
+                caption: "Three or more conversations arriving at once become one banner instead of a pile. Being mentioned always gets its own. With Apple Intelligence the banner says what people want; without it, who is waiting.",
+                isOn: $preferences.summarisesNotificationBursts
+            )
+                .disabled(!preferences.showsNotifications)
             Text("kvidr follows each conversation’s notification setting from Nextcloud — right-click a conversation in the sidebar to change it. Notifications arrive while kvidr is running; closing the window keeps it running, quitting does not.")
                 .font(.system(size: 11))
                 .foregroundStyle(.tertiary)

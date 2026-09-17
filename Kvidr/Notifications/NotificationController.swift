@@ -20,6 +20,8 @@ final class NotificationController: NSObject {
     var onOpenMessage: ((String, Int) -> Void)?
     /// Set by the app: whether the user's own status is Do Not Disturb right now.
     var isDoNotDisturb: () -> Bool = { false }
+    /// Collapses a burst of banners into one — see ``NotificationDigest``.
+    let digest = NotificationDigest()
 
     init(preferences: Preferences) {
         self.preferences = preferences
@@ -82,11 +84,25 @@ final class NotificationController: NSObject {
         content.threadIdentifier = conversation.token
         if isMention { content.interruptionLevel = .timeSensitive }
 
-        let request = UNNotificationRequest(
-            identifier: "\(conversation.token)-\(conversation.lastActivity.timeIntervalSince1970)",
-            content: content,
-            trigger: nil
-        )
+        let identifier = "\(conversation.token)-\(conversation.lastActivity.timeIntervalSince1970)"
+
+        // A banner that names you is never swallowed into a digest: being mentioned is the
+        // one thing worth interrupting for, and it is why the interruption level above is
+        // what it is.
+        if !isMention {
+            let stillMine = digest.shouldPostIndividually(
+                token: conversation.token,
+                identifier: identifier,
+                who: conversation.lastMessage?.actor.resolvedDisplayName ?? conversation.displayName,
+                room: conversation.displayName,
+                isGroup: !conversation.isOneToOne,
+                // A sensitive conversation's words don't go to the digest either.
+                text: conversation.isSensitive ? "" : (conversation.lastMessage?.text ?? "")
+            )
+            guard stillMine else { return }
+        }
+
+        let request = UNNotificationRequest(identifier: identifier, content: content, trigger: nil)
         center.add(request) { error in
             if let error { Log.notification.warning("Couldn’t post notification: \(error.localizedDescription)") }
         }
@@ -189,6 +205,7 @@ final class NotificationController: NSObject {
 
     /// Removes delivered notifications for a conversation the user has now read.
     func clearNotifications(for token: String) {
+        digest.reset()
         center.getDeliveredNotifications { notifications in
             let ids = notifications
                 .filter { $0.request.content.threadIdentifier == token }

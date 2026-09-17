@@ -179,6 +179,8 @@ final class AppModel {
 
         attention.intelligence = intelligence
         attention.isEnabled = dependencies.preferences.marksWhatNeedsYou
+        notifications.digest.intelligence = intelligence
+        notifications.digest.isEnabled = dependencies.preferences.summarisesNotificationBursts
 
         // Paint from the cache *before* going to `.ready`, so the window never flashes an
         // empty "No Conversations" state on the way in.
@@ -527,6 +529,7 @@ final class AppModel {
     /// the model is asked — and it is only asked about what the table couldn't call.
     func refreshAttention(from list: ConversationListModel) {
         attention.isEnabled = dependencies.preferences.marksWhatNeedsYou
+        notifications.digest.isEnabled = dependencies.preferences.summarisesNotificationBursts
         attention.update(with: list.index.allConversations, currentUserID: session?.account.userID ?? "")
     }
 

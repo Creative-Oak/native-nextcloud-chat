@@ -9,6 +9,7 @@ private enum Key {
     static let notificationSound = "notifications.sound"
     static let notificationPreviews = "notifications.previews"
     static let dockBadge = "notifications.dockBadge"
+    static let notificationDigest = "notifications.digest"
     static let sendOnReturn = "composer.sendOnReturn"
     static let browseContacts = "newMessage.browseContacts"
     static let allowInsecureLocalServers = "advanced.allowInsecureLocalServers"
@@ -57,6 +58,12 @@ final class Preferences {
 
     var showsDockBadge: Bool {
         didSet { defaults.set(showsDockBadge, forKey: Key.dockBadge) }
+    }
+
+    /// Several conversations arriving at once become one banner rather than a stack of
+    /// them. The names are listed without a model; Apple Intelligence writes the line.
+    var summarisesNotificationBursts: Bool {
+        didSet { defaults.set(summarisesNotificationBursts, forKey: Key.notificationDigest) }
     }
 
     /// Return sends, Shift-Return inserts a newline. Inverted when this is off.
@@ -154,6 +161,7 @@ final class Preferences {
             Key.notificationSound: true,
             Key.notificationPreviews: true,
             Key.dockBadge: true,
+            Key.notificationDigest: true,
             Key.sendOnReturn: true,
             Key.browseContacts: true,
             Key.transcribeVoiceMessages: true,
@@ -171,6 +179,7 @@ final class Preferences {
         playsNotificationSound = defaults.bool(forKey: Key.notificationSound)
         showsNotificationPreviews = defaults.bool(forKey: Key.notificationPreviews)
         showsDockBadge = defaults.bool(forKey: Key.dockBadge)
+        summarisesNotificationBursts = defaults.bool(forKey: Key.notificationDigest)
         sendsOnReturn = defaults.bool(forKey: Key.sendOnReturn)
         browsesContacts = defaults.bool(forKey: Key.browseContacts)
         transcribesVoiceMessages = defaults.bool(forKey: Key.transcribeVoiceMessages)

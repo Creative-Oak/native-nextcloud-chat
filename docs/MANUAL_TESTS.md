@@ -219,3 +219,32 @@ with Apple Intelligence off — check it that way first.
 | 7.14 | Watch Activity Monitor while a sync brings in twenty conversations | **One burst of work, not twenty** — the whole sidebar is one question |
 
 ---
+
+## 8. A rush of notifications becomes one
+
+**Precondition:** Settings → Notifications → "Group a rush of notifications" on, and
+notifications allowed by macOS. Have kvidr in the background — banners only show when the
+window isn't front.
+
+The burst has to be **three different conversations within eight seconds**, so you need the
+second account posting to three rooms quickly, or a colleague's help.
+
+| # | Do this | Expect |
+| --- | --- | --- |
+| 8.1 | Have one message arrive in one conversation | **A normal banner, instantly.** Nothing is delayed or grouped |
+| 8.2 | Have five messages arrive in the *same* conversation | Normal banners, threaded by macOS as before — one room is not a burst |
+| 8.3 | Have messages land in three different conversations within a few seconds | **The individual banners are taken back and one replaces them: "3 conversations are waiting"** |
+| 8.4 | Read the body with Apple Intelligence **off** | The names: "Heine, Salina and Jay" |
+| 8.5 | With Apple Intelligence **on**, watch the same banner for a second | It updates in place to a sentence — "Heine needs the invoice; Salina asked about Friday" |
+| 8.6 | Check the wording | One sentence, not cut off mid-way, in the conversation's language |
+| 8.7 | Click the digest banner | kvidr comes forward |
+| 8.8 | Have somebody **@mention** you during a burst | **That one gets its own banner anyway** — a mention is never swallowed |
+| 8.9 | Include a sensitive conversation in the burst | Its words are not in the digest |
+| 8.10 | Open a conversation after a digest | The digest banner is taken off screen |
+| 8.11 | Turn the setting off, repeat 8.3 | Three separate banners, as before |
+| 8.12 | Turn notifications off entirely | Nothing, as before |
+
+If a digest appears when only one or two conversations were involved, or an ordinary single
+message is ever late, that is a bug — the whole point is that the common case is untouched.
+
+---
