@@ -273,3 +273,37 @@ tirsdag eller onsdag?", "tirsdag passer mig bedst", "onsdag er bedre for mig".
 | 9.12 | In a brand-new conversation with one message | The button isn't there — there is nothing to read |
 
 ---
+
+## 10. Searching by asking
+
+**Precondition:** Settings → Intelligence → "Read a search as a question" on. The first half
+works with Apple Intelligence off.
+
+You need history to search: a few messages from a named colleague about a named thing, a
+week or so old.
+
+| # | Do this | Expect |
+| --- | --- | --- |
+| 10.1 | ⇧⌘F, type `faktura` | Ordinary results. **No bar under the field** — a search term is left alone |
+| 10.2 | Type `hvad sagde Heine om fakturaen` | **Results, rather than nothing** — and a bar under the field: *Searching for "Heine fakturaen"* |
+| 10.3 | Before this work, try the same sentence on the Talk web UI | It finds nothing. That is the problem being solved |
+| 10.4 | Click "Use what I typed" | The bar goes and the literal sentence is searched — almost certainly no results. That is correct: you asked for it |
+| 10.5 | Edit the query | It is read as a question again — "use what I typed" applies to that one search |
+| 10.6 | Type a three-word search like `release notes v2` | No bar. Short searches are never touched |
+| 10.7 | Turn the setting off, repeat 10.2 | No bar, literal search, exactly as before this work |
+
+**With Apple Intelligence on:**
+
+| # | Do this | Expect |
+| --- | --- | --- |
+| 10.8 | Type `hvad sagde Heine om fakturaen i sidste uge` | The bar first shows the keywords, then updates: *Searching for "faktura", from Heine, after 10 Sep* |
+| 10.9 | Check the results | Only Heine's, only in that window |
+| 10.10 | Type a question naming somebody **not** in it, e.g. ask about a topic with no name | No "from" in the bar — a name that wasn't in what you typed is never used |
+| 10.11 | Scroll to "Show More" on a narrowed search | The next page uses the same terms and the same filter |
+| 10.12 | Type quickly and keep going | One search at a time; results don't flicker between old and new |
+
+The bar is the thing to be fussy about: it must always say what was actually searched, and
+"Use what I typed" must always be one click away. A search box that quietly searches for
+something else is worse than one that finds nothing.
+
+---

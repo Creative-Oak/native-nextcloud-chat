@@ -494,6 +494,8 @@ struct RootView: View {
             currentToken: app.chat?.token,
             currentConversationName: app.chat?.conversation.displayName
         )
+        model.intelligence = app.intelligence
+        model.interpretsQuestions = app.dependencies.preferences.interpretsSearchQuestions
         if let term {
             model.scope = .everywhere
             model.term = term

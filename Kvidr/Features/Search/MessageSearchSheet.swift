@@ -65,6 +65,10 @@ struct MessageSearchSheet: View {
                 }
             }
 
+            if let intent = model.interpretation {
+                SearchInterpretationBar(intent: intent) { model.useLiteralQuery() }
+            }
+
             if model.canScopeToConversation {
                 Picker("Search in", selection: $model.scope) {
                     Text(model.currentConversationName ?? "This Conversation")
@@ -210,5 +214,38 @@ extension MessageSearchHit {
     /// back to the actor id — which is what it fetches by anyway.
     var actor: MessageActor {
         MessageActor(kind: MessageActor.Kind(rawValue: actorType), id: actorID)
+    }
+}
+
+/// Under the search field, when what was typed was read as a question: what is actually
+/// being searched for, and a way back to the literal words.
+///
+/// Not optional and not hidden behind a disclosure. Changing somebody's search without
+/// saying so is the sort of helpfulness that makes people stop trusting a search box, and
+/// the way out has to be one click.
+private struct SearchInterpretationBar: View {
+    let intent: SearchIntent
+    var onUseLiteral: () -> Void
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "sparkles")
+                .font(.system(size: 10))
+                .foregroundStyle(Color.accentColor)
+
+            Text(intent.explanation())
+                .lineLimit(1)
+                .truncationMode(.middle)
+
+            Spacer(minLength: 4)
+
+            Button("Use what I typed", action: onUseLiteral)
+                .buttonStyle(.link)
+                .fixedSize()
+                .help("Search for exactly the words you typed")
+        }
+        .font(.system(size: 11))
+        .foregroundStyle(.secondary)
+        .accessibilityElement(children: .contain)
     }
 }

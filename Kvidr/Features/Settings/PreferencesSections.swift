@@ -46,6 +46,11 @@ struct PreferencesCards: View {
                 caption: "Puts a mark in the sidebar on conversations whose newest message asks you something, beyond the ones that spell out your name. Questions and plain requests are found on this Mac; Apple Intelligence, when it is there, decides the ones that could go either way.",
                 isOn: $preferences.marksWhatNeedsYou
             )
+            PreferenceToggle(
+                title: "Read a search as a question",
+                caption: "Typing a whole question into ⇧⌘F searches for the words that would be in the message, rather than for the question. What was searched is always shown under the field, with one click back to your exact words.",
+                isOn: $preferences.interpretsSearchQuestions
+            )
             ReminderDestinationPicker(preferences: preferences)
             IntelligenceStatusNote()
         }

@@ -22,6 +22,7 @@ private enum Key {
     static let smartReplies = "intelligence.smartReplies"
     static let catchUp = "intelligence.catchUp"
     static let needsYou = "intelligence.needsYou"
+    static let searchQuestions = "intelligence.searchQuestions"
     static let reminderDestination = "reminders.destination"
     static let transcriptionLanguage = "voice.transcriptionLanguage"
 }
@@ -118,6 +119,12 @@ final class Preferences {
         didSet { defaults.set(marksWhatNeedsYou, forKey: Key.needsYou) }
     }
 
+    /// A whole question typed into ⇧⌘F is read as a search rather than matched literally.
+    /// The keywords are found on this Mac; Apple Intelligence adds who and when.
+    var interpretsSearchQuestions: Bool {
+        didSet { defaults.set(interpretsSearchQuestions, forKey: Key.searchQuestions) }
+    }
+
     /// Where "Remind Me" puts a reminder.
     var reminderDestination: ReminderDestination {
         didSet { defaults.set(reminderDestination.rawValue, forKey: Key.reminderDestination) }
@@ -170,6 +177,7 @@ final class Preferences {
             Key.smartReplies: true,
             Key.catchUp: true,
             Key.needsYou: true,
+            Key.searchQuestions: true,
             Key.reminderDestination: ReminderDestination.talk.rawValue,
             Key.allowInsecureLocalServers: false,
             Key.developerMode: false
@@ -188,6 +196,7 @@ final class Preferences {
         suggestsReplies = defaults.bool(forKey: Key.smartReplies)
         offersCatchUp = defaults.bool(forKey: Key.catchUp)
         marksWhatNeedsYou = defaults.bool(forKey: Key.needsYou)
+        interpretsSearchQuestions = defaults.bool(forKey: Key.searchQuestions)
         reminderDestination = defaults.string(forKey: Key.reminderDestination)
             .flatMap(ReminderDestination.init(rawValue:)) ?? .talk
         transcriptionLanguage = defaults.string(forKey: Key.transcriptionLanguage)

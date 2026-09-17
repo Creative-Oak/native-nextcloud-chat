@@ -20,6 +20,8 @@ final class MessageSearchModel: Identifiable {
     var term = "" {
         didSet {
             guard oldValue != term else { return }
+            // A new question deserves to be read again, whatever was decided about the last.
+            usesLiteralQuery = false
             scheduleSearch()
         }
     }
@@ -40,6 +42,19 @@ final class MessageSearchModel: Identifiable {
     /// Answered by the server's provider list, not by a version check. Optimistic until
     /// the answer arrives, so the field is never disabled for a frame.
     private(set) var isAvailable = true
+
+    /// How a typed question was read, when it was one — see `SearchIntent`. Shown under the
+    /// field, because changing somebody's search without telling them is not on.
+    private(set) var interpretation: SearchIntent?
+    /// Set by "Search for exactly what I typed": the question is taken at its word from
+    /// then on, for this search.
+    private(set) var usesLiteralQuery = false
+
+    /// Apple Intelligence, for reading a question. Nothing here needs it — the keyword
+    /// strip is what makes a sentence findable, and it runs everywhere.
+    @ObservationIgnored var intelligence: OnDeviceIntelligence?
+    @ObservationIgnored var interpretsQuestions = true
+    @ObservationIgnored private var refineTask: Task<Void, Never>?
 
     /// Highlighted row, for ↑/↓ and Return.
     var highlighted: Int = 0
@@ -82,6 +97,15 @@ final class MessageSearchModel: Identifiable {
 
     // MARK: - Searching
 
+    /// Takes the question at its word: searches exactly what was typed, and stops
+    /// interpreting it until the text changes.
+    func useLiteralQuery() {
+        usesLiteralQuery = true
+        interpretation = nil
+        refineTask?.cancel()
+        scheduleSearch(immediately: true)
+    }
+
     private func scheduleSearch(immediately: Bool = false) {
         searchTask?.cancel()
         generation += 1
@@ -97,8 +121,14 @@ final class MessageSearchModel: Identifiable {
             hits = []
             hasSearched = false
             isSearching = false
+            interpretation = nil
             return
         }
+
+        // What the server is actually asked. A four-word question is not a search term:
+        // Talk matches substrings, and nobody ever wrote the sentence you typed.
+        let intent = interpret(trimmed)
+        interpretation = intent.changesAnything(from: trimmed) ? intent : nil
 
         isSearching = true
         let service = session.messageSearch
@@ -112,9 +142,9 @@ final class MessageSearchModel: Identifiable {
             guard !Task.isCancelled, let self else { return }
 
             do throws(TalkError) {
-                let page = try await service.searchMessages(term: trimmed, in: token)
+                let page = try await service.searchMessages(term: intent.terms, in: token)
                 guard !Task.isCancelled, self.generation == generation else { return }
-                self.hits = page.hits
+                self.hits = Self.admitted(page.hits, by: intent)
                 self.cursor = page.cursor
                 self.isPaginated = page.isPaginated
             } catch {
@@ -124,7 +154,56 @@ final class MessageSearchModel: Identifiable {
             }
             self.isSearching = false
             self.hasSearched = true
+            self.refineWithModel(trimmed, generation: generation)
         }
+    }
+
+    /// The question read by the table: keywords only, and only when it reads as a question.
+    private func interpret(_ typed: String) -> SearchIntent {
+        guard !usesLiteralQuery, interpretsQuestions, NaturalLanguageQuery.looksConversational(typed) else {
+            return SearchIntent(terms: typed, author: nil, after: nil, before: nil)
+        }
+        return SearchIntent(terms: NaturalLanguageQuery.keywords(from: typed), author: nil, after: nil, before: nil)
+    }
+
+    /// A second pass once the results are on screen: the model can say *who* and *when*,
+    /// which no word list can. It only ever narrows, and only when it found something the
+    /// keyword strip didn't.
+    private func refineWithModel(_ typed: String, generation: Int) {
+        refineTask?.cancel()
+        guard !usesLiteralQuery, interpretsQuestions,
+              let intelligence, intelligence.isReady,
+              NaturalLanguageQuery.looksConversational(typed)
+        else { return }
+
+        let service = session.messageSearch
+        let token = scopeToken
+        refineTask = Task { [weak self] in
+            guard let refined = await intelligence.readSearchIntent(from: typed) else { return }
+            guard !Task.isCancelled, let self, self.generation == generation, !self.usesLiteralQuery else { return }
+            guard refined.author != nil || refined.after != nil || refined.before != nil
+                    || refined.terms.caseInsensitiveCompare(self.interpretation?.terms ?? typed) != .orderedSame
+            else { return }
+
+            self.interpretation = refined
+            self.isSearching = true
+            do throws(TalkError) {
+                let page = try await service.searchMessages(term: refined.terms, in: token)
+                guard !Task.isCancelled, self.generation == generation else { return }
+                self.hits = Self.admitted(page.hits, by: refined)
+                self.cursor = page.cursor
+                self.isPaginated = page.isPaginated
+            } catch {
+                // The first pass's results are already on screen and are a fine answer.
+                Log.ui.debug("Refined search failed: \(error.userMessage)")
+            }
+            self.isSearching = false
+        }
+    }
+
+    /// The parts of an intent the server can't apply — who, and when — applied here.
+    private static func admitted(_ hits: [MessageSearchHit], by intent: SearchIntent) -> [MessageSearchHit] {
+        hits.filter { intent.admits(title: $0.title, timestamp: $0.timestamp) }
     }
 
     /// The next page, appended. Called by the "Show More" button at the end of the list.
@@ -139,7 +218,7 @@ final class MessageSearchModel: Identifiable {
 
         do throws(TalkError) {
             let page = try await session.messageSearch.searchMessages(
-                term: trimmed,
+                term: interpretation?.terms ?? trimmed,
                 in: scopeToken,
                 cursor: cursor
             )
