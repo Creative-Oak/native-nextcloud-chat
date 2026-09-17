@@ -107,6 +107,9 @@ final class ChatModel {
     /// that has been used says so the moment it is.
     var usedSuggestions: Set<String> = []
 
+    /// Messages translated into the reader's language — see ``MessageTranslationModel``.
+    let translation = MessageTranslationModel()
+
     /// A reminder armed by clicking a time in the draft, waiting for the message it is
     /// about to exist. See ``ArmedReminder``.
     var armedReminder: ArmedReminder?

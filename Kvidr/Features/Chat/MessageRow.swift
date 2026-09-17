@@ -35,6 +35,10 @@ struct MessageRow: View {
     var onRetry: (Message) -> Void
     var onDiscard: (Message) -> Void
     var onShowParent: (Int) -> Void
+    /// This message in the reader's own language, once they've asked for it.
+    var translation: MessageTranslationModel.State?
+    /// Nil where there is nothing to translate.
+    var onTranslate: (() -> Void)?
     /// The one-tap suggestions this message earned, if any — see `ChatModel+Suggestions`.
     var suggestions: [MessageSuggestion] = []
     /// Which of them have already been acted on, by suggestion id.
@@ -101,6 +105,10 @@ struct MessageRow: View {
                 if !message.isDeleted, let link = content.firstWebLink {
                     LinkPreviewCard(url: link, isFromMe: isFromMe)
                         .padding(.top, 2)
+                }
+
+                if let translation {
+                    TranslatedText(state: translation, isFromMe: isFromMe)
                 }
 
                 if !suggestions.isEmpty, !message.isDeleted {
@@ -328,6 +336,8 @@ struct MessageRow: View {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(content.preview, forType: .string)
             },
+            onTranslate: onTranslate,
+            isTranslated: translation != nil,
             onReact: { onReact($0, message) },
             onShowReactions: { isShowingReactionDetail = true },
             onMoreReactions: { onShowTapback(message) },
@@ -397,5 +407,51 @@ struct QuotedMessageView: View {
         MessageContentParser(currentUserID: "", markdownEnabled: false)
             .parse(text: parent.text, parameters: parent.parameters, isMarkdown: false)
             .preview
+    }
+}
+
+/// A message in the reader's language, under the words that were actually sent.
+///
+/// Under, never instead of. The original stays exactly where it was: a translation is a
+/// reading of what somebody said, and quietly replacing their words with a machine's would
+/// be the wrong thing for a chat client to do even when the machine is right.
+private struct TranslatedText: View {
+    let state: MessageTranslationModel.State
+    let isFromMe: Bool
+
+    var body: some View {
+        Group {
+            switch state {
+            case .working:
+                HStack(spacing: 4) {
+                    ProgressView().controlSize(.mini)
+                    Text("Translating…")
+                }
+
+            case .done(let translated):
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(translated.text)
+                        .font(.system(size: 14))
+                        .foregroundStyle(.primary)
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Text(translated.sourceLanguage.map { "Translated from \($0)" } ?? "Translated")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.tertiary)
+                }
+
+            case .failed(let reason):
+                Text(reason)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .font(.system(size: 12))
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .frame(maxWidth: 520, alignment: .leading)
+        .background(Color.primary.opacity(0.06), in: .rect(cornerRadius: 10))
+        .padding(.top, 3)
+        .accessibilityElement(children: .contain)
     }
 }

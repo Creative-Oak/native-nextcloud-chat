@@ -148,6 +148,10 @@ struct MessageMenuActions {
     var onEdit: () -> Void
     var onDelete: () -> Void
     var onCopy: () -> Void
+    /// Nil where there is nothing to translate — a deleted message, a bare file share.
+    var onTranslate: (() -> Void)?
+    /// Whether a translation is already on screen, so the item can offer to take it away.
+    var isTranslated = false
     var onReact: (String) -> Void
     var onShowReactions: () -> Void
     var onMoreReactions: () -> Void
@@ -281,6 +285,13 @@ enum MessageMenu {
         }
         if let onForward = actions.onForward {
             menu.addItem(ClosureMenuItem("Forward…", symbol: "arrowshape.turn.up.right", action: onForward))
+        }
+        if let onTranslate = actions.onTranslate {
+            menu.addItem(ClosureMenuItem(
+                actions.isTranslated ? "Hide Translation" : "Translate",
+                symbol: "character.bubble",
+                action: onTranslate
+            ))
         }
         menu.addItem(ClosureMenuItem("Copy", symbol: "doc.on.doc", action: actions.onCopy))
         for link in actions.links {

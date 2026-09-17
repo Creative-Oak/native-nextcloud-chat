@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import Translation
 
 /// The transcript.
 ///
@@ -50,6 +51,9 @@ struct ChatView: View {
     @State private var isPointerOverHeader = false
     /// What you missed, when you ask for it. One per conversation.
     @State private var catchUp = CatchUpModel()
+    /// A `TranslationSession` can only be had from inside `.translationTask`, so the
+    /// transcript holds the configuration and `ChatModel.translation` holds the answers.
+    @State private var translationConfiguration: TranslationSession.Configuration?
 
     /// The user's own Note to self conversation, where "Add to Notes" puts things.
     ///
@@ -134,6 +138,23 @@ struct ChatView: View {
         // Settings decide whether the chips appear at all, and where a reminder armed in
         // the composer goes once the message it belongs to exists.
         .task(id: model.token) { configureSuggestions() }
+        // Asking for a translation sets `pending`; that is what starts the task below.
+        // An identical repeat still has to run, hence `invalidate()` rather than a new
+        // configuration — the modifier watches the configuration, not the text.
+        .onChange(of: model.translation.pending) { _, pending in
+            guard pending != nil else { return }
+            if translationConfiguration == nil {
+                translationConfiguration = TranslationSession.Configuration(
+                    source: nil,
+                    target: Locale.current.language
+                )
+            } else {
+                translationConfiguration?.invalidate()
+            }
+        }
+        .translationTask(translationConfiguration) { session in
+            await translate(with: session)
+        }
         // Where the pointer counts as over the header — the toolbar and the name
         // capsule under it — which is what brings the frosted band up; the band itself
         // is the transcript's top scroll edge, hardened.
@@ -428,6 +449,36 @@ struct ChatView: View {
         }
     }
 
+    /// Runs the one translation that is waiting.
+    ///
+    /// The framework detects the source language itself and offers to download what it
+    /// needs the first time — which is why nothing here checks availability or asks
+    /// permission. It either answers or throws, and a throw is shown in place.
+    private func translate(with session: TranslationSession) async {
+        guard let pending = model.translation.pending else { return }
+        do {
+            let response = try await session.translate(pending.text)
+            let source = Locale.current.localizedString(forLanguageCode: response.sourceLanguage.minimalIdentifier)
+            model.translation.finished(
+                messageID: pending.messageID,
+                with: .success(Translated(
+                    text: response.targetText,
+                    original: pending.text,
+                    sourceLanguage: source
+                ))
+            )
+        } catch {
+            model.translation.finished(messageID: pending.messageID, with: .failure(error))
+        }
+    }
+
+    /// Nothing to translate in a deleted message, a system line, or a bare file share.
+    private func translateAction(for message: Message) -> (() -> Void)? {
+        let text = model.content(for: message).preview.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !message.isDeleted, !message.isSystem, text.count >= 2 else { return nil }
+        return { model.translation.toggle(messageID: message.messageID, text: text) }
+    }
+
     private func activate(_ suggestion: MessageSuggestion, on message: Message) {
         model.activate(suggestion, on: message, reminders: reminders, noteToSelfToken: noteToSelfToken)
     }
@@ -495,6 +546,8 @@ struct ChatView: View {
                 onRetry: { model.retry($0) },
                 onDiscard: { model.discard($0) },
                 onShowParent: { highlightedMessageID = $0 },
+                translation: model.translation.state(for: message.messageID),
+                onTranslate: translateAction(for: message),
                 suggestions: model.suggestions(for: message),
                 usedSuggestions: model.usedSuggestionKeys(for: message),
                 onSuggestion: { activate($0, on: message) },

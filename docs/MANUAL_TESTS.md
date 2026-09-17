@@ -333,3 +333,31 @@ fakturaen inden fredag …").
 | 11.12 | With Apple Intelligence off | Transcripts as before, no summaries |
 
 ---
+
+## 12. Translate a message
+
+*Apple's Translation framework, not the language model — this works with Apple Intelligence
+switched off entirely.*
+
+**Precondition:** your Mac's language set to one thing, and a message in another. The
+easiest setup is an English Mac and a Danish colleague, or the reverse.
+
+| # | Do this | Expect |
+| --- | --- | --- |
+| 12.1 | Right-click a message in the other language | **A "Translate" item in the menu** |
+| 12.2 | Click it, the first time ever | macOS offers to download the language pair, with its own progress. Allow it |
+| 12.3 | Wait | **The translation appears in a panel under the original — the original is still there, unchanged** |
+| 12.4 | Read the caption | "Translated from Danish" |
+| 12.5 | Right-click the same message again | The item now says **"Hide Translation"**; clicking it takes the panel away |
+| 12.6 | Translate a message already in your language | "Already in your language" — not the same sentence twice |
+| 12.7 | Translate several messages | Each keeps its own panel |
+| 12.8 | Right-click a deleted message, or a bare file share | **No Translate item** — there is nothing to translate |
+| 12.9 | Switch conversation and come back | Translations are per conversation and start clean |
+| 12.10 | With Apple Intelligence **off** | **Everything above still works.** This is the Translation framework, not the model |
+| 12.11 | Pull the network cable and translate a new language pair | It fails in place — "Couldn't translate this" — rather than hanging or crashing |
+
+The rule to hold the line on: the translation goes **under** the original and never replaces
+it. A translation is a reading of what somebody said, and swapping their words for a
+machine's is the wrong thing to do even when the machine is right.
+
+---
