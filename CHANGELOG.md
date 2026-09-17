@@ -27,6 +27,36 @@ replies — which is nothing but a model. See
   for at the moment it is first needed, and kvidr only ever adds to it.
 - Nothing is sent anywhere. The on-device model only, never Private Cloud Compute.
 
+### Eight more, the same day
+
+- **Catch me up.** Forty unread in a busy room: the “New messages” line offers to summarise
+  them, and a card appears above the messages it read. Asked for by a click — opening a
+  conversation never starts an inference.
+- **What needs you.** An orange `?` in the sidebar on conversations whose newest message is
+  actually waiting on you, beyond the ones that spell out your name. Questions and plain
+  requests are found on this Mac; the ambiguous ones go to the model *in one prompt for the
+  whole sidebar*.
+- **A rush of notifications becomes one banner.** Three conversations at once, and the
+  banners already on screen are replaced by one saying who is waiting and what for. A single
+  message still notifies instantly — nothing is buffered or delayed. A mention is never
+  swallowed.
+- **A poll, read out of the conversation.** “Tirsdag eller onsdag?” across twenty messages
+  fills the poll sheet’s question and options — the options people actually raised. You
+  still press Create.
+- **⇧⌘F understands a question.** “hvad sagde Heine om fakturaen i sidste uge” now finds
+  something instead of nothing. A bar under the field always says what was searched, with
+  “Use what I typed” one click away.
+- **What a long voice message came to.** Under the transcript of anything over about half a
+  minute: one line on what it was about, and a ✓ for anything it asked for.
+- **Translate a message**, under the original and never in place of it. Apple’s Translation
+  framework, so this one works with Apple Intelligence switched off entirely.
+- **Send Later knows when they’re back.** Writing to somebody who is out of office, a bar
+  over the field offers the morning they return — skipping the weekend. No model at all:
+  the server already said they were away.
+
+Three of these need no language model, and three more work at reduced strength without one.
+`docs/plans/2026-09-17-apple-intelligence-design.md` § 6 says exactly what each costs.
+
 ## 1.0.0
 
 The first release: a native macOS client for Nextcloud Talk's text chat.

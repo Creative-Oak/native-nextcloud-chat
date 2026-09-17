@@ -4,8 +4,13 @@ What to click, and what should happen, for the parts of kvidr no compiler and no
 can check. Written to be worked through on a dev machine with a real Nextcloud behind it.
 
 `swift test` covers the rules underneath most of this — date phrases, suggestion shapes,
-return times, triage scoring. What is listed here is everything those tests cannot see: the
-drawing, the timing, the permissions, and whether the thing is any good.
+return times, attention scoring, search intents. What is listed here is everything those
+tests cannot see: the drawing, the timing, the permissions, and whether the thing is any
+good.
+
+**Twelve sections.** If you have half an hour rather than an afternoon, do §1 (the
+underline and the composer's height), §7 (the sidebar marks) and §12 (translation) — those
+three cover the riskiest code in the change.
 
 ## How to use this
 

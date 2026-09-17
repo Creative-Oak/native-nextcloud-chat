@@ -264,6 +264,7 @@ struct ComposerView: View {
 
     /// Hands both helpers what this Mac and this user allow, and asks for replies to
     /// whatever is already on screen.
+    @MainActor
     private func startIntelligence() {
         app.intelligence.refreshReadiness()
         // A session carries its conversation with it, and the next conversation is none of
@@ -314,6 +315,7 @@ struct ComposerView: View {
     /// A suggested reply goes into the field with the caret after it, never straight to
     /// the server. One click has never sent a message in this app and this isn't the
     /// feature to start with.
+    @MainActor
     private func useSuggestedReply(_ reply: String) {
         model.draftText = reply
         model.caretRequest = reply.count
@@ -323,6 +325,7 @@ struct ComposerView: View {
 
     /// A click on an underlined time: the reminder is armed, not set. It has nothing to
     /// hang on until the message exists — see ``ArmedReminder``.
+    @MainActor
     private func armReminder(at offset: Int) {
         guard let expression = composerIntelligence.expression(atCharacter: offset) else { return }
         model.armedReminder = ArmedReminder(date: expression.date, phrase: expression.phrase)

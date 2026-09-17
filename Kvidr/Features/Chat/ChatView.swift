@@ -439,6 +439,7 @@ struct ChatView: View {
 
     /// What Settings allows, and where a reminder armed in the composer goes once the
     /// message it belongs to exists.
+    @MainActor
     private func configureSuggestions() {
         model.showsSuggestions = preferences?.showsMessageSuggestions ?? true
         catchUp.intelligence = app.intelligence
@@ -454,6 +455,7 @@ struct ChatView: View {
     /// The framework detects the source language itself and offers to download what it
     /// needs the first time — which is why nothing here checks availability or asks
     /// permission. It either answers or throws, and a throw is shown in place.
+    @MainActor
     private func translate(with session: TranslationSession) async {
         guard let pending = model.translation.pending else { return }
         do {
@@ -473,12 +475,14 @@ struct ChatView: View {
     }
 
     /// Nothing to translate in a deleted message, a system line, or a bare file share.
+    @MainActor
     private func translateAction(for message: Message) -> (() -> Void)? {
         let text = model.content(for: message).preview.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !message.isDeleted, !message.isSystem, text.count >= 2 else { return nil }
         return { model.translation.toggle(messageID: message.messageID, text: text) }
     }
 
+    @MainActor
     private func activate(_ suggestion: MessageSuggestion, on message: Message) {
         model.activate(suggestion, on: message, reminders: reminders, noteToSelfToken: noteToSelfToken)
     }

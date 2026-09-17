@@ -65,10 +65,18 @@ across your whole message history · a keyboard shortcuts window.
 reminder when the message goes · a one-tap row under a message: Add to Reminders, Add to
 Notes (to your Note to self conversation) · suggested replies above the field, in the
 conversation's language and in the way you write · Writing Tools in the composer ·
-reminders to Nextcloud, Apple Reminders, or both. All of it runs on your Mac — the
-on-device model only, never Private Cloud Compute — and all of it except suggested replies
-works with Apple Intelligence switched off. See
-[`docs/plans/2026-09-17-apple-intelligence-design.md`](docs/plans/2026-09-17-apple-intelligence-design.md).
+**Catch me up** on a pile of unread, from the new-messages line · an orange mark on the
+conversations actually waiting on you · a rush of notifications collapsed into one banner ·
+a poll read out of a conversation going in circles · ⇧⌘F that understands a whole question
+and says what it searched for · what a long voice message came to, under its transcript ·
+**Translate** a message, under the original · Send Later that knows when the person you
+are writing to is back · reminders to Nextcloud, Apple Reminders, or both.
+
+All of it runs on your Mac — the on-device model only, never Private Cloud Compute — and
+most of it works with Apple Intelligence switched off, some of it identically. See
+[`docs/plans/2026-09-17-apple-intelligence-design.md`](docs/plans/2026-09-17-apple-intelligence-design.md)
+for what each one costs without a model, and
+[`docs/MANUAL_TESTS.md`](docs/MANUAL_TESTS.md) for how to check them all on a Mac.
 
 **Design** — Liquid Glass on macOS 26, applied to the floating layer (message actions,
 panels, reaction pills, upload rows) and deliberately *not* to the transcript, which is

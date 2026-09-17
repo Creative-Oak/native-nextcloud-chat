@@ -206,6 +206,21 @@ The date scanner and the suggestion rules are covered by tests (`swift test`), s
 Worth trying with Apple Intelligence **off**, too: underlined times and the one-tap chips
 should all still work, and the reply row should simply not appear.
 
+Eight more features landed the same day (catch up, needs-you marks, notification digests,
+thread-to-poll, question search, voice gists, translation, absence-aware Send Later). Two
+of them touch framework surfaces nothing here could compile against:
+
+- **`Translation`** — `.translationTask`, `TranslationSession.Configuration`,
+  `session.translate(_:)`, `response.sourceLanguage`. All of it is in
+  `ChatView.translate(with:)` and `MessageTranslation.swift`.
+- **`UserNotifications` withdrawal** — the digest takes delivered banners back with
+  `removeDeliveredNotifications(withIdentifiers:)` and replaces them by reusing one
+  identifier. Whether that looks tidy or flickers is a thing only a Mac can say.
+
+[`MANUAL_TESTS.md`](MANUAL_TESTS.md) is the script for all of it — twelve sections, each
+with what to do and what should happen, and a note in each on which parts must still work
+with Apple Intelligence off.
+
 ## 6. Known gaps
 
 - **Calls** are deliberately out of scope for v1. `docs/ARCHITECTURE.md` § Room for calls

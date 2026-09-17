@@ -143,7 +143,55 @@ there is no separate reminders entitlement — plus
 `NSRemindersFullAccessUsageDescription`, both added. kvidr only ever **adds** a reminder;
 it never reads the ones already there.
 
-## 6. What this is not
+## 6. The eight that followed
+
+*Added the same day, after the first slice landed.* Same rules: the table first, the model
+only where a table can't go, nothing leaves the Mac, and nothing here is allowed to be the
+only way to do something.
+
+| # | Feature | Model needed? | Where |
+| --- | --- | --- | --- |
+| 1 | **Send Later when they're away** — "Heine is away until Friday · Send Mon 08:00" | **No.** The server already said they're away | `AbsenceSendLaterBar`, `Absence.firstMorningBack` |
+| 2 | **Catch up** — four lines about what you missed, from the new-messages line | Yes, and asked for by a click | `CatchUpModel`, `CatchUpCard` |
+| 3 | **Needs you** — an orange `?` on conversations waiting on you | Partly. Questions and requests are a table; the rest is one batched call | `AttentionScanner`, `AttentionModel` |
+| 4 | **One banner for a rush** — three conversations at once become one notification | Partly. The names need no model; the sentence does | `NotificationDigest` |
+| 5 | **Thread → poll** — fills the poll sheet's fields from the conversation | Yes | `OnDeviceIntelligence+Poll`, `NewPollSheet` |
+| 6 | **⇧⌘F reads a question** — "hvad sagde Heine om fakturaen i sidste uge" | Partly. Keywords are a table; who and when need the model | `NaturalLanguageQuery`, `SearchIntent` |
+| 7 | **What a long voice message came to** — a line and any to-dos, under the transcript | Yes | `VoiceInsightsModel` |
+| 8 | **Translate a message** | **No** — Apple's `Translation` framework, a different thing entirely | `MessageTranslationModel` |
+
+Three of the eight need no language model at all, and three more work at reduced strength
+without one. That ratio is the point.
+
+### Decisions worth keeping
+
+- **A sidebar is one question, not twenty.** The triage in #3 sends every ambiguous
+  conversation in a single prompt and gets back a list of *numbers*, which are then mapped
+  to tokens here. A model never sees or returns an identifier the app trusts.
+- **The common case is never made worse to serve the rare one.** #4 collapses a burst only
+  once it is already happening: a single message still raises its banner instantly, with no
+  buffering and no delay.
+- **Nothing is summarised unasked, except where the cost is bounded.** #2 waits for a click.
+  #7 doesn't, because it only reads transcripts over half a minute and voice messages are
+  rare — and the transcript it reads was already written out automatically.
+- **Say what you did.** #6 puts a bar under the search field naming what was actually
+  searched, with "Use what I typed" one click away. Silently changing somebody's search is
+  how a search box loses their trust for good.
+- **The original stays.** #8 puts the translation *under* the message, never in place of it.
+
+### What each one costs when the model is away
+
+| Feature | With Apple Intelligence off |
+| --- | --- |
+| Send Later when away | Identical |
+| Translate | Identical |
+| Underlined times, one-tap chips | Identical but for the long-tail phrases |
+| Needs you | Questions and plain requests still marked; the ambiguous ones aren't |
+| One banner for a rush | Still one banner; it lists names instead of saying what they want |
+| ⇧⌘F reads a question | Still strips the question words; no who/when narrowing |
+| Catch up, thread → poll, voice gist, suggested replies | Not offered — the button or row simply isn't there |
+
+## 7. What this is not
 
 - **No cloud model, no Private Cloud Compute, no third-party provider.** The 2026
   `LanguageModel` protocol makes all three a few lines away; that is exactly why the line
@@ -153,7 +201,7 @@ it never reads the ones already there.
   result, and a clear "this is a summary" boundary in a transcript people trust.
 - **No auto-send, ever.** Every suggestion in here ends with the user clicking send.
 
-## 7. Files
+## 8. Files
 
 ```
 Sources/TalkCore/Intelligence/
@@ -172,3 +220,27 @@ Kvidr/Features/Chat/
 Kvidr/Features/Reminders/
   AppleRemindersService.swift EventKit, and ReminderDestination.
 ```
+
+And for the eight:
+
+```
+Sources/TalkCore/Intelligence/
+  AttentionScanner.swift      Is this message waiting on you? (#3)
+  SearchIntent.swift          NaturalLanguageQuery + SearchIntent (#6)
+Sources/TalkCore/Models/
+  Absence.swift               Moved here; firstMorningBack lives on it (#1)
+Kvidr/Features/Intelligence/
+  OnDeviceIntelligence.swift  answer(_:purpose:instructions:prompt:) — every question
+  OnDeviceIntelligence+CatchUp / +Triage / +Digest / +Poll / +Search / +Voice
+  CatchUpModel.swift, CatchUpCard.swift                     (#2)
+  AttentionModel.swift                                      (#3)
+  VoiceInsightsModel.swift                                  (#7)
+  MessageTranslation.swift                                  (#8)
+Kvidr/Features/Scheduled/AbsenceSendLaterBar.swift          (#1)
+Kvidr/Notifications/NotificationDigest.swift                (#4)
+```
+
+Every question to the model goes through one `answer(_:purpose:instructions:prompt:)`, so a
+guardrail trip, a context overflow and a model that went away mid-sentence all arrive as
+`nil` and every caller keeps the path it already had. One session per purpose, so one
+question's answer is never in the context of the next.
