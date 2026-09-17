@@ -30,6 +30,8 @@ final class VoicePlayer {
 
     @ObservationIgnored private let session: Session
     @ObservationIgnored let transcriber: VoiceTranscriber
+    /// What the long ones came to — see ``VoiceInsightsModel``.
+    @ObservationIgnored let insights = VoiceInsightsModel()
     @ObservationIgnored private var data: [String: Data] = [:]
     @ObservationIgnored private var order: [String] = []
     @ObservationIgnored private var player: AVAudioPlayer?

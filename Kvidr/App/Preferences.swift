@@ -23,6 +23,7 @@ private enum Key {
     static let catchUp = "intelligence.catchUp"
     static let needsYou = "intelligence.needsYou"
     static let searchQuestions = "intelligence.searchQuestions"
+    static let voiceGist = "intelligence.voiceGist"
     static let reminderDestination = "reminders.destination"
     static let transcriptionLanguage = "voice.transcriptionLanguage"
 }
@@ -125,6 +126,12 @@ final class Preferences {
         didSet { defaults.set(interpretsSearchQuestions, forKey: Key.searchQuestions) }
     }
 
+    /// Long voice messages get a line saying what they came to, under their transcript.
+    /// Needs Apple Intelligence, and the transcript it reads.
+    var summarisesLongVoiceMessages: Bool {
+        didSet { defaults.set(summarisesLongVoiceMessages, forKey: Key.voiceGist) }
+    }
+
     /// Where "Remind Me" puts a reminder.
     var reminderDestination: ReminderDestination {
         didSet { defaults.set(reminderDestination.rawValue, forKey: Key.reminderDestination) }
@@ -178,6 +185,7 @@ final class Preferences {
             Key.catchUp: true,
             Key.needsYou: true,
             Key.searchQuestions: true,
+            Key.voiceGist: true,
             Key.reminderDestination: ReminderDestination.talk.rawValue,
             Key.allowInsecureLocalServers: false,
             Key.developerMode: false
@@ -197,6 +205,7 @@ final class Preferences {
         offersCatchUp = defaults.bool(forKey: Key.catchUp)
         marksWhatNeedsYou = defaults.bool(forKey: Key.needsYou)
         interpretsSearchQuestions = defaults.bool(forKey: Key.searchQuestions)
+        summarisesLongVoiceMessages = defaults.bool(forKey: Key.voiceGist)
         reminderDestination = defaults.string(forKey: Key.reminderDestination)
             .flatMap(ReminderDestination.init(rawValue:)) ?? .talk
         transcriptionLanguage = defaults.string(forKey: Key.transcriptionLanguage)

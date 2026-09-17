@@ -63,6 +63,12 @@ struct PreferencesCards: View {
             )
             TranscriptionLanguagePicker(preferences: preferences)
                 .disabled(!preferences.transcribesVoiceMessages)
+            PreferenceToggle(
+                title: "Say what a long one came to",
+                caption: "Under the transcript of a voice message over about half a minute: one line on what it was about, and anything it asked for. Read from the transcript, on this Mac. Needs Apple Intelligence.",
+                isOn: $preferences.summarisesLongVoiceMessages
+            )
+                .disabled(!preferences.transcribesVoiceMessages)
         }
 
         InspectorCard(title: "Notifications") {
@@ -226,9 +232,17 @@ private struct TranscriptionLanguagePicker: View {
         .task { languages = await VoiceTranscriber.supportedLanguages() }
         .onChange(of: preferences.transcriptionLanguage) {
             app.voicePlayer?.transcriber.reset()
+            // The readings were of the old language's transcripts, which are gone.
+            app.voicePlayer?.insights.reset()
         }
         // Turning it back on writes out what is already on screen, too.
         .onChange(of: preferences.transcribesVoiceMessages) { _, isOn in
+            if isOn { app.voicePlayer?.transcriber.reset() }
+            app.voicePlayer?.insights.reset()
+        }
+        .onChange(of: preferences.summarisesLongVoiceMessages) { _, isOn in
+            app.voicePlayer?.insights.isEnabled = isOn
+            app.voicePlayer?.insights.reset()
             if isOn { app.voicePlayer?.transcriber.reset() }
         }
     }

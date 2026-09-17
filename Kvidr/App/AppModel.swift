@@ -160,6 +160,8 @@ final class AppModel {
         )
         previewLoader = PreviewLoader(session: session, keyring: dependencies.cacheKeyring)
         voicePlayer = VoicePlayer(session: session, transcriber: VoiceTranscriber(preferences: dependencies.preferences))
+        voicePlayer?.insights.intelligence = intelligence
+        voicePlayer?.insights.isEnabled = dependencies.preferences.summarisesLongVoiceMessages
         profile = ProfileModel(session: session)
 
         let list = ConversationListModel(session: session, notifications: notifications)

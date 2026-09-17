@@ -307,3 +307,29 @@ The bar is the thing to be fussy about: it must always say what was actually sea
 something else is worse than one that finds nothing.
 
 ---
+
+## 11. What a long voice message came to
+
+**Precondition:** Apple Intelligence **on**; Settings → Voice Messages → "Transcribe voice
+messages" **and** "Say what a long one came to" both on.
+
+You need a voice message of at least half a minute or so — record one from the other account,
+rambling, with a request buried in the middle ("… og så skal du lige huske at sende
+fakturaen inden fredag …").
+
+| # | Do this | Expect |
+| --- | --- | --- |
+| 11.1 | Let the long voice message appear | The transcript writes itself out underneath, as before |
+| 11.2 | Wait a moment longer | **A sparkles line under the transcript: one sentence on what it was about** |
+| 11.3 | Look for the request | A ✓ line for it — "send fakturaen inden fredag" |
+| 11.4 | Check the language | Danish recording, Danish summary |
+| 11.5 | Check it against the transcript | **It invents no deadline and no name that wasn't said** |
+| 11.6 | Send a short voice message ("ja, det lyder fint") | **No summary at all.** A ten-second message is already as short as it gets |
+| 11.7 | Send a long one with no request in it | A summary line, and no ✓ lines. Empty is a normal answer |
+| 11.8 | Scroll several long voice messages into view at once | They are read one after another, not all at once — no beachball, no fan |
+| 11.9 | Change the transcription language in Settings | Transcripts **and** summaries are thrown away and redone |
+| 11.10 | Turn "Say what a long one came to" off | The summaries go; transcripts stay |
+| 11.11 | Turn transcription off entirely | Neither appears — the summary is read from the transcript, so it cannot exist without one |
+| 11.12 | With Apple Intelligence off | Transcripts as before, no summaries |
+
+---

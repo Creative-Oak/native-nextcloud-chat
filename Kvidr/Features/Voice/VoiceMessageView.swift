@@ -66,6 +66,13 @@ struct VoiceMessageView: View {
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: 260, alignment: .leading)
+                    .task(id: text) {
+                        player.insights.read(id: object.id, transcript: text)
+                    }
+
+                if case .ready(let gist) = player.insights.state(for: object.id) {
+                    VoiceGistView(gist: gist, isFromMe: isFromMe)
+                }
             }
         }
         .padding(.vertical, 2)
@@ -143,5 +150,39 @@ private struct Waveform: View {
         .accessibilityElement()
         .accessibilityLabel("Position")
         .accessibilityValue("\(Int(progress * 100)) percent")
+    }
+}
+
+/// The short of a long recording, under its transcript: one sentence, and anything it
+/// asked for. Marked with sparkles and set apart from the words that were actually said,
+/// which are right above it.
+private struct VoiceGistView: View {
+    let gist: VoiceGist
+    let isFromMe: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 9))
+                Text(gist.summary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            ForEach(gist.actions, id: \.self) { action in
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    Image(systemName: "checkmark.circle")
+                        .font(.system(size: 9))
+                    Text(action)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .font(.system(size: 12))
+        .foregroundStyle(isFromMe ? AnyShapeStyle(Color.white.opacity(0.75)) : AnyShapeStyle(.tertiary))
+        .frame(maxWidth: 260, alignment: .leading)
+        .padding(.top, 1)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("What the message came to")
     }
 }
