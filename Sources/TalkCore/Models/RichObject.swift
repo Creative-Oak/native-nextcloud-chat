@@ -111,7 +111,17 @@ struct RichObject: Sendable, Hashable, Codable {
     var isImage: Bool { mimeType?.hasPrefix("image/") ?? false }
     var isVideo: Bool { mimeType?.hasPrefix("video/") ?? false }
     /// A voice message or any other sound file — played in the transcript.
-    var isAudio: Bool { mimeType?.hasPrefix("audio/") ?? false }
+    ///
+    /// Also a file stored as untyped bytes whose name says it is audio: kvidr used to upload
+    /// everything as `application/octet-stream`, and Nextcloud kept that, so its own earlier
+    /// recordings arrive with no type at all.
+    var isAudio: Bool {
+        if mimeType?.hasPrefix("audio/") == true { return true }
+        guard mimeType == nil || mimeType == "application/octet-stream" else { return false }
+        return Self.audioExtensions.contains((name as NSString).pathExtension.lowercased())
+    }
+
+    private static let audioExtensions: Set<String> = ["wav", "mp3", "m4a", "aac", "caf", "aiff", "flac"]
 
     /// Mentions of the current user come through as `type: user` with a matching id, but
     /// `{mention-call}` (i.e. `@all`) is a `call` object — both highlight.

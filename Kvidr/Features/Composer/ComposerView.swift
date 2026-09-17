@@ -10,6 +10,8 @@ struct ComposerView: View {
     @Environment(\.preferences) private var preferences
     @State private var height: CGFloat = ComposerTextView.minimumHeight
     @State private var isShowingNewPoll = false
+    /// Made the first time the record button is pressed.
+    @State private var recorder: VoiceRecorder?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -42,7 +44,15 @@ struct ComposerView: View {
             }
 
             if model.conversation.canPostMessages {
-                editor
+                if let recorder, recorder.phase != .idle {
+                    VoiceRecordingBar(recorder: recorder) {
+                        let replyTo = model.replyingTo.flatMap { $0.token == model.token ? $0.messageID : nil }
+                        recorder.send(replyTo: replyTo)
+                        model.cancelReply()
+                    }
+                } else {
+                    editor
+                }
             } else {
                 unavailableNotice
             }
@@ -50,6 +60,9 @@ struct ComposerView: View {
         // No bar. The composer is floating chrome now: the transcript slides under it and
         // shows through the glass, which is what the material is for.
         .overlay(alignment: .bottomLeading) { mentionSuggestions }
+        // Leaving the conversation throws an unsent recording away, file and all.
+        .onDisappear { recorder?.discard() }
+        .animation(.smooth(duration: 0.2), value: recorder?.phase)
     }
 
     private var editor: some View {
@@ -135,17 +148,34 @@ struct ComposerView: View {
                         .monospacedDigit()
                         .foregroundStyle(remaining < 0 ? .red : .secondary)
                 }
-                Button(action: { model.send() }) {
-                    Image(systemName: "arrow.up")
-                        .font(.system(size: 13, weight: .semibold))
-                        .frame(width: 16, height: 16)
+                if showsRecordButton {
+                    // An empty field records instead, as it does in Messages; the send arrow
+                    // comes back with the first character typed.
+                    Button {
+                        startRecording()
+                    } label: {
+                        Image(systemName: "waveform")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 28, height: 28)
+                            .contentShape(.rect)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Record a voice message")
+                    .accessibilityLabel("Record a voice message")
+                } else {
+                    Button(action: { model.send() }) {
+                        Image(systemName: "arrow.up")
+                            .font(.system(size: 13, weight: .semibold))
+                            .frame(width: 16, height: 16)
+                    }
+                    .buttonStyle(.glassProminent)
+                    .buttonBorderShape(.circle)
+                    .tint(.accentColor)
+                    .disabled(!model.canSend)
+                    .keyboardShortcut(.return, modifiers: .command)
+                    .help(sendHelp)
                 }
-                .buttonStyle(.glassProminent)
-                .buttonBorderShape(.circle)
-                .tint(.accentColor)
-                .disabled(!model.canSend)
-                .keyboardShortcut(.return, modifiers: .command)
-                .help(sendHelp)
             }
         }
         .padding(.leading, 12)
@@ -171,6 +201,22 @@ struct ComposerView: View {
         .glass(.panel, cornerRadius: 14)
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
+    }
+
+    /// Nothing typed, nothing attached, not editing — and a server that takes files.
+    private var showsRecordButton: Bool {
+        model.draftText.isEmpty && !model.attachments.hasStaged && model.editing == nil
+            && model.attachments.canAttach
+    }
+
+    private func startRecording() {
+        let recorder = self.recorder ?? VoiceRecorder(
+            session: model.session,
+            token: model.token,
+            conversationName: model.conversation.displayName
+        )
+        self.recorder = recorder
+        Task { await recorder.start() }
     }
 
     private var placeholder: String {

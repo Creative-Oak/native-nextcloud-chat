@@ -313,6 +313,35 @@ struct NewServiceTests {
         #expect(metadata?["replyTo"] as? Int == 41)
     }
 
+    @Test("An upload says what type of file it is, from its extension")
+    func uploadContentType() {
+        // Exactly Nextcloud's spelling: Talk refuses a voice message that isn't `audio/wav`.
+        #expect(AttachmentService.mimeType(forFileName: "Talk recording from 2026-09-17 (Note to self).wav") == "audio/wav")
+        #expect(AttachmentService.mimeType(forFileName: "memo.M4A") == "audio/mp4")
+        #expect(AttachmentService.mimeType(forFileName: "report.pdf") == "application/pdf")
+        #expect(AttachmentService.mimeType(forFileName: "IMG_0001.HEIC") == "image/heic")
+        #expect(AttachmentService.mimeType(forFileName: "README") == "application/octet-stream")
+        #expect(AttachmentService.mimeType(forFileName: "data.notarealextension") == "application/octet-stream")
+    }
+
+    @Test("A recording is shared as a voice message, which is what makes clients draw a player")
+    func shareVoiceMessage() async throws {
+        let transport = StubTransport(json: ocsEnvelope("[]"), status: 200)
+        let service = AttachmentService(
+            server: try ServerAddress.parse("https://cloud.example.com"),
+            credentials: Credentials(loginName: "alice", appPassword: "pw"),
+            userID: "alice",
+            transport: transport,
+            client: try client(transport)
+        )
+
+        try await service.share(path: "/Talk/Talk recording.m4a", token: "tok", isVoiceMessage: true)
+        let fields = form(try #require(transport.lastRequest))
+        let metadata = try JSONSerialization.jsonObject(with: Data((fields["talkMetaData"] ?? "").utf8)) as? [String: Any]
+        #expect(metadata?["messageType"] as? String == "voice-message")
+        #expect(metadata?["caption"] == nil)
+    }
+
     @Test("Removing a staged file takes it out of the user's Nextcloud too")
     func deleteStagedFile() async throws {
         let transport = StubTransport(json: "", status: 204)

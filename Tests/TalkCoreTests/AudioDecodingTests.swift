@@ -46,3 +46,18 @@ struct AudioDecodingTests {
         #expect(DecodedAudio(samples: [], sampleRate: 16_000).levels(count: 4) == [0.12, 0.12, 0.12, 0.12])
     }
 }
+
+@Suite("Audio files in messages")
+struct AudioRichObjectTests {
+    @Test("A file is audio by its type, or by its name when it was stored untyped")
+    func isAudio() {
+        func file(_ name: String, _ mime: String?) -> RichObject {
+            RichObject(type: .file, id: "1", name: name, attributes: mime.map { ["mimetype": $0] } ?? [:])
+        }
+        #expect(file("x.wav", "audio/wav").isAudio)
+        #expect(file("Talk recording (Note to self).wav", "application/octet-stream").isAudio)
+        #expect(file("song.M4A", nil).isAudio)
+        #expect(!file("report.pdf", "application/octet-stream").isAudio)
+        #expect(!file("fake.wav", "text/plain").isAudio)   // a real type is believed
+    }
+}

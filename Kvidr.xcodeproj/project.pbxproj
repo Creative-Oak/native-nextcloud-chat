@@ -254,8 +254,9 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = kvidr;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
-				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "kvidr writes out voice messages on this Mac, so you can read them as well as listen.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "kvidr records a voice message when you press the record button in a conversation.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "kvidr writes out voice messages on this Mac, so you can read them as well as listen.";
 				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = app.kvidr.mac;
 				PRODUCT_NAME = kvidr;
@@ -276,8 +277,9 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = kvidr;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
-				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "kvidr writes out voice messages on this Mac, so you can read them as well as listen.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "kvidr records a voice message when you press the record button in a conversation.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "kvidr writes out voice messages on this Mac, so you can read them as well as listen.";
 				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = app.kvidr.mac;
 				PRODUCT_NAME = kvidr;

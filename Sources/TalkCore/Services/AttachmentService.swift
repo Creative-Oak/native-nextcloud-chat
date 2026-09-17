@@ -1,4 +1,5 @@
 import Foundation
+import UniformTypeIdentifiers
 
 /// One file on its way into a conversation.
 struct FileTransfer: Sendable, Identifiable, Equatable {
@@ -211,7 +212,10 @@ actor AttachmentService {
             let path = Endpoint.filePath("\(folder)/\(candidate)")
 
             var headers: HTTPHeaders = [
-                "Content-Type": "application/octet-stream",
+                // Nextcloud keeps the type it is told. Every upload used to say
+                // `application/octet-stream`, so a WAV was stored as unknown bytes: no player
+                // for a voice message, and no type-based handling for anything else either.
+                "Content-Type": Self.mimeType(forFileName: candidate),
                 "Authorization": credentials.authorizationHeaderValue,
                 // Create the folder if it isn't there yet, rather than a separate MKCOL.
                 "X-NC-WebDAV-Auto-Mkcol": "1",
@@ -257,6 +261,75 @@ actor AttachmentService {
 
     private static let maximumNameAttempts = 20
 
+    /// The type a file's extension names, in Nextcloud's own words — falling back to plain
+    /// bytes when the extension says nothing.
+    ///
+    /// Nextcloud's spelling matters, not just the type: Talk only keeps a voice message a
+    /// voice message when the file is exactly `audio/wav` or `audio/mpeg`, and macOS calls a
+    /// WAV `audio/vnd.wave`. Where the two disagree, Nextcloud's name wins.
+    static func mimeType(forFileName name: String) -> String {
+        let fileExtension = (name as NSString).pathExtension.lowercased()
+        guard !fileExtension.isEmpty else { return "application/octet-stream" }
+        if let nextcloud = nextcloudMimeTypes[fileExtension] { return nextcloud }
+        return UTType(filenameExtension: fileExtension)?.preferredMIMEType ?? "application/octet-stream"
+    }
+
+    /// Every extension where Nextcloud's `mimetypemapping.dist.json` (server 34) names a type
+    /// differently from macOS.
+    private static let nextcloudMimeTypes: [String: String] = [
+        "arw": "image/x-dcraw",
+        "avi": "video/x-msvideo",
+        "bin": "application/x-bin",
+        "cr2": "image/x-dcraw",
+        "dcr": "image/x-dcraw",
+        "dng": "image/x-dcraw",
+        "docm": "application/vnd.ms-word.document.macroEnabled.12",
+        "dv": "video/dv",
+        "emf": "image/emf",
+        "erf": "image/x-dcraw",
+        "exe": "application/x-ms-dos-executable",
+        "gz": "application/gzip",
+        "gzip": "application/gzip",
+        "hif": "image/heic",
+        "ico": "image/x-icon",
+        "iiq": "image/x-dcraw",
+        "js": "application/javascript",
+        "m4a": "audio/mp4",
+        "m4v": "video/mp4",
+        "nef": "image/x-dcraw",
+        "orf": "image/x-dcraw",
+        "otf": "application/font-sfnt",
+        "pef": "image/x-dcraw",
+        "php": "application/x-php",
+        "pl": "application/x-perl",
+        "potm": "application/vnd.ms-powerpoint.template.macroEnabled.12",
+        "ppsm": "application/vnd.ms-powerpoint.slideshow.macroEnabled.12",
+        "pptm": "application/vnd.ms-powerpoint.presentation.macroEnabled.12",
+        "psd": "application/x-photoshop",
+        "py": "text/x-python",
+        "raf": "image/x-dcraw",
+        "rar": "application/x-rar-compressed",
+        "rw2": "image/x-dcraw",
+        "sr2": "image/x-dcraw",
+        "srf": "image/x-dcraw",
+        "tga": "image/tga",
+        "ttf": "application/font-sfnt",
+        "vsd": "application/vnd.visio",
+        "vsdm": "application/vnd.ms-visio.drawing.macroEnabled.12",
+        "vsdx": "application/vnd.ms-visio.drawing",
+        "vssm": "application/vnd.ms-visio.stencil.macroEnabled.12",
+        "vssx": "application/vnd.ms-visio.stencil",
+        "vstm": "application/vnd.ms-visio.template.macroEnabled.12",
+        "vstx": "application/vnd.ms-visio.template",
+        "wav": "audio/wav",
+        "xlam": "application/vnd.ms-excel.addin.macroEnabled.12",
+        "xlsb": "application/vnd.ms-excel.sheet.binary.macroEnabled.12",
+        "xlsm": "application/vnd.ms-excel.sheet.macroEnabled.12",
+        "xltm": "application/vnd.ms-excel.template.macroEnabled.12",
+        "yaml": "application/yaml",
+        "yml": "application/yaml"
+    ]
+
     /// `report.pdf`, then `report (2).pdf`, `report (3).pdf`… the way Finder does it.
     static func name(_ fileName: String, attempt: Int) -> String {
         guard attempt > 0 else { return fileName }
@@ -270,14 +343,18 @@ actor AttachmentService {
     // MARK: - Sharing into the conversation
 
     /// `shareType: 10` is a Talk conversation; `shareWith` is its token.
+    ///
+    /// - Parameter isVoiceMessage: shares the file as a voice message, which Talk's clients
+    ///   draw as a player rather than as a file — the `messageType` is all that says so.
     func share(
         path: String,
         token: String,
         caption: String = "",
         replyTo: Int? = nil,
-        referenceID: String? = nil
+        referenceID: String? = nil,
+        isVoiceMessage: Bool = false
     ) async throws(TalkError) {
-        var metadata: [String: Any] = ["messageType": "comment"]
+        var metadata: [String: Any] = ["messageType": isVoiceMessage ? "voice-message" : "comment"]
         let caption = caption.trimmingCharacters(in: .whitespacesAndNewlines)
         if !caption.isEmpty { metadata["caption"] = caption }
         if let replyTo, replyTo > 0 { metadata["replyTo"] = replyTo }
