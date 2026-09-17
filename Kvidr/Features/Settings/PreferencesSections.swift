@@ -20,6 +20,16 @@ struct PreferencesCards: View {
             )
         }
 
+        InspectorCard(title: "Voice Messages") {
+            PreferenceToggle(
+                title: "Transcribe voice messages",
+                caption: "Writes out what was said under each voice message. It happens on this Mac — the recording isn’t sent anywhere. The first time, macOS may download the language’s speech model.",
+                isOn: $preferences.transcribesVoiceMessages
+            )
+            TranscriptionLanguagePicker(preferences: preferences)
+                .disabled(!preferences.transcribesVoiceMessages)
+        }
+
         InspectorCard(title: "Notifications") {
             PreferenceToggle(title: "Show notifications", isOn: $preferences.showsNotifications)
             PreferenceToggle(title: "Play a sound", isOn: $preferences.playsNotificationSound)
@@ -80,3 +90,43 @@ private struct PreferenceToggle: View {
         }
     }
 }
+
+/// Which language voice messages are transcribed in. Only languages this Mac has a speech
+/// model for are offered; "Automatic" follows the Mac's own language.
+private struct TranscriptionLanguagePicker: View {
+    @Bindable var preferences: Preferences
+    @Environment(AppModel.self) private var app
+    @State private var languages: [Locale] = []
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Language")
+                    .font(.system(size: 13))
+                Text("Transcripts are in one language. Choose the one most voice messages are spoken in.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 8)
+            Picker("Language", selection: $preferences.transcriptionLanguage) {
+                Text("Automatic").tag(String?.none)
+                Divider()
+                ForEach(languages, id: \.identifier) { locale in
+                    Text(VoiceTranscriber.name(of: locale)).tag(Optional(locale.identifier))
+                }
+            }
+            .labelsHidden()
+            .fixedSize()
+        }
+        .task { languages = await VoiceTranscriber.supportedLanguages() }
+        .onChange(of: preferences.transcriptionLanguage) {
+            app.voicePlayer?.transcriber.reset()
+        }
+        // Turning it back on writes out what is already on screen, too.
+        .onChange(of: preferences.transcribesVoiceMessages) { _, isOn in
+            if isOn { app.voicePlayer?.transcriber.reset() }
+        }
+    }
+}
+

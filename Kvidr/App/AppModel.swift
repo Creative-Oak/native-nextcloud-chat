@@ -80,6 +80,8 @@ final class AppModel {
     private(set) var avatarLoader: AvatarLoader?
     /// Thumbnails for shared files, likewise per account.
     private(set) var previewLoader: PreviewLoader?
+    /// Voice messages, one playing at a time; per account, like the previews.
+    private(set) var voicePlayer: VoicePlayer?
 
     /// A message a search result wants shown, applied once the conversation is live.
     private var pendingReveal: Int?
@@ -141,6 +143,7 @@ final class AppModel {
             sealer: CacheSealer(keyring: dependencies.cacheKeyring, accountID: account.id, kind: .avatar)
         )
         previewLoader = PreviewLoader(session: session, keyring: dependencies.cacheKeyring)
+        voicePlayer = VoicePlayer(session: session, transcriber: VoiceTranscriber(preferences: dependencies.preferences))
         profile = ProfileModel(session: session)
 
         let list = ConversationListModel(session: session, notifications: notifications)
@@ -265,6 +268,8 @@ final class AppModel {
         await previewLoader?.purge()
         avatarLoader = nil
         previewLoader = nil
+        voicePlayer?.stop()
+        voicePlayer = nil
         conversationList = nil
         chat = nil
         selectedToken = nil

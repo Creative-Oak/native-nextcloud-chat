@@ -248,6 +248,9 @@ private struct AttachmentView: View {
         } else if object.isImage && object.previewAvailable {
             InlineImageView(object: object)
                 .contextMenu { menu }
+        } else if object.isAudio, object.path != nil {
+            VoiceMessageView(object: object, isFromMe: isFromMe)
+                .contextMenu { menu }
         } else {
             fileRow
         }

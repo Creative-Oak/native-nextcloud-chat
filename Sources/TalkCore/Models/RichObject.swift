@@ -110,6 +110,8 @@ struct RichObject: Sendable, Hashable, Codable {
 
     var isImage: Bool { mimeType?.hasPrefix("image/") ?? false }
     var isVideo: Bool { mimeType?.hasPrefix("video/") ?? false }
+    /// A voice message or any other sound file — played in the transcript.
+    var isAudio: Bool { mimeType?.hasPrefix("audio/") ?? false }
 
     /// Mentions of the current user come through as `type: user` with a matching id, but
     /// `{mention-call}` (i.e. `@all`) is a `call` object — both highlight.

@@ -15,6 +15,8 @@ private enum Key {
     static let developerMode = "advanced.developerMode"
     static let lastSelectedToken = "state.lastSelectedToken"
     static let sidebarMode = "sidebar.mode"
+    static let transcribeVoiceMessages = "voice.transcribe"
+    static let transcriptionLanguage = "voice.transcriptionLanguage"
 }
 
 /// User preferences.
@@ -69,6 +71,17 @@ final class Preferences {
         didSet { defaults.set(browsesContacts, forKey: Key.browseContacts) }
     }
 
+    /// Voice messages are written out beneath themselves, on this Mac.
+    var transcribesVoiceMessages: Bool {
+        didSet { defaults.set(transcribesVoiceMessages, forKey: Key.transcribeVoiceMessages) }
+    }
+
+    /// The language voice messages are transcribed in, as a locale identifier. Nil follows
+    /// the Mac's own languages.
+    var transcriptionLanguage: String? {
+        didSet { defaults.set(transcriptionLanguage, forKey: Key.transcriptionLanguage) }
+    }
+
     var allowsInsecureLocalServers: Bool {
         didSet { defaults.set(allowsInsecureLocalServers, forKey: Key.allowInsecureLocalServers) }
     }
@@ -103,6 +116,7 @@ final class Preferences {
             Key.dockBadge: true,
             Key.sendOnReturn: true,
             Key.browseContacts: true,
+            Key.transcribeVoiceMessages: true,
             Key.allowInsecureLocalServers: false,
             Key.developerMode: false
         ])
@@ -113,6 +127,8 @@ final class Preferences {
         showsDockBadge = defaults.bool(forKey: Key.dockBadge)
         sendsOnReturn = defaults.bool(forKey: Key.sendOnReturn)
         browsesContacts = defaults.bool(forKey: Key.browseContacts)
+        transcribesVoiceMessages = defaults.bool(forKey: Key.transcribeVoiceMessages)
+        transcriptionLanguage = defaults.string(forKey: Key.transcriptionLanguage)
         allowsInsecureLocalServers = defaults.bool(forKey: Key.allowInsecureLocalServers)
         isDeveloperModeEnabled = defaults.bool(forKey: Key.developerMode)
         lastSelectedToken = defaults.string(forKey: Key.lastSelectedToken)

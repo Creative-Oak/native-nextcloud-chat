@@ -19,6 +19,7 @@ struct KvidrApp: App {
                 .environment(\.preferences, app.dependencies.preferences)
                 .environment(\.avatarLoader, app.avatarLoader)
                 .environment(\.previewLoader, app.previewLoader)
+                .environment(\.voicePlayer, app.voicePlayer)
                 .environment(\.linkPreviewLoader, linkPreviews)
                 .environment(\.talkSession, app.session)
                 .onAppear { appDelegate.app = app }
