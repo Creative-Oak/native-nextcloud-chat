@@ -99,12 +99,24 @@ struct SettingsPage: View {
         }
     }
 
+    /// The High Performance Backend, in words.
+    private var liveConnection: String {
+        switch app.signalingState {
+        case .idle: "Not started"
+        case .connecting: "Connecting…"
+        case .connected: "Connected"
+        case .reconnecting: "Reconnecting…"
+        case .unavailable(let reason): "Not available — \(reason.prefix(1).lowercased() + reason.dropFirst())"
+        }
+    }
+
     private var thisMac: some View {
         let account = profile.session.account
         return InspectorCard(title: "This Mac") {
             InspectorRow(label: "Server", value: account.server.displayString)
             InspectorRow(label: "Account", value: account.userID)
             InspectorRow(label: "Connection", value: app.connection == .offline ? "Offline" : "Connected")
+            InspectorRow(label: "Live connection", value: liveConnection)
             InspectorRow(
                 label: "Versions",
                 value: "Nextcloud \(account.capabilities.serverVersion.string) · Talk \(account.capabilities.talkVersion ?? "unknown")"

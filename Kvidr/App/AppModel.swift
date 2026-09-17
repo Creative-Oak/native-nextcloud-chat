@@ -70,6 +70,9 @@ final class AppModel {
     private(set) var profile: ProfileModel?
     private(set) var reminders: ReminderStore?
     private var notificationPoller: NotificationPoller?
+    /// The High Performance Backend connection's state, for Settings to show.
+    private(set) var signalingState: SignalingConnection.State = .idle
+    private var signalingStateTask: Task<Void, Never>?
 
     /// Window/app activation, which gates read state. See `ReadStatePolicy`.
     var isApplicationActive = true { didSet { activationChanged() } }
@@ -176,6 +179,7 @@ final class AppModel {
         await notifications.requestAuthorizationIfNeeded()
         await reminders.load()
         startNotificationPolling(session: session)
+        startSignaling(session: session)
     }
 
     /// Restores the previously open conversation, if it still exists.
@@ -210,6 +214,9 @@ final class AppModel {
         reminders = nil
         notificationPoller?.stop()
         notificationPoller = nil
+        signalingStateTask?.cancel()
+        signalingStateTask = nil
+        signalingState = .idle
     }
 
     /// The server's Talk configuration changed — refetch capabilities and rebuild around
@@ -483,6 +490,7 @@ final class AppModel {
                     let chat = self.chat
                     await sync.refreshNow(full: true)
                     await chat?.reconnect()
+                    await session.signaling.reconnectNow()
                 }
             }
         }
@@ -569,6 +577,25 @@ final class AppModel {
                 source?.lastError = error
             }
         }
+    }
+
+    /// Connects to the High Performance Backend, and follows its state. Nothing rides on the
+    /// connection yet; it is the groundwork for instant updates and typing.
+    private func startSignaling(session: Session) {
+        let signaling = session.signaling
+        signalingStateTask?.cancel()
+        signalingStateTask = Task { [weak self] in
+            for await state in await signaling.states() {
+                self?.signalingState = state
+            }
+        }
+        Task { await signaling.start() }
+    }
+
+    /// The Mac woke from sleep: the socket may have died without saying so.
+    func systemDidWake() {
+        guard let session else { return }
+        Task { await session.signaling.reconnectNow() }
     }
 
     /// See ``NotificationPoller``.

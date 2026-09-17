@@ -25,6 +25,8 @@ struct Session: Sendable {
     let serverNotifications: NotificationsService
     let scheduledMessages: ScheduledMessageService
     let absences: AbsenceService
+    /// The live connection to the High Performance Backend. Started by the app.
+    let signaling: SignalingConnection
     let profile: ProfileService
     let userStatus: UserStatusService
     let profileLinks: ProfileLinks
@@ -55,6 +57,11 @@ struct Session: Sendable {
         serverNotifications = NotificationsService(client: client)
         scheduledMessages = ScheduledMessageService(client: client)
         absences = AbsenceService(client: client)
+        let signalingSettings = SignalingSettingsService(client: client)
+        signaling = SignalingConnection(
+            settings: { () throws(TalkError) -> SignalingSettings in try await signalingSettings.settings() },
+            authURL: account.server.url(path: Endpoint.signalingBackend)
+        )
         profile = ProfileService(
             server: account.server,
             credentials: credentials,
@@ -79,6 +86,7 @@ struct Session: Sendable {
     func shutdown() async {
         await conversationSync.stop()
         await chatSync.stop()
+        await signaling.stop()
     }
 }
 

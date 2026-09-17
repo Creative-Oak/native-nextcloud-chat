@@ -42,6 +42,9 @@ enum Endpoint {
     static func schedule(_ token: String) -> String { "\(spreedV1)/chat/\(segment(token))/schedule" }
     static func schedule(_ token: String, _ id: String) -> String { "\(spreedV1)/chat/\(segment(token))/schedule/\(segment(id))" }
     static func outOfOfficeNow(_ userID: String) -> String { "/ocs/v2.php/apps/dav/api/v1/outOfOffice/\(segment(userID))/now" }
+    static let signalingSettings = "/ocs/v2.php/apps/spreed/api/v3/signaling/settings"
+    /// Where the signaling server checks a 1.0 sign-in, as a full URL it is told to call.
+    static let signalingBackend = "/ocs/v2.php/apps/spreed/api/v3/signaling/backend"
     static let notifications = "/ocs/v2.php/apps/notifications/api/v2/notifications"
     static let upcomingReminders = "\(spreedV1)/chat/upcoming-reminders"
     static func mentions(_ token: String) -> String { "\(spreedV1)/chat/\(segment(token))/mentions" }
@@ -165,7 +168,7 @@ enum Endpoint {
         "ocs", "v2.php", "index.php", "remote.php", "apps", "spreed", "api", "v1", "v2", "v4",
         "cloud", "capabilities", "user", "core", "apppassword", "login", "autocomplete", "get",
         "room", "note-to-self", "favorite", "archive", "important", "sensitive", "notify", "participants", "active", "state",
-        "avatar", "dark", "chat", "read", "context", "mentions", "reminder", "upcoming-reminders", "pin", "self", "notifications", "schedule", "outOfOffice", "now", "reaction", "poll",
+        "avatar", "dark", "chat", "read", "context", "mentions", "reminder", "upcoming-reminders", "pin", "self", "notifications", "schedule", "outOfOffice", "now", "v3", "signaling", "settings", "backend", "reaction", "poll",
         "search", "providers", "preview", "files_sharing", "shares", "dav", "files",
         "attendees", "share", "overview", "call",
         "users", "user_status", "status", "message", "custom", "predefined", "predefined_statuses"
