@@ -17,6 +17,8 @@ struct MessageRow: View {
     var onReply: (Message) -> Void
     /// Nil where the message can't be answered privately.
     var onReplyPrivately: ((Message) -> Void)?
+    /// Nil where the message can't be forwarded.
+    var onForward: ((Message) -> Void)?
     /// The reminder set on this message, if any.
     var reminder: Reminder?
     /// Nil where reminders can't be set.
@@ -300,6 +302,7 @@ struct MessageRow: View {
             myReactions: message.myReactions,
             onReply: { onReply(message) },
             onReplyPrivately: onReplyPrivately.map { handler in { handler(message) } },
+            onForward: onForward.map { handler in { handler(message) } },
             reminder: reminder?.date,
             onRemind: onRemind,
             onRemoveReminder: reminder.map { reminder in { onRemoveReminder(reminder) } },

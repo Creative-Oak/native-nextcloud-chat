@@ -11,6 +11,8 @@ import Observation
 final class ChatModel {
     private(set) var conversation: Conversation
     private(set) var timeline = MessageTimeline()
+    /// Where a message was just forwarded, for the note at the top of the transcript.
+    var forwardedTo: Conversation?
     /// This user's messages waiting to be sent, soonest first. See `ChatModel+Scheduled`.
     var scheduled: [ScheduledMessage] = []
     /// Set from the composer's Send Later: the next message is scheduled for then instead.

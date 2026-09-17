@@ -24,6 +24,10 @@ struct ChatView: View {
     var reminders: ReminderStore?
     /// Reply Privately: opens the one-to-one with the author, with the message quoted.
     var onReplyPrivately: (Message) -> Void = { _ in }
+    /// Forward…: asks where to, then sends it there.
+    var onForward: (Message) -> Void = { _ in }
+    /// Opens a conversation — the Show on the forwarded note.
+    var onOpenConversation: (String) -> Void = { _ in }
 
     @State private var highlightedMessageID: Int?
     @State private var didInitialScroll = false
@@ -63,6 +67,12 @@ struct ChatView: View {
                         } else if model.isRevealing {
                             RevealingBar()
                                 .transition(.opacity)
+                        } else if let target = model.forwardedTo {
+                            ForwardedBar(name: target.displayName) {
+                                model.forwardedTo = nil
+                                onOpenConversation(target.token)
+                            }
+                            .transition(.move(edge: .top).combined(with: .opacity))
                         } else if let live = liveConversation, live.hasCall {
                             CallInProgressBar(conversation: live) {
                                 NSWorkspace.shared.open(model.webURL)
@@ -85,6 +95,7 @@ struct ChatView: View {
                 .animation(.smooth(duration: 0.25), value: model.isRevealing)
                 .animation(.smooth(duration: 0.25), value: liveConversation?.hasCall)
                 .animation(.smooth(duration: 0.25), value: model.visiblePin?.id)
+                .animation(.smooth(duration: 0.25), value: model.forwardedTo?.token)
                 // An inset rather than another row in the stack: the composer floats over
                 // the transcript the way Messages' does, and the scroll view still knows
                 // not to hide the newest message behind it.
@@ -404,6 +415,7 @@ struct ChatView: View {
                 capabilities: model.capabilities,
                 onReply: { model.beginReply(to: $0); composerFocused = true },
                 onReplyPrivately: model.canReplyPrivately(to: message) ? onReplyPrivately : nil,
+                onForward: ForwardPlan.plan(for: message) != nil ? onForward : nil,
                 reminder: reminders?.reminder(token: message.token, messageID: message.messageID),
                 onRemind: reminders?.canSetReminders == true ? { date in reminders?.set(on: message, at: date) } : nil,
                 onRemoveReminder: { reminders?.remove($0) },

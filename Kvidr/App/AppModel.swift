@@ -534,6 +534,33 @@ final class AppModel {
         conversationCreated(conversation)
     }
 
+    /// Forwards a message into another conversation, as ``ForwardPlan`` says: words posted
+    /// again, a file shared again. The note that it went, or the error, lands on the
+    /// conversation it came from.
+    func forward(_ message: Message, to target: Conversation) {
+        guard let session, let plan = ForwardPlan.plan(for: message) else { return }
+        let source = chat
+        Task {
+            do throws(TalkError) {
+                switch plan {
+                case .text(let text):
+                    _ = try await session.chat.send(token: target.token, message: text)
+                case .file(let path, let caption, let isVoiceMessage):
+                    try await session.attachments.share(
+                        path: path, token: target.token, caption: caption, isVoiceMessage: isVoiceMessage
+                    )
+                }
+                source?.forwardedTo = target
+                Task { @MainActor in
+                    try? await Task.sleep(for: .seconds(5))
+                    if source?.forwardedTo?.token == target.token { source?.forwardedTo = nil }
+                }
+            } catch {
+                source?.lastError = error
+            }
+        }
+    }
+
     /// See ``NotificationPoller``.
     private func startNotificationPolling(session: Session) {
         let sync = session.conversationSync

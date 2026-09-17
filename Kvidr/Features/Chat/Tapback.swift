@@ -134,6 +134,8 @@ struct MessageMenuActions {
     var onReply: () -> Void
     /// Nil where a private reply isn't possible.
     var onReplyPrivately: (() -> Void)?
+    /// Nil where the message can't be forwarded — a poll, a system line.
+    var onForward: (() -> Void)?
     /// When this message's reminder is due, if it has one.
     var reminder: Date?
     /// Nil where reminders can't be set.
@@ -276,6 +278,9 @@ enum MessageMenu {
                 item.submenu = submenu
                 menu.addItem(item)
             }
+        }
+        if let onForward = actions.onForward {
+            menu.addItem(ClosureMenuItem("Forward…", symbol: "arrowshape.turn.up.right", action: onForward))
         }
         menu.addItem(ClosureMenuItem("Copy", symbol: "doc.on.doc", action: actions.onCopy))
         for link in actions.links {

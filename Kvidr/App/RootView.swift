@@ -27,6 +27,8 @@ struct RootView: View {
     @State private var contentWidth: CGFloat = 0
     @State private var conversationSettings: ConversationSettingsModel?
     @State private var messageSearch: MessageSearchModel?
+    /// The message the Forward sheet is choosing a conversation for.
+    @State private var forwarding: Message?
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
@@ -282,7 +284,9 @@ struct RootView: View {
                                     await app.replyPrivately(to: message)
                                     focusComposerOnceOpen()
                                 }
-                            }
+                            },
+                            onForward: { forwarding = $0 },
+                            onOpenConversation: { app.selectedToken = $0 }
                         )
                             // A fresh view per conversation: no state bleeds between them.
                             .id(chat.token)
@@ -366,6 +370,19 @@ struct RootView: View {
         }
         // Built fresh each time so the scope picker reflects whichever conversation is
         // open now, rather than the one that was open the first time it was used.
+        .sheet(isPresented: Binding(get: { forwarding != nil }, set: { if !$0 { forwarding = nil } })) {
+            if let message = forwarding {
+                ForwardSheet(
+                    message: message,
+                    conversations: app.conversationList?.index.visibleConversations ?? [],
+                    onForward: { target in
+                        forwarding = nil
+                        app.forward(message, to: target)
+                    },
+                    onCancel: { forwarding = nil }
+                )
+            }
+        }
         .sheet(item: $messageSearch) { model in
             MessageSearchSheet(
                 model: model,
