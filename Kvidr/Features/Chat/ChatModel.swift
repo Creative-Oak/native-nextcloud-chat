@@ -11,6 +11,13 @@ import Observation
 final class ChatModel {
     private(set) var conversation: Conversation
     private(set) var timeline = MessageTimeline()
+    /// This user's messages waiting to be sent, soonest first. See `ChatModel+Scheduled`.
+    var scheduled: [ScheduledMessage] = []
+    /// Set from the composer's Send Later: the next message is scheduled for then instead.
+    var sendLater: Date?
+    /// A scheduled message taken back into the composer to be changed.
+    var editingScheduled: ScheduledMessage?
+    @ObservationIgnored var scheduledRefresh: Task<Void, Never>?
     /// Pinned messages, most recently pinned first. See `ChatModel+Pins`.
     var pins: [PinnedMessage] = []
     /// The pin this user dismissed the pinned bar for.
@@ -178,6 +185,7 @@ final class ChatModel {
             }
         }
         Task { await loadPins() }
+        Task { await loadScheduled() }
     }
 
     /// Async on purpose. The long-poll engine is shared between conversations, so the
@@ -226,6 +234,11 @@ final class ChatModel {
         guard !change.isEmpty else { return }
 
         await session.store.save(messages: batch.messages, accountID: session.account.id)
+
+        // A message of mine arriving may be a scheduled one going out.
+        if !scheduled.isEmpty, batch.messages.contains(where: { session.account.isMe($0.actor) }) {
+            Task { await loadScheduled() }
+        }
 
         // Someone pinned or unpinned something: the list is the truth, so read it again.
         if batch.messages.contains(where: { PinnedMessage.changeSystemMessages.contains($0.systemMessage) }) {

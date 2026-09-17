@@ -187,6 +187,12 @@ struct ChatView: View {
                             .id(row.id)
                     }
 
+                    // Waiting to be sent: after everything that has been, as in Messages.
+                    ForEach(model.scheduled) { message in
+                        ScheduledMessageRow(model: model, message: message)
+                            .id("scheduled-\(message.id)")
+                    }
+
                     // A little breathing room above the composer, and the anchor the
                     // "scroll to bottom" logic targets.
                     Color.clear

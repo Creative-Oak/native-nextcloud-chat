@@ -17,6 +17,11 @@ extension ChatModel {
     /// stayed grey.
     var canSend: Bool {
         guard conversation.canPostMessages else { return false }
+        // Only words can be scheduled.
+        if sendLater != nil || editingScheduled != nil {
+            return !trimmedDraft.isEmpty && !attachments.hasStaged
+                && trimmedDraft.count <= capabilities.config.effectiveMaxMessageLength
+        }
         guard !trimmedDraft.isEmpty || attachments.hasStaged else { return false }
         // The words become the attachment's caption, and a caption is a message as far as
         // the length limit is concerned.
@@ -39,6 +44,10 @@ extension ChatModel {
     func send() {
         if editing != nil {
             commitEdit()
+            return
+        }
+        if sendLater != nil || editingScheduled != nil {
+            sendScheduled()
             return
         }
 

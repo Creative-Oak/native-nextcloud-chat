@@ -23,6 +23,7 @@ struct Session: Sendable {
     let reminders: ReminderService
     let pins: PinService
     let serverNotifications: NotificationsService
+    let scheduledMessages: ScheduledMessageService
     let profile: ProfileService
     let userStatus: UserStatusService
     let profileLinks: ProfileLinks
@@ -51,6 +52,7 @@ struct Session: Sendable {
         reminders = ReminderService(client: client)
         pins = PinService(client: client)
         serverNotifications = NotificationsService(client: client)
+        scheduledMessages = ScheduledMessageService(client: client)
         profile = ProfileService(
             server: account.server,
             credentials: credentials,

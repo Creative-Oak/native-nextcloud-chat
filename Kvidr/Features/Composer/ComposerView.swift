@@ -78,6 +78,11 @@ struct ComposerView: View {
                                 Divider()
                                 Button("Poll…", systemImage: "chart.bar.doc.horizontal") { isShowingNewPoll = true }
                             }
+                            if model.canSchedule, model.editing == nil {
+                                Divider()
+                                // Straight to the capsule in the field; the quick times are in there.
+                                Button("Send Later", systemImage: "clock") { model.beginSendLater() }
+                            }
                         }
                     )
                 }
@@ -104,6 +109,19 @@ struct ComposerView: View {
     /// Text, character count and send, all inside one glass capsule — the field is a
     /// single control rather than a row of parts spread across the window.
     private var field: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Send Later sits inside the field, above the words it will send — as in Messages.
+            // The room under it keeps it clear of the send button's circle.
+            if model.sendLater != nil {
+                // 7pt from the field's edge on every side it touches: the field pads its
+                // content 12 leading, 6 trailing and 5 top, so these even that out.
+                SendLaterPill(model: model)
+                    .padding(.top, 2)
+                    .padding(.bottom, 10)
+                    .padding(.leading, -5)
+                    .padding(.trailing, 1)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
         HStack(alignment: .bottom, spacing: 6) {
             ComposerTextView(
                 text: $model.draftText,
@@ -178,6 +196,11 @@ struct ComposerView: View {
                 }
             }
         }
+        // A little more room under the words while Send Later is open, so the field holds
+        // the outline without looking packed.
+        .padding(.bottom, model.sendLater != nil ? 4 : 0)
+        }
+        .animation(.smooth(duration: 0.2), value: model.sendLater != nil)
         .padding(.leading, 12)
         .padding(.trailing, 6)
         .padding(.vertical, 5)
@@ -206,7 +229,7 @@ struct ComposerView: View {
     /// Nothing typed, nothing attached, not editing — and a server that takes files.
     private var showsRecordButton: Bool {
         model.draftText.isEmpty && !model.attachments.hasStaged && model.editing == nil
-            && model.attachments.canAttach
+            && model.sendLater == nil && model.attachments.canAttach
     }
 
     private func startRecording() {
@@ -251,6 +274,8 @@ struct ComposerView: View {
         }
         if model.editing != nil {
             model.cancelEdit()
+        } else if model.sendLater != nil {
+            model.cancelSendLater()
         } else if model.replyingTo != nil {
             model.cancelReply()
         }
