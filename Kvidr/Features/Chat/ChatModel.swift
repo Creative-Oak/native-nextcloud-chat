@@ -11,6 +11,15 @@ import Observation
 final class ChatModel {
     private(set) var conversation: Conversation
     private(set) var timeline = MessageTimeline()
+    /// Pinned messages, most recently pinned first. See `ChatModel+Pins`.
+    var pins: [PinnedMessage] = []
+    /// The pin this user dismissed the pinned bar for.
+    var hiddenPinnedID = 0
+    /// The latest pin as last seen, to notice when it changes — see `ChatModel+Pins`.
+    var latestPinID = 0
+    /// Set by the app: the sidebar's copy of the conversation follows a hide, so reopening
+    /// the conversation doesn't bring back a bar that was just dismissed.
+    var onHiddenPinChanged: (Int) -> Void = { _ in }
     /// The transcript's display list. Rebuilt when the timeline changes — never per render.
     private(set) var rows: [ChatRow] = []
     /// Files on their way into this conversation.
@@ -140,6 +149,8 @@ final class ChatModel {
         self.attachments = attachments ?? AttachmentQueue(session: session, token: conversation.token)
         self.readContext = readContext
         self.onReadMarker = onReadMarker
+        self.hiddenPinnedID = conversation.hiddenPinnedID
+        self.latestPinID = conversation.lastPinnedID
     }
 
     // MARK: - Lifecycle
@@ -166,6 +177,7 @@ final class ChatModel {
                 await self.handle(event)
             }
         }
+        Task { await loadPins() }
     }
 
     /// Async on purpose. The long-poll engine is shared between conversations, so the
@@ -214,6 +226,11 @@ final class ChatModel {
         guard !change.isEmpty else { return }
 
         await session.store.save(messages: batch.messages, accountID: session.account.id)
+
+        // Someone pinned or unpinned something: the list is the truth, so read it again.
+        if batch.messages.contains(where: { PinnedMessage.changeSystemMessages.contains($0.systemMessage) }) {
+            Task { await loadPins() }
+        }
 
         // Messages arriving while the user is reading history get a "new messages" line of
         // their own, so they can see where they were when they scroll back down.

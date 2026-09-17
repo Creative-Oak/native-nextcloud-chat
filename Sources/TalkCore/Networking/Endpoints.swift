@@ -37,6 +37,8 @@ enum Endpoint {
     static func chatReadMarker(_ token: String) -> String { "\(spreedV1)/chat/\(segment(token))/read" }
     static func chatContext(_ token: String, _ messageID: Int) -> String { "\(spreedV1)/chat/\(segment(token))/\(messageID)/context" }
     static func reminder(_ token: String, _ messageID: Int) -> String { "\(spreedV1)/chat/\(segment(token))/\(messageID)/reminder" }
+    static func pin(_ token: String, _ messageID: Int) -> String { "\(spreedV1)/chat/\(segment(token))/\(messageID)/pin" }
+    static func pinSelf(_ token: String, _ messageID: Int) -> String { "\(spreedV1)/chat/\(segment(token))/\(messageID)/pin/self" }
     static let upcomingReminders = "\(spreedV1)/chat/upcoming-reminders"
     static func mentions(_ token: String) -> String { "\(spreedV1)/chat/\(segment(token))/mentions" }
     static func reaction(_ token: String, _ messageID: Int) -> String { "\(spreedV1)/reaction/\(segment(token))/\(messageID)" }
@@ -159,7 +161,7 @@ enum Endpoint {
         "ocs", "v2.php", "index.php", "remote.php", "apps", "spreed", "api", "v1", "v2", "v4",
         "cloud", "capabilities", "user", "core", "apppassword", "login", "autocomplete", "get",
         "room", "note-to-self", "favorite", "archive", "important", "sensitive", "notify", "participants", "active", "state",
-        "avatar", "dark", "chat", "read", "context", "mentions", "reminder", "upcoming-reminders", "reaction", "poll",
+        "avatar", "dark", "chat", "read", "context", "mentions", "reminder", "upcoming-reminders", "pin", "self", "reaction", "poll",
         "search", "providers", "preview", "files_sharing", "shares", "dav", "files",
         "attendees", "share", "overview", "call",
         "users", "user_status", "status", "message", "custom", "predefined", "predefined_statuses"

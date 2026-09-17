@@ -207,6 +207,13 @@ final class ConversationListModel {
         }
     }
 
+    /// Local echo for hiding (or the server un-hiding) the pinned bar, so the conversation
+    /// reopens the way it was left.
+    func setHiddenPinnedID(_ id: Int, token: String) {
+        index.update(token: token) { $0.hiddenPinnedID = id }
+        persist(token: token)
+    }
+
     func setNotificationLevel(_ level: NotificationLevel, for conversation: Conversation) {
         guard let conversation = index[conversation.token] else { return }
         let previous = conversation.notificationLevel

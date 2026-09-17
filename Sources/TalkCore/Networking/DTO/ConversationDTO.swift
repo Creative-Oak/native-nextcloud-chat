@@ -36,6 +36,8 @@ struct ConversationDTO: Decodable, Sendable {
     let isArchived: Bool?
     let isImportant: Bool?
     let isSensitive: Bool?
+    let lastPinnedId: Int?
+    let hiddenPinnedId: Int?
     let notificationLevel: Int?
     let notificationCalls: Int?
     let lobbyState: Int?
@@ -61,7 +63,7 @@ struct ConversationDTO: Decodable, Sendable {
         case actorType, actorId, permissions, attendeePermissions, defaultPermissions
         case readOnly, listable, messageExpiration, hasPassword, hasCall, callFlag, callStartTime
         case canStartCall, canDeleteConversation, canLeaveConversation, lastActivity
-        case isFavorite, isArchived, isImportant, isSensitive, notificationLevel, notificationCalls, lobbyState, lobbyTimer
+        case isFavorite, isArchived, isImportant, isSensitive, lastPinnedId, hiddenPinnedId, notificationLevel, notificationCalls, lobbyState, lobbyTimer
         case unreadMessages, unreadMention, unreadMentionDirect, lastReadMessage, lastCommonReadMessage
         case lastMessage, objectType, objectId, avatarVersion, isCustomAvatar, mentionPermissions
         case status, statusIcon, statusMessage, statusClearAt
@@ -97,6 +99,8 @@ struct ConversationDTO: Decodable, Sendable {
         isArchived = Lenient.bool(container, .isArchived)
         isImportant = Lenient.bool(container, .isImportant)
         isSensitive = Lenient.bool(container, .isSensitive)
+        lastPinnedId = Lenient.int(container, .lastPinnedId)
+        hiddenPinnedId = Lenient.int(container, .hiddenPinnedId)
         notificationLevel = Lenient.int(container, .notificationLevel)
         notificationCalls = Lenient.int(container, .notificationCalls)
         lobbyState = Lenient.int(container, .lobbyState)
@@ -165,6 +169,8 @@ struct ConversationDTO: Decodable, Sendable {
             notificationCalls: notificationCalls ?? 1,
             isImportant: isImportant ?? false,
             isSensitive: isSensitive ?? false,
+            lastPinnedID: lastPinnedId ?? 0,
+            hiddenPinnedID: hiddenPinnedId ?? 0,
             unreadMessages: unreadMessages ?? 0,
             unreadMention: unreadMention ?? false,
             // Without `direct-mention-flag` the server can't distinguish @all from a direct

@@ -126,10 +126,11 @@ struct ConversationDecodingTests {
 
     @Test("Important and sensitive decode, and a cached conversation from before them still opens")
     func importantAndSensitive() throws {
-        let json = #"{"token":"t","isImportant":true,"isSensitive":1}"#
+        let json = #"{"token":"t","isImportant":true,"isSensitive":1,"lastPinnedId":42,"hiddenPinnedId":40}"#
         let room = try JSONDecoder().decode(ConversationDTO.self, from: Data(json.utf8)).model()
         #expect(room.isImportant)
         #expect(room.isSensitive)
+        #expect(room.lastPinnedID == 42 && room.hiddenPinnedID == 40)
         #expect(ConversationPreview.text(for: room) == ConversationPreview.hiddenText)
 
         // Encode a conversation, strip the new keys, and decode it as the cache would.
@@ -137,6 +138,8 @@ struct ConversationDecodingTests {
         var object = try #require(try JSONSerialization.jsonObject(with: encoded) as? [String: Any])
         object.removeValue(forKey: "importantFlag")
         object.removeValue(forKey: "sensitiveFlag")
+        object.removeValue(forKey: "lastPinnedValue")
+        object.removeValue(forKey: "hiddenPinnedValue")
         let old = try JSONDecoder().decode(Conversation.self, from: JSONSerialization.data(withJSONObject: object))
         #expect(old.displayName == "Old")
         #expect(!old.isImportant && !old.isSensitive)

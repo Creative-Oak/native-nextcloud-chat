@@ -10,6 +10,9 @@ enum SharedItemType: String, Sendable, Hashable, CaseIterable, Identifiable {
     case deckcard
     case poll
     case recording
+    /// Pinned messages. Listed as a shared item by the server, shown by the pinned bar
+    /// rather than the inspector — which is why it is left out of `displayOrder`.
+    case pinned
     case other
 
     var id: String { rawValue }
@@ -24,6 +27,7 @@ enum SharedItemType: String, Sendable, Hashable, CaseIterable, Identifiable {
         case "deckcard": self = .deckcard
         case "poll": self = .poll
         case "recording": self = .recording
+        case "pinned": self = .pinned
         default: self = .other
         }
     }
@@ -38,6 +42,7 @@ enum SharedItemType: String, Sendable, Hashable, CaseIterable, Identifiable {
         case .deckcard: "Deck Cards"
         case .poll: "Polls"
         case .recording: "Recordings"
+        case .pinned: "Pinned"
         case .other: "Other"
         }
     }
@@ -52,6 +57,7 @@ enum SharedItemType: String, Sendable, Hashable, CaseIterable, Identifiable {
         case .deckcard: "rectangle.stack"
         case .poll: "chart.bar"
         case .recording: "record.circle"
+        case .pinned: "pin"
         case .other: "tray"
         }
     }

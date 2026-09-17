@@ -315,6 +315,9 @@ final class AppModel {
                 self?.notifications.clearNotifications(for: token)
             }
         )
+        model.onHiddenPinChanged = { [weak self, token = conversation.token] id in
+            self?.conversationList?.setHiddenPinnedID(id, token: token)
+        }
         chat = model
         attachmentQueues = attachmentQueues.filter { !$0.value.isEmpty }
         attachmentQueues[conversation.token] = model.attachments

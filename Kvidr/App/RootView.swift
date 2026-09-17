@@ -568,6 +568,24 @@ struct RootView: View {
             // both claim that corner — the button is gone the moment the panel is there.
             ToolbarSpacer(.flexible)
 
+            // The pins, once their bar has been hidden: Talk can't un-hide it, so this is
+            // how they stay reachable. Just left of the details button, in a circle of its
+            // own — a fixed spacer is what parts two items of one placement.
+            if let chat = app.chat, chat.hasHiddenPins {
+                ToolbarItem(placement: .primaryAction) {
+                    Menu {
+                        PinnedMessagesMenu(model: chat) { messageID in
+                            Task { await chat.reveal(messageID: messageID) }
+                        }
+                    } label: {
+                        Label("Pinned Messages", systemImage: "pin")
+                    }
+                    .menuIndicator(.hidden)
+                    .help("Pinned messages (\(chat.activePinCount))")
+                }
+                ToolbarSpacer(.fixed, placement: .primaryAction)
+            }
+
             ToolbarItem(placement: .primaryAction) {
                 Button(action: toggleInspector) {
                     Label("Conversation Details", systemImage: "info.circle")

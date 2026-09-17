@@ -22,6 +22,11 @@ struct MessageRow: View {
     /// Nil where reminders can't be set.
     var onRemind: ((Date) -> Void)?
     var onRemoveReminder: (Reminder) -> Void = { _ in }
+    /// The pin on this message, if it is pinned.
+    var pin: PinnedMessage?
+    /// Nil where this user can't pin.
+    var onPin: ((PinDuration) -> Void)?
+    var onUnpin: (Int) -> Void = { _ in }
     var onEdit: (Message) -> Void
     var onDelete: (Message) -> Void
     var onReact: (String, Message) -> Void
@@ -93,11 +98,20 @@ struct MessageRow: View {
 
                 if message.deliveryState.isPending { deliveryStatus }
 
-                if let reminder {
-                    Label(ReminderTime.text(reminder.date), systemImage: "alarm")
-                        .font(.caption2)
-                        .foregroundStyle(.orange)
-                        .help("You’ll be reminded about this message")
+                if pin != nil || reminder != nil {
+                    HStack(spacing: 8) {
+                        if let pin {
+                            Label("Pinned", systemImage: "pin.fill")
+                                .help("Pinned by \(pin.pinnedBy.resolvedDisplayName)"
+                                      + (pin.pinnedUntil.map { " until \($0.formatted(date: .abbreviated, time: .shortened))" } ?? ""))
+                        }
+                        if let reminder {
+                            Label(ReminderTime.text(reminder.date), systemImage: "alarm")
+                                .help("You’ll be reminded about this message")
+                        }
+                    }
+                    .font(.caption2)
+                    .foregroundStyle(.orange)
                 }
             }
             // A bubble that runs the full width of a wide window is a wall of text, not a
@@ -289,6 +303,9 @@ struct MessageRow: View {
             reminder: reminder?.date,
             onRemind: onRemind,
             onRemoveReminder: reminder.map { reminder in { onRemoveReminder(reminder) } },
+            isPinned: pin != nil,
+            onPin: onPin,
+            onUnpin: { onUnpin(message.messageID) },
             onEdit: { onEdit(message) },
             onDelete: { onDelete(message) },
             onCopy: {

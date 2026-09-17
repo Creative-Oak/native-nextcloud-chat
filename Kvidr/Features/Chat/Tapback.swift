@@ -139,6 +139,10 @@ struct MessageMenuActions {
     /// Nil where reminders can't be set.
     var onRemind: ((Date) -> Void)?
     var onRemoveReminder: (() -> Void)?
+    var isPinned = false
+    /// Nil where this user can't pin — only moderators can.
+    var onPin: ((PinDuration) -> Void)?
+    var onUnpin: () -> Void = {}
     var onEdit: () -> Void
     var onDelete: () -> Void
     var onCopy: () -> Void
@@ -258,6 +262,20 @@ enum MessageMenu {
         }
         if let onRemind = actions.onRemind {
             menu.addItem(remindMe(actions, onRemind: onRemind))
+        }
+        if let onPin = actions.onPin {
+            if actions.isPinned {
+                menu.addItem(ClosureMenuItem("Unpin", symbol: "pin.slash", action: actions.onUnpin))
+            } else {
+                let submenu = NSMenu()
+                for duration in PinDuration.allCases {
+                    submenu.addItem(ClosureMenuItem(duration.title) { onPin(duration) })
+                }
+                let item = NSMenuItem(title: "Pin", action: nil, keyEquivalent: "")
+                item.image = NSImage(systemSymbolName: "pin", accessibilityDescription: nil)
+                item.submenu = submenu
+                menu.addItem(item)
+            }
         }
         menu.addItem(ClosureMenuItem("Copy", symbol: "doc.on.doc", action: actions.onCopy))
         for link in actions.links {

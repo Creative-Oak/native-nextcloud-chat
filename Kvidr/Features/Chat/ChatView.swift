@@ -45,36 +45,46 @@ struct ChatView: View {
         VStack(spacing: 0) {
             transcript
                 .overlay(alignment: .top) {
-                    if let error = model.lastError, error != .cancelled {
-                        InlineStatusBar(error: error, state: model.syncState)
-                            .padding(.top, ConversationHeader.depthBelowToolbar + 10)
+                    // The transient bar, one at a time, then the pinned message under it —
+                    // a pin is standing information and shouldn't give way to a call.
+                    VStack(spacing: 6) {
+                        if let error = model.lastError, error != .cancelled {
+                            InlineStatusBar(error: error, state: model.syncState)
+                                .transition(.move(edge: .top).combined(with: .opacity))
+                        } else if let messageID = model.unreachableMessageID {
+                            UnreachableMessageBar(
+                                onOpenInBrowser: {
+                                    NSWorkspace.shared.open(model.webURL(forMessage: messageID))
+                                    model.dismissUnreachableMessage()
+                                },
+                                onDismiss: { model.dismissUnreachableMessage() }
+                            )
                             .transition(.move(edge: .top).combined(with: .opacity))
-                    } else if let messageID = model.unreachableMessageID {
-                        UnreachableMessageBar(
-                            onOpenInBrowser: {
-                                NSWorkspace.shared.open(model.webURL(forMessage: messageID))
-                                model.dismissUnreachableMessage()
-                            },
-                            onDismiss: { model.dismissUnreachableMessage() }
-                        )
-                        .padding(.top, ConversationHeader.depthBelowToolbar + 10)
-                        .transition(.move(edge: .top).combined(with: .opacity))
-                    } else if model.isRevealing {
-                        RevealingBar()
-                            .padding(.top, ConversationHeader.depthBelowToolbar + 10)
-                            .transition(.opacity)
-                    } else if let live = liveConversation, live.hasCall {
-                        CallInProgressBar(conversation: live) {
-                            NSWorkspace.shared.open(model.webURL)
+                        } else if model.isRevealing {
+                            RevealingBar()
+                                .transition(.opacity)
+                        } else if let live = liveConversation, live.hasCall {
+                            CallInProgressBar(conversation: live) {
+                                NSWorkspace.shared.open(model.webURL)
+                            }
+                            .transition(.move(edge: .top).combined(with: .opacity))
                         }
-                        .padding(.top, ConversationHeader.depthBelowToolbar + 10)
-                        .transition(.move(edge: .top).combined(with: .opacity))
+
+                        if let pin = model.visiblePin {
+                            PinnedBar(model: model, pin: pin) { messageID in
+                                Task { await model.reveal(messageID: messageID) }
+                            }
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                        }
                     }
+                    .padding(.top, ConversationHeader.depthBelowToolbar + 10)
+                    .padding(.horizontal, 16)
                 }
                 .animation(.smooth(duration: 0.25), value: model.lastError)
                 .animation(.smooth(duration: 0.25), value: model.unreachableMessageID)
                 .animation(.smooth(duration: 0.25), value: model.isRevealing)
                 .animation(.smooth(duration: 0.25), value: liveConversation?.hasCall)
+                .animation(.smooth(duration: 0.25), value: model.visiblePin?.id)
                 // An inset rather than another row in the stack: the composer floats over
                 // the transcript the way Messages' does, and the scroll view still knows
                 // not to hide the newest message behind it.
@@ -111,6 +121,9 @@ struct ChatView: View {
                 .accessibilityHidden(true)
         }
         .navigationTitle(model.conversation.displayName)
+        .onChange(of: liveConversation?.hiddenPinnedID) { _, id in
+            if let id { model.hiddenPinChangedElsewhere(id) }
+        }
         // Drop anywhere in the conversation, not just on the composer — that is where
         // people aim, and aiming at a 30pt field with a file in hand is a chore.
         .dropDestination(for: URL.self) { urls, _ in
@@ -388,6 +401,9 @@ struct ChatView: View {
                 reminder: reminders?.reminder(token: message.token, messageID: message.messageID),
                 onRemind: reminders?.canSetReminders == true ? { date in reminders?.set(on: message, at: date) } : nil,
                 onRemoveReminder: { reminders?.remove($0) },
+                pin: model.pin(for: message.messageID),
+                onPin: model.canPin ? { duration in model.pin(message, for: duration) } : nil,
+                onUnpin: { model.unpin(messageID: $0) },
                 onEdit: { model.beginEdit($0); composerFocused = true },
                 onDelete: { model.delete($0) },
                 onReact: { emoji, message in model.toggleReaction(emoji, on: message) },

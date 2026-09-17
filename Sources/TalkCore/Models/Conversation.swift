@@ -148,6 +148,21 @@ struct Conversation: Sendable, Hashable, Identifiable, Codable {
     private var importantFlag: Bool?
     private var sensitiveFlag: Bool?
 
+    /// The most recently pinned message, 0 for none. Cap `pinned-messages`.
+    var lastPinnedID: Int {
+        get { lastPinnedValue ?? 0 }
+        set { lastPinnedValue = newValue }
+    }
+
+    /// The pin this user dismissed the bar for; the bar comes back when a newer one is pinned.
+    var hiddenPinnedID: Int {
+        get { hiddenPinnedValue ?? 0 }
+        set { hiddenPinnedValue = newValue }
+    }
+
+    private var lastPinnedValue: Int?
+    private var hiddenPinnedValue: Int?
+
     var unreadMessages: Int
     var unreadMention: Bool
     var unreadMentionDirect: Bool
@@ -261,6 +276,8 @@ struct Conversation: Sendable, Hashable, Identifiable, Codable {
         notificationCalls: Int = 1,
         isImportant: Bool = false,
         isSensitive: Bool = false,
+        lastPinnedID: Int = 0,
+        hiddenPinnedID: Int = 0,
         unreadMessages: Int = 0,
         unreadMention: Bool = false,
         unreadMentionDirect: Bool = false,
@@ -303,6 +320,8 @@ struct Conversation: Sendable, Hashable, Identifiable, Codable {
         self.notificationCalls = notificationCalls
         self.importantFlag = isImportant
         self.sensitiveFlag = isSensitive
+        self.lastPinnedValue = lastPinnedID
+        self.hiddenPinnedValue = hiddenPinnedID
         self.unreadMessages = unreadMessages
         self.unreadMention = unreadMention
         self.unreadMentionDirect = unreadMentionDirect

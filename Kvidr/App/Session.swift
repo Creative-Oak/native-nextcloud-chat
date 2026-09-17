@@ -21,6 +21,7 @@ struct Session: Sendable {
     let messageSearch: MessageSearchService
     let polls: PollService
     let reminders: ReminderService
+    let pins: PinService
     let profile: ProfileService
     let userStatus: UserStatusService
     let profileLinks: ProfileLinks
@@ -47,6 +48,7 @@ struct Session: Sendable {
         messageSearch = MessageSearchService(client: client)
         polls = PollService(client: client)
         reminders = ReminderService(client: client)
+        pins = PinService(client: client)
         profile = ProfileService(
             server: account.server,
             credentials: credentials,
