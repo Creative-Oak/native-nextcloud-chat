@@ -221,17 +221,25 @@ private struct PinnedConversations: View {
     @Binding var selection: String?
     /// The face whose menu is open.
     @State private var menuToken: String?
-    /// The face a dragged favourite is over.
-    @State private var dropTarget: String?
+    /// The face being carried, and where. Kept out of this view's own state: this view is a
+    /// row of the list, and a change to its state has the list rebuild the row — every face
+    /// then starts over where it is now, and nothing slides. Only the faces read it.
+    @State private var drag = FaceDrag()
+    @State private var gridSize: CGSize = .zero
+
+    private static let space = "favouriteFaces"
+    private static let minimumCellWidth: CGFloat = 72
+    private static let spacing: CGFloat = 2
 
     /// Three across at the sidebar's ideal width, as in Messages.
-    private let columns = [GridItem(.adaptive(minimum: 72), spacing: 2)]
+    private let columns = [GridItem(.adaptive(minimum: minimumCellWidth), spacing: spacing)]
 
     var body: some View {
-        LazyVGrid(columns: columns, spacing: 2) {
+        LazyVGrid(columns: columns, spacing: Self.spacing) {
             ForEach(conversations) { conversation in
                 let isSelected = selection == conversation.token
                 Button {
+                    guard !drag.didDrag else { drag.didDrag = false; return }
                     selection = conversation.token
                 } label: {
                     VStack(spacing: 6) {
@@ -284,29 +292,85 @@ private struct PinnedConversations: View {
                         )
                     )
                 }
-                // Drag a face onto another's place to rearrange them, as in Messages.
-                .draggable(FavoriteDrag(token: conversation.token)) {
-                    AvatarView(conversation: conversation, size: 62)
-                }
-                .dropDestination(for: FavoriteDrag.self) { items, _ in
-                    guard let moved = items.first?.token else { return false }
-                    withAnimation(.smooth(duration: 0.25)) { model.moveFavorite(moved, onto: conversation.token) }
-                    return true
-                } isTargeted: { targeted in
-                    dropTarget = targeted ? conversation.token : (dropTarget == conversation.token ? nil : dropTarget)
-                }
-                .scaleEffect(dropTarget == conversation.token ? 1.06 : 1)
-                .animation(.smooth(duration: 0.15), value: dropTarget)
+                // The face itself is carried — its picture and its name, not a snapshot of
+                // them — and the others slide aside to make room, the way Messages
+                // rearranges its pinned faces. Not system drag and drop: that lights up the
+                // list row the grid sits in, and puts down a second copy of the face while
+                // its drag image is still on the way back.
+                .modifier(CarriedFace(drag: drag, token: conversation.token, grid: grid))
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 4, coordinateSpace: .named(Self.space))
+                        .onChanged { carry(conversation.token, value: $0) }
+                        .onEnded { _ in putDown() }
+                )
                 .help(conversation.displayName)
                 .accessibilityLabel(label(for: conversation))
                 .accessibilityAddTraits(isSelected ? .isSelected : [])
             }
         }
+        .coordinateSpace(.named(Self.space))
+        .onGeometryChange(for: CGSize.self) { $0.size } action: { gridSize = $0 }
         // Out past the list's own content inset, so the selected block lands level with a
         // selected row's highlight. Measured on macOS 26.6: a row's content starts 16pt
         // from the sidebar's edge and its highlight 10pt, so the grid reaches out by 6.
         .padding(.horizontal, -6)
         .padding(.vertical, 6)
+    }
+
+    private var grid: FaceGrid {
+        FaceGrid(size: gridSize, count: conversations.count, minimumCellWidth: Self.minimumCellWidth, spacing: Self.spacing)
+    }
+
+    // MARK: - Rearranging
+
+    private func carry(_ token: String, value: DragGesture.Value) {
+        guard !drag.settling else { return }
+        let grid = grid
+        if drag.token != token {
+            let order = conversations.map(\.token)
+            drag.base = order
+            drag.order = order
+            drag.startSlot = order.firstIndex(of: token) ?? 0
+            drag.token = token
+            drag.didDrag = true
+        }
+        drag.translation = value.translation
+        let start = grid.origin(ofSlot: drag.startSlot)
+        let center = CGPoint(
+            x: start.x + grid.cell.width / 2 + value.translation.width,
+            y: start.y + grid.cell.height / 2 + value.translation.height
+        )
+        guard let target = grid.slot(at: center), let from = drag.order.firstIndex(of: token), from != target else { return }
+        var order = drag.order
+        order.remove(at: from)
+        order.insert(token, at: min(target, order.count))
+        withAnimation(FaceDrag.slide) { drag.order = order }
+    }
+
+    /// Let go: the face glides from the pointer into its place — the one face, not a copy on
+    /// its way back while the real one appears — and then the grid takes the new order.
+    private func putDown() {
+        guard let token = drag.token, !drag.settling else { return }
+        let grid = grid
+        let index = drag.order.firstIndex(of: token) ?? drag.startSlot
+        let start = grid.origin(ofSlot: drag.startSlot)
+        let place = grid.origin(ofSlot: index)
+        withAnimation(FaceDrag.land) {
+            drag.settling = true
+            drag.translation = CGSize(width: place.x - start.x, height: place.y - start.y)
+        } completion: {
+            // The new order and the offsets' end in the same frame, so nothing on screen moves.
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                model.setFavoriteOrder(drag.order)
+                drag.token = nil
+                drag.translation = .zero
+                drag.settling = false
+            }
+        }
+        // Released off every face, no click comes to clear the flag; clear it after this event.
+        Task { @MainActor in drag.didDrag = false }
     }
 
     /// A person's first name, a group's whole name. The cells are narrow, and
@@ -508,14 +572,98 @@ private struct DraftRow: View {
     }
 }
 
-/// A favourite being dragged to a new place in the grid. Carried as a small JSON object — an
-/// app-specific type would need declaring in an Info.plist this project generates — and only
-/// something that decodes as one is accepted, so text or a file dropped on a face is refused.
-struct FavoriteDrag: Codable, Transferable {
-    let token: String
+/// A favourite being carried in the grid of faces.
+@MainActor
+@Observable
+private final class FaceDrag {
+    static let slide = Animation.smooth(duration: 0.3)
+    static let land = Animation.smooth(duration: 0.32)
 
-    static var transferRepresentation: some TransferRepresentation {
-        CodableRepresentation(contentType: .json)
+    var token: String?
+    /// The order when it was picked up — the grid's order until it is put down.
+    var base: [String] = []
+    /// The order on screen: the others slide aside as it passes.
+    var order: [String] = []
+    var startSlot = 0
+    /// How far the pointer has moved since it was picked up.
+    var translation: CGSize = .zero
+    /// Put down and gliding into its place.
+    var settling = false
+    /// Set by a drag so the click that ends it doesn't also open the conversation.
+    var didDrag = false
+}
+
+/// The slots of the grid of faces: columns as `.adaptive(minimum:)` lays them out, rows of
+/// equal height.
+private struct FaceGrid: Equatable {
+    let size: CGSize
+    let count: Int
+    let minimumCellWidth: CGFloat
+    let spacing: CGFloat
+
+    private var columns: Int { max(1, Int((size.width + spacing) / (minimumCellWidth + spacing))) }
+    private var rows: Int { max(1, Int(ceil(Double(count) / Double(columns)))) }
+
+    var cell: CGSize {
+        CGSize(
+            width: (size.width - spacing * CGFloat(columns - 1)) / CGFloat(columns),
+            height: (size.height - spacing * CGFloat(rows - 1)) / CGFloat(rows)
+        )
+    }
+
+    /// The slot at a point; anything past the last face — the empty end of the last row —
+    /// is the last slot.
+    ///
+    /// Over another face, the carried one has to reach the middle half of it first, so the
+    /// face making room slides out from under it rather than staying hidden beneath it.
+    func slot(at point: CGPoint) -> Int? {
+        guard count > 0, size.width > 0, size.height > 0 else { return nil }
+        let stride = cell.width + spacing
+        let column = min(columns - 1, max(0, Int(point.x / stride)))
+        let row = min(rows - 1, max(0, Int(point.y / (cell.height + spacing))))
+        let slot = row * columns + column
+        guard slot < count else { return count - 1 }
+        let fromMiddle = abs(point.x - (CGFloat(column) * stride + cell.width / 2))
+        return fromMiddle <= cell.width / 4 ? slot : nil
+    }
+
+    func origin(ofSlot slot: Int) -> CGPoint {
+        guard size.width > 0 else { return .zero }
+        return CGPoint(
+            x: CGFloat(slot % columns) * (cell.width + spacing),
+            y: CGFloat(slot / columns) * (cell.height + spacing)
+        )
     }
 }
 
+/// How a face looks while a favourite is carried. The carried one is lifted and follows the
+/// pointer; the others are drawn offset from their places in the grid to their places in the
+/// new order, which the grid only takes when the face is put down.
+private struct CarriedFace: ViewModifier {
+    let drag: FaceDrag
+    let token: String
+    let grid: FaceGrid
+
+    func body(content: Content) -> some View {
+        let isCarried = drag.token == token
+        let isLifted = isCarried && !drag.settling
+        content
+            .scaleEffect(isLifted ? 1.08 : 1)
+            .shadow(color: .black.opacity(isLifted ? 0.18 : 0), radius: 8, y: 4)
+            .animation(.smooth(duration: 0.26), value: isLifted)
+            .offset(isCarried ? drag.translation : shift)
+            .zIndex(isCarried ? 1 : 0)
+            // The carried face follows the pointer, not the slide.
+            .transaction { if isLifted { $0.animation = nil } }
+    }
+
+    private var shift: CGSize {
+        guard drag.token != nil,
+              let base = drag.base.firstIndex(of: token),
+              let now = drag.order.firstIndex(of: token)
+        else { return .zero }
+        let from = grid.origin(ofSlot: base)
+        let to = grid.origin(ofSlot: now)
+        return CGSize(width: to.x - from.x, height: to.y - from.y)
+    }
+}

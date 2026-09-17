@@ -63,6 +63,13 @@ final class ConversationListModel {
         }
     }
 
+    /// The favourites' new order, from rearranging them by dragging.
+    func setFavoriteOrder(_ tokens: [String]) {
+        guard tokens != favoriteOrder else { return }
+        favoriteOrder = tokens
+        UserDefaults.standard.set(tokens, forKey: favoriteOrderKey)
+    }
+
     /// Drops a favourite onto another's place.
     func moveFavorite(_ token: String, onto target: String) {
         // Start from what is on screen, so favourites never placed by hand are placed now.
