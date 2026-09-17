@@ -28,6 +28,8 @@ struct ChatView: View {
     var onForward: (Message) -> Void = { _ in }
     /// Opens a conversation — the Show on the forwarded note.
     var onOpenConversation: (String) -> Void = { _ in }
+    /// Opens the one-to-one with a user — an out-of-office's stand-in.
+    var onMessageUser: (String) -> Void = { _ in }
 
     @State private var highlightedMessageID: Int?
     @State private var didInitialScroll = false
@@ -80,6 +82,16 @@ struct ChatView: View {
                             .transition(.move(edge: .top).combined(with: .opacity))
                         }
 
+                        if let absence = model.absence {
+                            AbsenceBar(
+                                name: model.conversation.displayName,
+                                absence: absence,
+                                onMessageReplacement: absence.replacementUserID.map { id in { onMessageUser(id) } },
+                                onDismiss: { model.absence = nil }
+                            )
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                        }
+
                         if let pin = model.visiblePin {
                             PinnedBar(model: model, pin: pin) { messageID in
                                 Task { await model.reveal(messageID: messageID) }
@@ -96,6 +108,7 @@ struct ChatView: View {
                 .animation(.smooth(duration: 0.25), value: liveConversation?.hasCall)
                 .animation(.smooth(duration: 0.25), value: model.visiblePin?.id)
                 .animation(.smooth(duration: 0.25), value: model.forwardedTo?.token)
+                .animation(.smooth(duration: 0.25), value: model.absence)
                 // An inset rather than another row in the stack: the composer floats over
                 // the transcript the way Messages' does, and the scroll view still knows
                 // not to hide the newest message behind it.

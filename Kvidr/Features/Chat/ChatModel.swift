@@ -11,6 +11,8 @@ import Observation
 final class ChatModel {
     private(set) var conversation: Conversation
     private(set) var timeline = MessageTimeline()
+    /// The other person's out-of-office, in a one-to-one, while they're away.
+    var absence: Absence?
     /// Where a message was just forwarded, for the note at the top of the transcript.
     var forwardedTo: Conversation?
     /// This user's messages waiting to be sent, soonest first. See `ChatModel+Scheduled`.
@@ -122,6 +124,18 @@ final class ChatModel {
         rebuildRows()
     }
 
+    /// In a one-to-one, whether the other person is out of office now — as Talk's web app
+    /// shows it. A conversation with anyone else, or a server without the calendar app's
+    /// endpoint, simply has none.
+    func loadAbsence() async {
+        guard conversation.type == .oneToOne, let partner = conversation.oneToOnePartnerID else { return }
+        do throws(TalkError) {
+            absence = try await session.absences.currentAbsence(userID: partner)
+        } catch {
+            Log.ui.info("No out-of-office for this conversation: \(error.userMessage)")
+        }
+    }
+
     func rebuildRows() {
         rows = ChatRow.build(messages: timeline.messages, firstUnreadMessageID: firstUnreadMessageID)
     }
@@ -188,6 +202,7 @@ final class ChatModel {
         }
         Task { await loadPins() }
         Task { await loadScheduled() }
+        Task { await loadAbsence() }
     }
 
     /// Async on purpose. The long-poll engine is shared between conversations, so the

@@ -345,22 +345,32 @@ final class AppModel {
     /// or a new one, which Talk hands back as the existing one if there is one it hadn't
     /// told us about — opened with the message quoted in the composer.
     func replyPrivately(to message: Message) async {
-        guard let session, let list = conversationList else { return }
         pendingPrivateReply = message
-        if let existing = list.index.conversations.first(where: { $0.type == .oneToOne && $0.name == message.actor.id }) {
+        if await !openOneToOne(with: message.actor.id) {
+            pendingPrivateReply = nil
+        }
+    }
+
+    /// Opens the one-to-one with a user — the one in the sidebar, or a new one, which Talk
+    /// hands back as the existing one if there is one it hadn't told us about.
+    @discardableResult
+    func openOneToOne(with userID: String) async -> Bool {
+        guard let session, let list = conversationList else { return false }
+        if let existing = list.index.conversations.first(where: { $0.type == .oneToOne && $0.name == userID }) {
             selectedToken = existing.token
-            return
+            return true
         }
         do {
-            let created = try await session.conversations.create(.oneToOne(with: message.actor.id)).conversation
+            let created = try await session.conversations.create(.oneToOne(with: userID)).conversation
             if list[created.token] == nil {
                 conversationCreated(created)
             } else {
                 selectedToken = created.token
             }
+            return true
         } catch {
-            pendingPrivateReply = nil
-            Log.ui.warning("Couldn’t open a conversation for a private reply: \(error.userMessage)")
+            Log.ui.warning("Couldn’t open a one-to-one conversation: \(error.userMessage)")
+            return false
         }
     }
 

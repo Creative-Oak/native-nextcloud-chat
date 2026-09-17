@@ -286,7 +286,13 @@ struct RootView: View {
                                 }
                             },
                             onForward: { forwarding = $0 },
-                            onOpenConversation: { app.selectedToken = $0 }
+                            onOpenConversation: { app.selectedToken = $0 },
+                            onMessageUser: { userID in
+                                Task {
+                                    await app.openOneToOne(with: userID)
+                                    focusComposerOnceOpen()
+                                }
+                            }
                         )
                             // A fresh view per conversation: no state bleeds between them.
                             .id(chat.token)

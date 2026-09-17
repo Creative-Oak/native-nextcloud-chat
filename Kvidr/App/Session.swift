@@ -24,6 +24,7 @@ struct Session: Sendable {
     let pins: PinService
     let serverNotifications: NotificationsService
     let scheduledMessages: ScheduledMessageService
+    let absences: AbsenceService
     let profile: ProfileService
     let userStatus: UserStatusService
     let profileLinks: ProfileLinks
@@ -53,6 +54,7 @@ struct Session: Sendable {
         pins = PinService(client: client)
         serverNotifications = NotificationsService(client: client)
         scheduledMessages = ScheduledMessageService(client: client)
+        absences = AbsenceService(client: client)
         profile = ProfileService(
             server: account.server,
             credentials: credentials,
