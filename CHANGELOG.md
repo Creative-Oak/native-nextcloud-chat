@@ -1,5 +1,32 @@
 # Changelog
 
+## Unreleased
+
+### Intelligence
+
+Everything here works with Apple Intelligence switched off, or missing, except suggested
+replies — which is nothing but a model. See
+[`docs/plans/2026-09-17-apple-intelligence-design.md`](docs/plans/2026-09-17-apple-intelligence-design.md).
+
+- **Times you type are underlined where you typed them.** “lad os snakke om det i morgen”
+  underlines *i morgen* in link blue; clicking it arms a reminder, and sending the message
+  sets it. Danish and English, including “på fredag”, “om et par dage”, “i morgen kl. 14”
+  and “in two hours” — read on this Mac from a table, not from `NSDataDetector`, which does
+  not know any of them. Apple Intelligence, where it is available, adds the phrases the
+  table can’t hold.
+- **A one-tap row under a message**: **Add to Reminders** when a message names a time,
+  **Add to Notes** when it carries a list. Notes go to your Note to self conversation, so
+  they are on your phone too. Offered on the newest few messages only, never in a sensitive
+  conversation, and a chip that has been used says so.
+- **Suggested replies** above the message field, in the conversation’s language and in the
+  way you write — primed with your own recent messages. Clicking one puts it *in the field*;
+  nothing is ever sent by one click. Needs Apple Intelligence.
+- **Writing Tools** in the message field: proofread, rewrite and the tone changes.
+- **Reminders can go to Apple Reminders**, Nextcloud’s own, or both — Settings →
+  Intelligence. Nextcloud is the default and needs no permission; Reminders.app is asked
+  for at the moment it is first needed, and kvidr only ever adds to it.
+- Nothing is sent anywhere. The on-device model only, never Private Cloud Compute.
+
 ## 1.0.0
 
 The first release: a native macOS client for Nextcloud Talk's text chat.

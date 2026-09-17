@@ -45,10 +45,12 @@ Sources/TalkCore/              Foundation-only. The whole non-UI application.
   Persistence/                 SwiftData models, repositories, store actor   (#if canImport(SwiftData))
   Security/                    KeychainStore                                  (#if canImport(Security))
   Rendering/                   MessageContentParser → [MessageContentNode]
+  Intelligence/                DateExpressionScanner, SuggestionScanner — no model needed
   Support/                     Logging, clocks, backoff, reachability
 Tests/TalkCoreTests/           Unit tests + sanitized JSON fixtures
 Kvidr/                    The macOS app target (SwiftUI + AppKit + notifications)
   App/ Features/ UI/ Notifications/ Resources/
+  Features/Intelligence/       The only place FoundationModels is imported
 Kvidr.xcodeproj           Xcode 26 project, synchronized folders
 docs/
 ```

@@ -47,6 +47,9 @@ extension ChatModel {
             return
         }
         if sendLater != nil || editingScheduled != nil {
+            // A scheduled message has no id for days; a reminder can't wait that long for
+            // one, and quietly keeping it armed until then would be a promise we'd break.
+            armedReminder = nil
             sendScheduled()
             return
         }
@@ -66,6 +69,8 @@ extension ChatModel {
             attachments.send(caption: text, replyTo: replyingTo.flatMap { $0.token == token ? $0.messageID : nil })
             draftText = ""
             replyingTo = nil
+            // The upload's own message is the one that would carry it, and this isn't it.
+            armedReminder = nil
             return
         }
 
@@ -102,10 +107,13 @@ extension ChatModel {
         mutateTimeline { $0.addPending(optimistic) }
         draftText = ""
         replyingTo = nil
+        // Taken off the composer now, and set only if the send actually lands.
+        let reminder = armedReminder
+        armedReminder = nil
         saveDraftNow()
         isScrolledToLatest = true
 
-        transmit(optimistic, replyTo: replyTo, replyToToken: replyToToken)
+        transmit(optimistic, replyTo: replyTo, replyToToken: replyToToken, reminder: reminder)
     }
 
     /// Retries a send that failed. Same reference id, so a message the server actually did
@@ -125,7 +133,7 @@ extension ChatModel {
         Task { await store.deleteMessage(localID: message.localID, token: token, accountID: accountID) }
     }
 
-    private func transmit(_ optimistic: Message, replyTo: Int?, replyToToken: String?) {
+    private func transmit(_ optimistic: Message, replyTo: Int?, replyToToken: String?, reminder: ArmedReminder? = nil) {
         // Only send a reference id the server knows what to do with.
         let referenceID = capabilities.supportsReferenceIDs ? optimistic.referenceID : nil
 
@@ -144,6 +152,9 @@ extension ChatModel {
                 // The long poll may have delivered this already; the timeline handles both
                 // orders and will not duplicate.
                 self.mutateTimeline { $0.apply([sent]) }
+                // The message exists now, so the time clicked in the draft has something to
+                // hang on. A send that failed sets nothing, which is the right answer.
+                if let reminder { self.onArmedReminder(sent, reminder.date) }
                 await session.store.save(messages: [sent], accountID: session.account.id)
                 await session.store.deleteMessage(localID: optimistic.localID, token: token, accountID: session.account.id)
             } catch {

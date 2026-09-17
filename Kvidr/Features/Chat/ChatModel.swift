@@ -97,6 +97,23 @@ final class ChatModel {
     /// so it doesn't jump around while the user is reading.
     private(set) var firstUnreadMessageID: Int?
 
+    /// Whether the one-tap row under a message is offered at all. Set from Settings when
+    /// the conversation opens — see `ChatModel+Suggestions`.
+    @ObservationIgnored var showsSuggestions = true
+    /// What each message suggests, worked out once. Not observed: it is a memo of a pure
+    /// function, like `contentCache` beside it.
+    @ObservationIgnored var suggestionCache: [String: [MessageSuggestion]] = [:]
+    /// Chips already acted on, as "<message id>/<suggestion id>". Observed, so a chip
+    /// that has been used says so the moment it is.
+    var usedSuggestions: Set<String> = []
+
+    /// A reminder armed by clicking a time in the draft, waiting for the message it is
+    /// about to exist. See ``ArmedReminder``.
+    var armedReminder: ArmedReminder?
+    /// Where an armed reminder goes once the server has acknowledged the message. Set by
+    /// the transcript, which is what holds the reminder store.
+    @ObservationIgnored var onArmedReminder: @MainActor (Message, Date) -> Void = { _, _ in }
+
     let session: Session
     private let readContext: @MainActor () -> ReadStateContext
     private let onReadMarker: @MainActor (String, Int) -> Void

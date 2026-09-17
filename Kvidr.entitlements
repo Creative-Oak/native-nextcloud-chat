@@ -11,6 +11,11 @@
 	<!-- Phase 7, for attaching files the user picks. -->
 	<key>com.apple.security.files.user-selected.read-only</key>
 	<true/>
+	<!-- Writing a reminder into Reminders.app, when Settings says that is where reminders
+	     go. On macOS, Reminders is behind the calendars entitlement — there is no separate
+	     one — and nothing is ever read back out: kvidr only ever adds. -->
+	<key>com.apple.security.personal-information.calendars</key>
+	<true/>
 	<!-- Recording a voice message, from the record button in a conversation. -->
 	<key>com.apple.security.device.audio-input</key>
 	<true/>

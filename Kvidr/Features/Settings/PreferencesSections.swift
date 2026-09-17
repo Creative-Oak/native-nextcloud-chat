@@ -20,6 +20,26 @@ struct PreferencesCards: View {
             )
         }
 
+        InspectorCard(title: "Intelligence") {
+            PreferenceToggle(
+                title: "Underline times you type",
+                caption: "Typing “lad os snakke om det i morgen” underlines the words “i morgen”; clicking them sets a reminder for when the message is sent. The phrases are read on this Mac. With Apple Intelligence on, the ones a fixed list can’t cover are read too.",
+                isOn: $preferences.suggestsTimes
+            )
+            PreferenceToggle(
+                title: "Suggest what to do with a message",
+                caption: "Offers Add to Reminders and Add to Notes under a message that names a time or carries a list. Read on this Mac, with or without Apple Intelligence.",
+                isOn: $preferences.showsMessageSuggestions
+            )
+            PreferenceToggle(
+                title: "Suggest replies",
+                caption: "Offers two or three replies above the message field, in the conversation’s language and in the way you write. Needs Apple Intelligence.",
+                isOn: $preferences.suggestsReplies
+            )
+            ReminderDestinationPicker(preferences: preferences)
+            IntelligenceStatusNote()
+        }
+
         InspectorCard(title: "Voice Messages") {
             PreferenceToggle(
                 title: "Transcribe voice messages",
@@ -88,6 +108,69 @@ private struct PreferenceToggle: View {
                 .controlSize(.small)
                 .labelsHidden()
         }
+    }
+}
+
+/// Where "Remind Me" puts a reminder. Nextcloud's own follow you to your phone and the
+/// web; Reminders.app is where a lot of people actually look.
+private struct ReminderDestinationPicker: View {
+    @Bindable var preferences: Preferences
+    @Environment(AppModel.self) private var app
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Reminders go to")
+                        .font(.system(size: 13))
+                    Text("Nextcloud’s reminders arrive in Talk on every device you use. Apple Reminders asks for permission the first time, and stays on this Mac and your Apple account.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 8)
+                Picker("Reminders go to", selection: $preferences.reminderDestination) {
+                    ForEach(ReminderDestination.allCases, id: \.self) { destination in
+                        Text(destination.title).tag(destination)
+                    }
+                }
+                .labelsHidden()
+                .fixedSize()
+            }
+
+            if preferences.reminderDestination.includesApple,
+               let access = app.reminders?.apple.access,
+               case .denied(let reason) = access {
+                Label(reason, systemImage: "exclamationmark.triangle")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        // Coming back from System Settings having granted it should clear the warning.
+        .onChange(of: preferences.reminderDestination) { app.reminders?.apple.refreshAccess() }
+    }
+}
+
+/// Says, once, why the parts that need Apple Intelligence are quiet — rather than leaving
+/// three switches that look on and do nothing.
+private struct IntelligenceStatusNote: View {
+    @Environment(AppModel.self) private var app
+
+    var body: some View {
+        Group {
+            if case .unavailable(let reason) = app.intelligence.readiness {
+                Label {
+                    Text("\(reason) Underlined times and the one-tap suggestions still work — they’re read on this Mac either way.")
+                } icon: {
+                    Image(systemName: "sparkles")
+                }
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .task { app.intelligence.refreshReadiness() }
     }
 }
 

@@ -175,6 +175,37 @@ The things that most need your eye, because they are exactly what I could not se
 - Does ⇧⌘F find things the web UI finds?
 - Does the window come back where you left it?
 
+### The Apple Intelligence work, specifically
+
+Added 17 September 2026 — design in
+[`plans/2026-09-17-apple-intelligence-design.md`](plans/2026-09-17-apple-intelligence-design.md).
+The date scanner and the suggestion rules are covered by tests (`swift test`), so the
+*logic* is settled. Four things are not, and all four need a Mac:
+
+1. **The composer's height.** `ComposerTextView.updateHeight()` used to read
+   `textView.layoutManager`, which on a TextKit 2 view silently drops the view back to
+   TextKit 1 — and Writing Tools' full experience needs TextKit 2. It now asks
+   `textLayoutManager` first and keeps the old path as a fallback. So: does the field still
+   grow line by line, stop at its ceiling and start scrolling, and does the transcript stay
+   put while it does? This is the change most likely to have gone wrong.
+2. **The underline.** Type `lad os snakke om det i morgen`. Is *i morgen* blue and
+   underlined, does the underline move with the words as you edit around it, and does
+   clicking it arm the pill rather than just moving the caret? Typing straight after an
+   underlined phrase must not come out blue.
+3. **The Foundation Models API surface.** `OnDeviceIntelligence` is the only file that
+   imports it, written against the documented shape without an SDK to check it against:
+   `SystemLanguageModel.default.availability`, `LanguageModelSession { instructions }`,
+   `respond(to:generating:)`, `@Generable`/`@Guide`. If any of it has moved, it has moved in
+   one file, and everything else is written to carry on without it.
+4. **Reminders.app.** With Settings → Intelligence → "Reminders go to" set to Apple or
+   Both, the first reminder should raise the system permission prompt — it needs both
+   `com.apple.security.personal-information.calendars` in the entitlements and
+   `NSRemindersFullAccessUsageDescription`, which are both in. A silent no-op means one of
+   them didn't make it into the signed build.
+
+Worth trying with Apple Intelligence **off**, too: underlined times and the one-tap chips
+should all still work, and the reply row should simply not appear.
+
 ## 6. Known gaps
 
 - **Calls** are deliberately out of scope for v1. `docs/ARCHITECTURE.md` § Room for calls

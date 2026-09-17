@@ -35,6 +35,11 @@ struct MessageRow: View {
     var onRetry: (Message) -> Void
     var onDiscard: (Message) -> Void
     var onShowParent: (Int) -> Void
+    /// The one-tap suggestions this message earned, if any — see `ChatModel+Suggestions`.
+    var suggestions: [MessageSuggestion] = []
+    /// Which of them have already been acted on, by suggestion id.
+    var usedSuggestions: Set<String> = []
+    var onSuggestion: (MessageSuggestion) -> Void = { _ in }
     /// True while this message's reactions float above it — see `TapbackBar`.
     var isTapbackTarget = false
     var onShowTapback: (Message) -> Void
@@ -96,6 +101,14 @@ struct MessageRow: View {
                 if !message.isDeleted, let link = content.firstWebLink {
                     LinkPreviewCard(url: link, isFromMe: isFromMe)
                         .padding(.top, 2)
+                }
+
+                if !suggestions.isEmpty, !message.isDeleted {
+                    MessageSuggestionChips(
+                        suggestions: suggestions,
+                        used: usedSuggestions,
+                        onActivate: onSuggestion
+                    )
                 }
 
                 if message.deliveryState.isPending { deliveryStatus }

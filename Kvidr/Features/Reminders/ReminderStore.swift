@@ -13,17 +13,61 @@ final class ReminderStore {
     private(set) var reminders: [Reminder] = []
 
     let session: Session
+    /// Reminders.app, for the destinations that include it.
+    let apple: AppleRemindersService
     @ObservationIgnored private let notifications: NotificationController
+    @ObservationIgnored private let preferences: Preferences
     @ObservationIgnored private var expiryTask: Task<Void, Never>?
     /// Where a reminder's conversation name, and whether it is sensitive, come from.
     @ObservationIgnored var conversation: (String) -> Conversation? = { _ in nil }
 
-    init(session: Session, notifications: NotificationController) {
+    init(
+        session: Session,
+        notifications: NotificationController,
+        preferences: Preferences,
+        apple: AppleRemindersService = AppleRemindersService()
+    ) {
         self.session = session
         self.notifications = notifications
+        self.preferences = preferences
+        self.apple = apple
     }
 
     var canSetReminders: Bool { session.capabilitySnapshot.supportsReminders }
+
+    /// Whether a reminder can be set at all — either the server takes them, or the user
+    /// keeps them in Reminders.app, where the server's opinion doesn't come into it.
+    var canRemind: Bool {
+        (canSetReminders && preferences.reminderDestination.includesTalk)
+            || preferences.reminderDestination.includesApple
+    }
+
+    /// Sets a reminder about a message, wherever this user keeps them.
+    ///
+    /// The one door every "remind me" in the app comes through — the message menu, the
+    /// chip under a bubble, and a time clicked in your own draft — so the choice in
+    /// Settings is honoured in one place rather than three.
+    func remind(about message: Message, at date: Date) {
+        let destination = preferences.reminderDestination
+        if destination.includesTalk, canSetReminders {
+            set(on: message, at: date)
+        }
+        guard destination.includesApple else { return }
+
+        let room = conversation(message.token)
+        let isSensitive = room?.isSensitive == true
+        // A sensitive conversation's words do not get copied into another app's database.
+        let body = isSensitive ? ConversationPreview.hiddenText : message.text
+        let who = message.actor.resolvedDisplayName
+        let title = body.isEmpty ? "Message from \(who)" : "\(who): \(body.prefix(80))"
+        let notes = [room?.displayName, isSensitive ? nil : (body.count > 80 ? body : nil)]
+            .compactMap { $0 }
+            .joined(separator: "\n\n")
+
+        Task { [apple] in
+            await apple.add(title: title, notes: notes.isEmpty ? nil : notes, due: date)
+        }
+    }
 
     func reminder(token: String, messageID: Int) -> Reminder? {
         reminders.first { $0.token == token && $0.messageID == messageID }

@@ -60,6 +60,16 @@ an in-app viewer · ⌥⌘F find in conversation · ⌘K quick switcher · moder
 (rename, description, read-only, message expiration, link access) · ⇧⌘F server-side search
 across your whole message history · a keyboard shortcuts window.
 
+**Intelligence** — times you name in a message are underlined where you typed them
+(`i morgen`, `på fredag kl. 14`, `in two hours` — Danish and English), and a click sets a
+reminder when the message goes · a one-tap row under a message: Add to Reminders, Add to
+Notes (to your Note to self conversation) · suggested replies above the field, in the
+conversation's language and in the way you write · Writing Tools in the composer ·
+reminders to Nextcloud, Apple Reminders, or both. All of it runs on your Mac — the
+on-device model only, never Private Cloud Compute — and all of it except suggested replies
+works with Apple Intelligence switched off. See
+[`docs/plans/2026-09-17-apple-intelligence-design.md`](docs/plans/2026-09-17-apple-intelligence-design.md).
+
 **Design** — Liquid Glass on macOS 26, applied to the floating layer (message actions,
 panels, reaction pills, upload rows) and deliberately *not* to the transcript, which is
 content. See `docs/ARCHITECTURE.md` § Liquid Glass.

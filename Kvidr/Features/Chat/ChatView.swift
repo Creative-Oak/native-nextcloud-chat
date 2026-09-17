@@ -12,6 +12,8 @@ struct ChatView: View {
     @Bindable var model: ChatModel
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(AppModel.self) private var app
+    @Environment(\.preferences) private var preferences
     /// Owned by the window so ⌘⇧K and Return-from-the-sidebar can move focus here.
     @Binding var composerFocused: Bool
     /// Keeps the frosted band over the header up whether or not the pointer is there —
@@ -46,6 +48,16 @@ struct ChatView: View {
     /// being over the header, and how far the frosted band reaches.
     @State private var toolbarDepth: CGFloat = 0
     @State private var isPointerOverHeader = false
+
+    /// The user's own Note to self conversation, where "Add to Notes" puts things.
+    ///
+    /// Read from the whole index rather than the sidebar's list: that one is filtered by
+    /// whatever is typed in the search field and leaves the archive out, and notes to self
+    /// are exactly the kind of conversation people archive and still use.
+    private var noteToSelfToken: String? {
+        guard model.capabilities.supportsNoteToSelf else { return nil }
+        return app.conversationList?.index.allConversations.first { $0.isNoteToSelf }?.token
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -117,6 +129,9 @@ struct ChatView: View {
                 }
         }
         .background(Color(nsColor: .textBackgroundColor))
+        // Settings decide whether the chips appear at all, and where a reminder armed in
+        // the composer goes once the message it belongs to exists.
+        .task(id: model.token) { configureSuggestions() }
         // Where the pointer counts as over the header — the toolbar and the name
         // capsule under it — which is what brings the frosted band up; the band itself
         // is the transcript's top scroll edge, hardened.
@@ -399,6 +414,19 @@ struct ChatView: View {
         }
     }
 
+    /// What Settings allows, and where a reminder armed in the composer goes once the
+    /// message it belongs to exists.
+    private func configureSuggestions() {
+        model.showsSuggestions = preferences?.showsMessageSuggestions ?? true
+        model.onArmedReminder = { [reminders] message, date in
+            reminders?.remind(about: message, at: date)
+        }
+    }
+
+    private func activate(_ suggestion: MessageSuggestion, on message: Message) {
+        model.activate(suggestion, on: message, reminders: reminders, noteToSelfToken: noteToSelfToken)
+    }
+
     private func dismissTapback() {
         withAnimation(reduceMotion ? nil : .snappy(duration: 0.2)) { tapbackMessageID = nil }
     }
@@ -446,7 +474,7 @@ struct ChatView: View {
                 onReplyPrivately: model.canReplyPrivately(to: message) ? onReplyPrivately : nil,
                 onForward: ForwardPlan.plan(for: message) != nil ? onForward : nil,
                 reminder: reminders?.reminder(token: message.token, messageID: message.messageID),
-                onRemind: reminders?.canSetReminders == true ? { date in reminders?.set(on: message, at: date) } : nil,
+                onRemind: reminders?.canRemind == true ? { date in reminders?.remind(about: message, at: date) } : nil,
                 onRemoveReminder: { reminders?.remove($0) },
                 pin: model.pin(for: message.messageID),
                 onPin: model.canPin ? { duration in model.pin(message, for: duration) } : nil,
@@ -457,6 +485,9 @@ struct ChatView: View {
                 onRetry: { model.retry($0) },
                 onDiscard: { model.discard($0) },
                 onShowParent: { highlightedMessageID = $0 },
+                suggestions: model.suggestions(for: message),
+                usedSuggestions: model.usedSuggestionKeys(for: message),
+                onSuggestion: { activate($0, on: message) },
                 isTapbackTarget: tapbackMessageID == message.messageID,
                 onShowTapback: { pressed in
                     withAnimation(reduceMotion ? nil : .snappy(duration: 0.25)) { tapbackMessageID = pressed.messageID }

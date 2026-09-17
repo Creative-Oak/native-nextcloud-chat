@@ -8,7 +8,12 @@ struct ComposerView: View {
     @Binding var isFocused: Bool
 
     @Environment(\.preferences) private var preferences
+    @Environment(AppModel.self) private var app
     @State private var height: CGFloat = ComposerTextView.minimumHeight
+    /// The times named in what is being typed. Owned here, because it is a property of the
+    /// draft rather than of the conversation.
+    @State private var composerIntelligence = ComposerIntelligence()
+    @State private var smartReplies = SmartReplyModel()
     @State private var isShowingNewPoll = false
     /// Made the first time the record button is pressed.
     @State private var recorder: VoiceRecorder?
@@ -51,12 +56,25 @@ struct ComposerView: View {
                         model.cancelReply()
                     }
                 } else {
+                    if !smartReplies.replies.isEmpty {
+                        SmartReplyBar(replies: smartReplies.replies, onPick: useSuggestedReply)
+                    }
                     editor
                 }
             } else {
                 unavailableNotice
             }
         }
+        .task(id: model.token) { startIntelligence() }
+        // The scanner runs on the draft as it changes; the model, when there is one, a
+        // moment behind it. Both are cancelled and restarted by `update`, so a fast typist
+        // never has more than one request in flight.
+        .onChange(of: model.draftText) { _, text in
+            composerIntelligence.update(for: text)
+            if !text.isEmpty { smartReplies.dismiss() }
+        }
+        .onChange(of: model.messages.last?.messageID) { smartReplies.update(for: model) }
+        .onChange(of: model.replyingTo?.messageID) { smartReplies.update(for: model) }
         // No bar. The composer is floating chrome now: the transcript slides under it and
         // shows through the glass, which is what the material is for.
         .overlay(alignment: .bottomLeading) { mentionSuggestions }
@@ -112,6 +130,15 @@ struct ComposerView: View {
         VStack(alignment: .leading, spacing: 0) {
             // Send Later sits inside the field, above the words it will send — as in Messages.
             // The room under it keeps it clear of the send button's circle.
+            if let armed = model.armedReminder {
+                ArmedReminderPill(armed: armed) { model.armedReminder = nil }
+                    .padding(.top, 2)
+                    .padding(.bottom, 10)
+                    .padding(.leading, -5)
+                    .padding(.trailing, 1)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+
             if model.sendLater != nil {
                 // 7pt from the field's edge on every side it touches: the field pads its
                 // content 12 leading, 6 trailing and 5 top, so these even that out.
@@ -133,6 +160,7 @@ struct ComposerView: View {
                 isEnabled: true,
                 sendsOnReturn: preferences?.sendsOnReturn ?? true,
                 isSuggesting: model.isShowingMentionSuggestions,
+                dateHighlights: preferences?.suggestsTimes == false ? [] : composerIntelligence.dates.map(\.range),
                 onSubmit: { model.send() },
                 onCancel: { cancelContext() },
                 onEditPrevious: { model.beginEditingLatestOwnMessage() },
@@ -147,7 +175,8 @@ struct ComposerView: View {
                     // Held rather than attached: a paste is the one way a file reaches the
                     // composer without anyone having pointed at it.
                     model.attachments.enqueue(pastedFiles: urls)
-                }
+                },
+                onActivateHighlight: { offset in armReminder(at: offset) }
             )
             .frame(height: height)
             .overlay(alignment: .topLeading) {
@@ -208,12 +237,47 @@ struct ComposerView: View {
         .padding(.bottom, model.sendLater != nil ? 4 : 0)
         }
         .animation(.smooth(duration: 0.2), value: model.sendLater != nil)
+        .animation(.smooth(duration: 0.2), value: model.armedReminder)
         .padding(.leading, 12)
         .padding(.trailing, 6)
         .padding(.vertical, 5)
         // Never shorter than the round buttons beside it: the three read as one band.
         .frame(minHeight: GlassMetrics.control)
         .glass(.field, cornerRadius: GlassMetrics.control / 2)
+    }
+
+    /// Hands both helpers what this Mac and this user allow, and asks for replies to
+    /// whatever is already on screen.
+    private func startIntelligence() {
+        app.intelligence.refreshReadiness()
+        // A session carries its conversation with it, and the next conversation is none of
+        // the last one's business.
+        app.intelligence.forgetContext()
+
+        composerIntelligence.intelligence = app.intelligence
+        composerIntelligence.isEnabled = preferences?.suggestsTimes ?? true
+        composerIntelligence.update(for: model.draftText)
+
+        smartReplies.intelligence = app.intelligence
+        smartReplies.isEnabled = preferences?.suggestsReplies ?? true
+        smartReplies.update(for: model)
+    }
+
+    /// A suggested reply goes into the field with the caret after it, never straight to
+    /// the server. One click has never sent a message in this app and this isn't the
+    /// feature to start with.
+    private func useSuggestedReply(_ reply: String) {
+        model.draftText = reply
+        model.caretRequest = reply.count
+        isFocused = true
+        smartReplies.dismiss()
+    }
+
+    /// A click on an underlined time: the reminder is armed, not set. It has nothing to
+    /// hang on until the message exists — see ``ArmedReminder``.
+    private func armReminder(at offset: Int) {
+        guard let expression = composerIntelligence.expression(atCharacter: offset) else { return }
+        model.armedReminder = ArmedReminder(date: expression.date, phrase: expression.phrase)
     }
 
     private var unavailableNotice: some View {

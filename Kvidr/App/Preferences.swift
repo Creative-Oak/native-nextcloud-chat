@@ -16,6 +16,10 @@ private enum Key {
     static let lastSelectedToken = "state.lastSelectedToken"
     static let sidebarMode = "sidebar.mode"
     static let transcribeVoiceMessages = "voice.transcribe"
+    static let suggestTimes = "intelligence.suggestTimes"
+    static let messageSuggestions = "intelligence.messageSuggestions"
+    static let smartReplies = "intelligence.smartReplies"
+    static let reminderDestination = "reminders.destination"
     static let transcriptionLanguage = "voice.transcriptionLanguage"
 }
 
@@ -76,6 +80,29 @@ final class Preferences {
         didSet { defaults.set(transcribesVoiceMessages, forKey: Key.transcribeVoiceMessages) }
     }
 
+    /// Times named in what you are typing are underlined, and a click on one arms a
+    /// reminder. The phrases themselves are found on this Mac either way — Apple
+    /// Intelligence, when it is there, only adds the ones a table can't hold.
+    var suggestsTimes: Bool {
+        didSet { defaults.set(suggestsTimes, forKey: Key.suggestTimes) }
+    }
+
+    /// The one-tap row under a message: Add to Reminders, Add to Notes.
+    var showsMessageSuggestions: Bool {
+        didSet { defaults.set(showsMessageSuggestions, forKey: Key.messageSuggestions) }
+    }
+
+    /// Replies offered above the message field. Needs Apple Intelligence; there is nothing
+    /// sensible to suggest without a model.
+    var suggestsReplies: Bool {
+        didSet { defaults.set(suggestsReplies, forKey: Key.smartReplies) }
+    }
+
+    /// Where "Remind Me" puts a reminder.
+    var reminderDestination: ReminderDestination {
+        didSet { defaults.set(reminderDestination.rawValue, forKey: Key.reminderDestination) }
+    }
+
     /// The language voice messages are transcribed in, as a locale identifier. Nil follows
     /// the Mac's own languages.
     var transcriptionLanguage: String? {
@@ -117,6 +144,10 @@ final class Preferences {
             Key.sendOnReturn: true,
             Key.browseContacts: true,
             Key.transcribeVoiceMessages: true,
+            Key.suggestTimes: true,
+            Key.messageSuggestions: true,
+            Key.smartReplies: true,
+            Key.reminderDestination: ReminderDestination.talk.rawValue,
             Key.allowInsecureLocalServers: false,
             Key.developerMode: false
         ])
@@ -128,6 +159,11 @@ final class Preferences {
         sendsOnReturn = defaults.bool(forKey: Key.sendOnReturn)
         browsesContacts = defaults.bool(forKey: Key.browseContacts)
         transcribesVoiceMessages = defaults.bool(forKey: Key.transcribeVoiceMessages)
+        suggestsTimes = defaults.bool(forKey: Key.suggestTimes)
+        showsMessageSuggestions = defaults.bool(forKey: Key.messageSuggestions)
+        suggestsReplies = defaults.bool(forKey: Key.smartReplies)
+        reminderDestination = defaults.string(forKey: Key.reminderDestination)
+            .flatMap(ReminderDestination.init(rawValue:)) ?? .talk
         transcriptionLanguage = defaults.string(forKey: Key.transcriptionLanguage)
         allowsInsecureLocalServers = defaults.bool(forKey: Key.allowInsecureLocalServers)
         isDeveloperModeEnabled = defaults.bool(forKey: Key.developerMode)

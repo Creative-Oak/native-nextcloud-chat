@@ -69,6 +69,9 @@ final class AppModel {
     /// row and the Settings page, so the two can never disagree.
     private(set) var profile: ProfileModel?
     private(set) var reminders: ReminderStore?
+    /// Apple Intelligence, asked once for the whole app rather than per conversation — a
+    /// session is expensive to make and its availability is a property of the Mac.
+    let intelligence = OnDeviceIntelligence()
     private var notificationPoller: NotificationPoller?
     /// The High Performance Backend connection's state, for Settings to show.
     private(set) var signalingState: SignalingConnection.State = .idle
@@ -163,7 +166,11 @@ final class AppModel {
         }
         conversationList = list
 
-        let reminders = ReminderStore(session: session, notifications: notifications)
+        let reminders = ReminderStore(
+            session: session,
+            notifications: notifications,
+            preferences: dependencies.preferences
+        )
         reminders.conversation = { [weak list] token in list?[token] }
         self.reminders = reminders
 
