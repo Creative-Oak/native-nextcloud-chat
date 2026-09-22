@@ -1,3 +1,4 @@
+import AVFoundation
 import CoreAudio
 import Foundation
 @preconcurrency import WebRTC
@@ -26,6 +27,10 @@ final class CallController {
         var name: String
         /// Their audio has reached this Mac.
         var isConnected = false
+        var isAudioOn = true
+        var isVideoOn = false
+        /// Their camera, once it has arrived.
+        var video: VideoTrack?
     }
 
     let token: String
@@ -38,6 +43,14 @@ final class CallController {
     }
     private(set) var participants: [Participant] = []
     private(set) var isMuted = false
+    private(set) var isCameraOn = false
+    /// This Mac's camera, to show in the corner.
+    private(set) var localVideo: VideoTrack?
+    /// The cameras to choose from, and the one in use.
+    private(set) var cameras: [AVCaptureDevice] = []
+    private(set) var cameraID: String?
+    /// Why the camera didn't come on, until the next try.
+    private(set) var cameraProblem: String?
     /// When this Mac's own connection came up.
     private(set) var connectedAt: Date?
 
@@ -50,6 +63,8 @@ final class CallController {
     @ObservationIgnored private var publisher: CallPeer?
     @ObservationIgnored private var subscribers: [String: CallPeer] = [:]
     @ObservationIgnored private var audioTrack: RTCAudioTrack?
+    @ObservationIgnored private var videoTrack: RTCVideoTrack?
+    @ObservationIgnored private var capturer: RTCCameraVideoCapturer?
     /// Made afresh for each start of the call's media: its audio opens the Mac's default
     /// microphone and speaker then, and keeps them.
     @ObservationIgnored private var factory = CallController.makeFactory()
@@ -80,7 +95,8 @@ final class CallController {
     /// Joins — starting the call if nobody is in it — and starts sending the microphone.
     func join() async {
         do throws(TalkError) {
-            try await session.calls.join(token: token, flags: [.inCall, .withAudio])
+            // With video: the camera's track goes out from the start, off.
+            try await session.calls.join(token: token, flags: [.inCall, .withAudio, .withVideo])
         } catch {
             end(reason: "Couldn’t join the call: \(error.userMessage)")
             return
@@ -132,6 +148,107 @@ final class CallController {
     func toggleMute() {
         isMuted.toggle()
         audioTrack?.isEnabled = !isMuted
+        broadcast(isMuted ? .audioOff : .audioOn)
+    }
+
+    /// Turns the camera on or off. The camera goes out from the start of the call whenever
+    /// the Mac has one, just switched off — so turning it on needs no new connection.
+    func toggleCamera() {
+        if isCameraOn {
+            stopCamera()
+        } else {
+            Task { await startCamera() }
+        }
+    }
+
+    func useCamera(_ id: String) {
+        guard id != cameraID else { return }
+        cameraID = id
+        if isCameraOn {
+            capturer?.stopCapture()
+            Task { await startCamera() }
+        }
+    }
+
+    private func startCamera() async {
+        guard let capturer, let videoTrack else { return }
+        cameraProblem = nil
+        guard await AVCaptureDevice.requestAccess(for: .video) else {
+            cameraProblem = "kvidr isn’t allowed to use the camera. Turn it on in System Settings → Privacy & Security → Camera."
+            return
+        }
+        cameras = Self.findCameras()
+        guard let device = cameras.first(where: { $0.uniqueID == cameraID }) ?? cameras.first else {
+            cameraProblem = "No camera found. Connect one, or use your iPhone as a camera with Continuity Camera."
+            return
+        }
+        cameraID = device.uniqueID
+        let format = Self.format(for: device)
+        let fps = format.map { Int(min(30, $0.videoSupportedFrameRateRanges.map(\.maxFrameRate).max() ?? 30)) } ?? 30
+        guard let format else { return }
+        do {
+            try await capturer.startCapture(with: device, format: format, fps: fps)
+        } catch {
+            Log.sync.warning("Couldn’t start the camera: \(error.localizedDescription)")
+            cameraProblem = "The camera couldn’t be started."
+            return
+        }
+        videoTrack.isEnabled = true
+        isCameraOn = true
+        broadcast(.videoOn)
+    }
+
+    private func stopCamera() {
+        capturer?.stopCapture()
+        videoTrack?.isEnabled = false
+        isCameraOn = false
+        broadcast(.videoOff)
+    }
+
+    /// Every camera the Mac can use: built in, plugged in, or an iPhone through Continuity
+    /// Camera. WebRTC's own list leaves the last two out.
+    static func findCameras() -> [AVCaptureDevice] {
+        AVCaptureDevice.DiscoverySession(
+            deviceTypes: [.builtInWideAngleCamera, .external, .continuityCamera],
+            mediaType: .video,
+            position: .unspecified
+        ).devices
+    }
+
+    /// Up to 720p: plenty for a call, and what the media server passes on without strain.
+    private static func format(for device: AVCaptureDevice) -> AVCaptureDevice.Format? {
+        let formats = RTCCameraVideoCapturer.supportedFormats(for: device)
+        func width(_ format: AVCaptureDevice.Format) -> Int32 { CMVideoFormatDescriptionGetDimensions(format.formatDescription).width }
+        return formats.filter { width($0) <= 1280 }.max { width($0) < width($1) } ?? formats.first
+    }
+
+    /// Tells everyone: on the data channel, which the media server passes to everyone
+    /// receiving this Mac, and to each session through the signaling server.
+    private func broadcast(_ status: MediaStatus) {
+        publisher?.send(status)
+        guard status.signalingData(to: "") != nil else { return }
+        for id in roster.inCall.keys {
+            Task { await self.session.signaling.send(.mediaStatus(toSession: id, status)) }
+        }
+    }
+
+    /// Someone new hears where things stand.
+    private func tellCurrentState(to id: String) {
+        Task {
+            await self.session.signaling.send(.mediaStatus(toSession: id, self.isMuted ? .audioOff : .audioOn))
+            await self.session.signaling.send(.mediaStatus(toSession: id, self.isCameraOn ? .videoOn : .videoOff))
+        }
+    }
+
+    func received(_ status: MediaStatus, from sessionID: String) {
+        guard let index = participants.firstIndex(where: { $0.id == sessionID }) else { return }
+        switch status {
+        case .audioOn: participants[index].isAudioOn = true
+        case .audioOff: participants[index].isAudioOn = false
+        case .videoOn: participants[index].isVideoOn = true
+        case .videoOff: participants[index].isVideoOn = false
+        case .speaking, .stoppedSpeaking: break
+        }
     }
 
     // MARK: - From the signaling server
@@ -190,6 +307,23 @@ final class CallController {
         options.streamIds = [ownSessionID]
         peer.connection.addTransceiver(with: track, init: options)
         audioTrack = track
+
+        // The camera's track, off until the camera is turned on — there from the start even
+        // without a camera, so one plugged in later needs no new connection.
+        cameras = Self.findCameras()
+        do {
+            let videoSource = factory.videoSource()
+            let video = factory.videoTrack(with: videoSource, trackId: "video")
+            video.isEnabled = isCameraOn
+            let videoOptions = RTCRtpTransceiverInit()
+            videoOptions.direction = .sendOnly
+            videoOptions.streamIds = [ownSessionID]
+            peer.connection.addTransceiver(with: video, init: videoOptions)
+            videoTrack = video
+            localVideo = VideoTrack(video)
+            capturer = RTCCameraVideoCapturer(delegate: videoSource)
+        }
+        peer.openStatusChannel()
         publisher = peer
         wire(peer)
         peer.onConnectionChange = { [weak self] connected, failed in
@@ -219,6 +353,11 @@ final class CallController {
         else { return }
         subscribers[sessionID] = peer
         wire(peer)
+        peer.onRemoteVideo = { [weak self] track in
+            guard let self, let index = self.participants.firstIndex(where: { $0.id == sessionID }) else { return }
+            self.participants[index].video = VideoTrack(track)
+        }
+        peer.onStatus = { [weak self] status in self?.received(status, from: sessionID) }
         peer.onConnectionChange = { [weak self] connected, failed in
             Log.sync.notice("Call: subscriber \(sessionID.prefix(6)) connected=\(connected) failed=\(failed)")
             guard let self, let index = self.participants.firstIndex(where: { $0.id == sessionID }) else { return }
@@ -229,6 +368,9 @@ final class CallController {
             let answer = try await peer.makeAnswer()
             try await peer.setLocal(.answer, sdp: answer)
             await send(CallSignal(kind: .answer(sdp: answer), sid: sid), to: sessionID)
+            // The media server starts a subscriber on a low layer of someone sending several;
+            // ask for as good as the tile deserves.
+            await send(CallSignal(kind: .selectStream(substream: preferredLayer, temporal: 2), sid: sid), to: sessionID)
         } catch {
             Log.sync.warning("Couldn’t receive a participant’s media: \(error.localizedDescription)")
         }
@@ -254,9 +396,12 @@ final class CallController {
                     userID: user.userID,
                     actorType: user.actorType,
                     actorID: user.actorID,
-                    name: name(for: user)
+                    name: name(for: user),
+                    // Until they say otherwise: what they joined with.
+                    isVideoOn: user.flags.contains(.withVideo)
                 ))
             }
+            tellCurrentState(to: user.sessionID)
             let session = user.sessionID
             Log.sync.notice("Call: requesting offer from \(session.prefix(6))")
             Task { await self.send(CallSignal(kind: .requestOffer), to: session) }
@@ -269,6 +414,11 @@ final class CallController {
         return user.actorID ?? user.userID ?? "Guest"
     }
 
+    /// The best layer while there are few enough tiles for it to show; the middle one for more.
+    private var preferredLayer: Int {
+        participants.count <= 2 ? 2 : 1
+    }
+
     private func send(_ signal: CallSignal, to session: String) async {
         await self.session.signaling.send(.callSignal(toSession: session, signal, nick: nick))
     }
@@ -279,6 +429,11 @@ final class CallController {
     }
 
     private func tearDown() {
+        capturer?.stopCapture()
+        capturer = nil
+        videoTrack = nil
+        localVideo = nil
+        isCameraOn = false
         publisher?.close()
         publisher = nil
         for peer in subscribers.values { peer.close() }
@@ -286,4 +441,16 @@ final class CallController {
         audioTrack = nil
         participants = []
     }
+}
+
+/// A video track, compared by which track it is — so a participant with one can still be
+/// compared, and a view knows when it was handed another.
+final class VideoTrack: Equatable {
+    let track: RTCVideoTrack
+
+    init(_ track: RTCVideoTrack) {
+        self.track = track
+    }
+
+    static func == (lhs: VideoTrack, rhs: VideoTrack) -> Bool { lhs.track === rhs.track }
 }

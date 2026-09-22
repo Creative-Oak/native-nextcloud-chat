@@ -24,6 +24,11 @@ struct CallSignalingTests {
 
     @Test("A request for an offer, and a candidate, encode too")
     func encodesRequestAndCandidate() throws {
+        let select = CallSignal(kind: .selectStream(substream: 2, temporal: 2), sid: "x").data(to: "them")
+        #expect(select["type"] as? String == "selectStream")
+        #expect((select["payload"] as? [String: Int]) == ["substream": 2, "temporal": 2])
+        #expect(select["sid"] as? String == "x")
+
         let request = CallSignal(kind: .requestOffer).data(to: "them")
         #expect(request["type"] as? String == "requestoffer")
         #expect(request["roomType"] as? String == "video")
@@ -86,5 +91,22 @@ struct CallSignalingTests {
             IceServerConfig(urls: ["stun:stun.example.com:443"]),
             IceServerConfig(urls: ["turn:turn.example.com:443?transport=udp"], username: "u", credential: "p"),
         ])
+    }
+
+    @Test("Media status goes as a data channel message and as mute and unmute, and comes back either way")
+    func mediaStatus() throws {
+        #expect(MediaStatus(dataChannelMessage: MediaStatus.videoOn.dataChannelMessage) == .videoOn)
+        #expect(MediaStatus(dataChannelMessage: Data(#"{"type":"speaking"}"#.utf8)) == .speaking)
+        #expect(MediaStatus(dataChannelMessage: Data(#"{"type":"nickChanged","payload":"x"}"#.utf8)) == nil)
+
+        let data = SignalingOutbound.mediaStatus(toSession: "them", .audioOff).encoded()
+        let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let body = try #require((object["message"] as? [String: Any])?["data"] as? [String: Any])
+        #expect(body["type"] as? String == "mute")
+        #expect((body["payload"] as? [String: String]) == ["name": "audio"])
+        #expect(MediaStatus.speaking.signalingData(to: "them") == nil)
+
+        #expect(decode(#"{"type":"message","message":{"sender":{"type":"session","sessionid":"s1"},"data":{"type":"unmute","roomType":"video","payload":{"name":"video"}}}}"#)
+            == .mediaStatus(fromSession: "s1", .videoOn))
     }
 }

@@ -18,6 +18,8 @@ enum SignalingOutbound: Sendable, Equatable {
     case message(toSession: String, data: [String: String])
     /// WebRTC negotiation for a call, to a session — this client's own, for what it sends.
     case callSignal(toSession: String, CallSignal, nick: String?)
+    /// This client's microphone or camera went on or off, told to one session.
+    case mediaStatus(toSession: String, MediaStatus)
 
     func encoded() -> Data {
         let object: [String: Any]
@@ -39,6 +41,8 @@ enum SignalingOutbound: Sendable, Equatable {
             object = ["id": id, "type": "room", "room": ["roomid": roomID, "sessionid": sessionID]]
         case let .callSignal(session, signal, nick):
             object = ["type": "message", "message": ["recipient": ["type": "session", "sessionid": session], "data": signal.data(to: session, nick: nick)] as [String: Any]]
+        case let .mediaStatus(session, status):
+            object = ["type": "message", "message": ["recipient": ["type": "session", "sessionid": session], "data": status.signalingData(to: session) ?? [:]] as [String: Any]]
         case let .message(session, data):
             object = ["type": "message", "message": ["recipient": ["type": "session", "sessionid": session], "data": data] as [String: Any]]
         }
@@ -60,6 +64,8 @@ enum SignalingInbound: Sendable, Equatable {
     case participantsChanged(token: String, users: [CallParticipantState], everyone: CallFlags?)
     /// WebRTC negotiation for a call, from a session.
     case callSignal(fromSession: String, CallSignal)
+    /// A session's microphone or camera went on or off.
+    case mediaStatus(fromSession: String, MediaStatus)
     /// Something was posted in the open conversation.
     case roomMessage(token: String)
     /// Sessions that are in the open conversation on the signaling server: those that came in
@@ -100,6 +106,9 @@ enum SignalingInbound: Sendable, Equatable {
             switch payload["type"] as? String {
             case "startedTyping" where !sender.isEmpty: return .typing(fromSession: sender, isTyping: true)
             case "stoppedTyping" where !sender.isEmpty: return .typing(fromSession: sender, isTyping: false)
+            case "mute", "unmute":
+                guard !sender.isEmpty, let status = MediaStatus(signalingData: payload) else { return .other(type: type, json: data) }
+                return .mediaStatus(fromSession: sender, status)
             case "offer", "answer", "candidate":
                 guard !sender.isEmpty, let signal = CallSignal.decode(payload) else { return .other(type: type, json: data) }
                 return .callSignal(fromSession: sender, signal)

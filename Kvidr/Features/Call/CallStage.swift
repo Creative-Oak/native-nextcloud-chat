@@ -35,12 +35,25 @@ struct CallStage: View {
     private var backdrop: some View {
         ZStack {
             Color(white: 0.07)
-            AvatarView(conversation: call.conversation, size: 520)
-                .blur(radius: 90)
-                .opacity(0.45)
-                .accessibilityHidden(true)
+            if let video = soloVideo {
+                // One other person with their camera on: they fill the window, as in FaceTime.
+                VideoView(video: video)
+                    .transition(.opacity)
+            } else {
+                AvatarView(conversation: call.conversation, size: 520)
+                    .blur(radius: 90)
+                    .opacity(0.45)
+                    .accessibilityHidden(true)
+            }
         }
         .ignoresSafeArea()
+        .animation(.smooth(duration: 0.3), value: soloVideo)
+    }
+
+    /// The video of the only other person, when there is one and their camera is on.
+    private var soloVideo: VideoTrack? {
+        guard call.participants.count == 1, let only = call.participants.first, only.isVideoOn else { return nil }
+        return only.video
     }
 
     private var stage: some View {
@@ -49,6 +62,15 @@ struct CallStage: View {
                 .padding(.top, 52)
                 .padding(.horizontal, 24)
 
+            if let problem = call.cameraProblem {
+                Label(problem, systemImage: "video.slash")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(.orange.opacity(0.35), in: .capsule)
+                    .padding(.top, 10)
+            }
             if call.audioDevices.inputs.isEmpty {
                 Label("No microphone — connect one, like your AirPods, to be heard.", systemImage: "mic.slash")
                     .font(.system(size: 12, weight: .medium))
@@ -62,6 +84,18 @@ struct CallStage: View {
             Group {
                 if call.participants.isEmpty {
                     waiting
+                } else if let only = call.participants.first, soloVideo != nil {
+                    // Their video is the backdrop; just their name, bottom-left, over it.
+                    VStack {
+                        Spacer()
+                        HStack(spacing: 6) {
+                            if !only.isAudioOn { Image(systemName: "mic.slash.fill").font(.system(size: 11, weight: .semibold)) }
+                            Text(only.name).font(.system(size: 14, weight: .semibold))
+                            Spacer()
+                        }
+                        .foregroundStyle(.white)
+                        .shadow(color: .black.opacity(0.6), radius: 4)
+                    }
                 } else {
                     tiles
                 }
@@ -74,7 +108,7 @@ struct CallStage: View {
                 .padding(.bottom, 22)
         }
         .overlay(alignment: .bottomTrailing) {
-            SelfTile(me: me, isMuted: call.isMuted)
+            SelfTile(me: me, isMuted: call.isMuted, video: call.isCameraOn ? call.localVideo : nil)
                 .padding(.trailing, 20)
                 .padding(.bottom, 20)
         }
@@ -131,10 +165,22 @@ struct CallStage: View {
             )
             .keyboardShortcut("m", modifiers: [.command, .shift])
 
-            AudioDeviceMenu(devices: call.audioDevices, onMicrophone: call.useMicrophone, onSpeaker: call.useSpeaker)
+            AudioDeviceMenu(
+                devices: call.audioDevices,
+                cameras: call.cameras.map { ($0.uniqueID, $0.localizedName) },
+                cameraID: call.cameraID,
+                onMicrophone: call.useMicrophone,
+                onSpeaker: call.useSpeaker,
+                onCamera: call.useCamera
+            )
 
-            CallControlButton(symbol: "video.slash.fill", label: "Camera comes in the next step", isOn: false, action: {})
-                .disabled(true)
+            CallControlButton(
+                symbol: call.isCameraOn ? "video.fill" : "video.slash.fill",
+                label: call.isCameraOn ? "Turn Camera Off" : "Turn Camera On",
+                isOn: call.isCameraOn,
+                action: call.toggleCamera
+            )
+            .keyboardShortcut("v", modifiers: [.command, .shift])
 
             Button(action: onLeave) {
                 Image(systemName: "phone.down.fill")
@@ -177,10 +223,19 @@ private struct ParticipantTile: View {
         ZStack(alignment: .bottomLeading) {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .fill(Color.white.opacity(0.07))
-            ActorAvatarView(actor: actor, size: isLarge ? 150 : 96)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .opacity(participant.isConnected ? 1 : 0.55)
+            if participant.isVideoOn, let video = participant.video {
+                VideoView(video: video)
+                    .clipShape(.rect(cornerRadius: 22, style: .continuous))
+            } else {
+                ActorAvatarView(actor: actor, size: isLarge ? 150 : 96)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .opacity(participant.isConnected ? 1 : 0.55)
+            }
             HStack(spacing: 6) {
+                if !participant.isAudioOn {
+                    Image(systemName: "mic.slash.fill")
+                        .font(.system(size: 10, weight: .semibold))
+                }
                 Text(participant.name)
                     .font(.system(size: 13, weight: .semibold))
                     .lineLimit(1)
@@ -189,6 +244,7 @@ private struct ParticipantTile: View {
                 }
             }
             .foregroundStyle(.white)
+            .shadow(color: .black.opacity(0.5), radius: 3)
             .padding(12)
         }
         .aspectRatio(isLarge ? 4 / 3 : 1, contentMode: .fit)
@@ -205,13 +261,19 @@ private struct ParticipantTile: View {
 private struct SelfTile: View {
     let me: MessageActor
     let isMuted: Bool
+    let video: VideoTrack?
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(Color.white.opacity(0.1))
-            ActorAvatarView(actor: me, size: 54)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            if let video {
+                VideoView(video: video, isMirrored: true)
+                    .clipShape(.rect(cornerRadius: 14, style: .continuous))
+            } else {
+                ActorAvatarView(actor: me, size: 54)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
             if isMuted {
                 Image(systemName: "mic.slash.fill")
                     .font(.system(size: 10, weight: .semibold))
@@ -219,7 +281,7 @@ private struct SelfTile: View {
                     .padding(6)
             }
         }
-        .frame(width: 150, height: 100)
+        .frame(width: video == nil ? 150 : 200, height: video == nil ? 100 : 132)
         .overlay {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .strokeBorder(.white.opacity(0.15), lineWidth: 1)
@@ -281,11 +343,24 @@ struct ReturnToCallPill: View {
 /// button on the call's bar like the others, with the devices in its menu.
 private struct AudioDeviceMenu: View {
     let devices: AudioDevices
+    let cameras: [(id: String, name: String)]
+    let cameraID: String?
     var onMicrophone: (AudioObjectID) -> Void
     var onSpeaker: (AudioObjectID) -> Void
+    var onCamera: (String) -> Void
 
     var body: some View {
         Menu {
+            if cameras.count > 1 {
+                Section("Camera") {
+                    ForEach(cameras, id: \.id) { camera in
+                        Toggle(camera.name, isOn: Binding(
+                            get: { camera.id == (cameraID ?? cameras.first?.id) },
+                            set: { _ in onCamera(camera.id) }
+                        ))
+                    }
+                }
+            }
             Section("Microphone") {
                 if devices.inputs.isEmpty {
                     Text("None connected")
@@ -316,8 +391,8 @@ private struct AudioDeviceMenu: View {
         .buttonStyle(.plain)
         .menuIndicator(.hidden)
         .fixedSize()
-        .help("Microphone and speaker")
-        .accessibilityLabel("Microphone and speaker")
+        .help("Camera, microphone and speaker")
+        .accessibilityLabel("Camera, microphone and speaker")
     }
 
     /// AirPods when they are what's in use, a speaker otherwise.

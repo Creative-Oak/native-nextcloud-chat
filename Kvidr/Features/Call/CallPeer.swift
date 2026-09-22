@@ -14,6 +14,16 @@ final class CallPeer: NSObject {
     let connection: RTCPeerConnection
 
     var onCandidate: (IceCandidate) -> Void = { _ in }
+    /// Their camera, once it arrives on a connection that receives.
+    var onRemoteVideo: (RTCVideoTrack) -> Void = { _ in }
+    /// What they say about their microphone and camera, on the "status" data channel.
+    var onStatus: (MediaStatus) -> Void = { _ in }
+
+    /// The "status" data channel: made here on the connection that sends, opened by the other
+    /// side on one that receives.
+    private var statusChannel: RTCDataChannel?
+    /// Said before the channel was open, sent once it is.
+    private var pendingStatus: [MediaStatus] = []
     var onConnectionChange: (_ isConnected: Bool, _ hasFailed: Bool) -> Void = { _, _ in }
 
     private var hasRemoteDescription = false
@@ -86,7 +96,38 @@ final class CallPeer: NSObject {
         }
     }
 
+    /// Makes the "status" channel. On the connection that sends, before the offer.
+    func openStatusChannel() {
+        guard statusChannel == nil,
+              let channel = connection.dataChannel(forLabel: "status", configuration: RTCDataChannelConfiguration())
+        else { return }
+        adopt(channel)
+    }
+
+    /// Tells the others through the media server, which passes it to everyone receiving.
+    func send(_ status: MediaStatus) {
+        guard let statusChannel, statusChannel.readyState == .open else {
+            pendingStatus.removeAll { $0.isAbout(status) }
+            pendingStatus.append(status)
+            return
+        }
+        statusChannel.sendData(RTCDataBuffer(data: status.dataChannelMessage, isBinary: false))
+    }
+
+    fileprivate func adopt(_ channel: RTCDataChannel) {
+        statusChannel = channel
+        channel.delegate = self
+    }
+
+    fileprivate func channelOpened() {
+        let pending = pendingStatus
+        pendingStatus = []
+        for status in pending { send(status) }
+    }
+
     func close() {
+        statusChannel?.delegate = nil
+        statusChannel?.close()
         connection.delegate = nil
         connection.close()
     }
@@ -115,5 +156,41 @@ extension CallPeer: RTCPeerConnectionDelegate {
     nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didChange newState: RTCIceConnectionState) {}
     nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didChange newState: RTCIceGatheringState) {}
     nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didRemove candidates: [RTCIceCandidate]) {}
-    nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didOpen dataChannel: RTCDataChannel) {}
+    nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didOpen dataChannel: RTCDataChannel) {
+        guard dataChannel.label == "status" else { return }
+        nonisolated(unsafe) let channel = dataChannel
+        Task { @MainActor in self.adopt(channel) }
+    }
+
+    nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didAdd rtpReceiver: RTCRtpReceiver, streams mediaStreams: [RTCMediaStream]) {
+        guard let track = rtpReceiver.track as? RTCVideoTrack else { return }
+        nonisolated(unsafe) let video = track
+        Task { @MainActor in self.onRemoteVideo(video) }
+    }
+}
+
+extension CallPeer: RTCDataChannelDelegate {
+    nonisolated func dataChannelDidChangeState(_ dataChannel: RTCDataChannel) {
+        guard dataChannel.readyState == .open else { return }
+        Task { @MainActor in self.channelOpened() }
+    }
+
+    nonisolated func dataChannel(_ dataChannel: RTCDataChannel, didReceiveMessageWith buffer: RTCDataBuffer) {
+        guard let status = MediaStatus(dataChannelMessage: buffer.data) else { return }
+        Task { @MainActor in self.onStatus(status) }
+    }
+}
+
+private extension MediaStatus {
+    /// Whether two say something about the same thing, so only the newer is worth sending.
+    func isAbout(_ other: MediaStatus) -> Bool {
+        switch (self, other) {
+        case (.audioOn, .audioOn), (.audioOn, .audioOff), (.audioOff, .audioOn), (.audioOff, .audioOff),
+             (.videoOn, .videoOn), (.videoOn, .videoOff), (.videoOff, .videoOn), (.videoOff, .videoOff),
+             (.speaking, .speaking), (.speaking, .stoppedSpeaking), (.stoppedSpeaking, .speaking), (.stoppedSpeaking, .stoppedSpeaking):
+            true
+        default:
+            false
+        }
+    }
 }

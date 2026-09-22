@@ -672,6 +672,8 @@ final class AppModel {
                     if token == self.selectedToken { await sync.refreshNow(full: false) }
                 case .callSignal(let from, let signal):
                     self.activeCall?.handle(signal, from: from)
+                case .mediaStatus(let from, let status):
+                    self.activeCall?.received(status, from: from)
                 case .error(_, let code, let message) where self.activeCall != nil:
                     Log.sync.notice("Call: signaling error \(code): \(message)")
                 case .participantsChanged(let token, _, _) where token == self.selectedToken:

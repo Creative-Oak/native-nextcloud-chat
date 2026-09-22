@@ -11,6 +11,9 @@ struct CallSignal: Sendable, Equatable {
         case candidate(IceCandidate)
         /// Ask a publisher's session for an offer of what it sends.
         case requestOffer
+        /// Which of a publisher's simulcast layers the media server should pass on: 0 lowest,
+        /// 2 best — spatially and in frame rate.
+        case selectStream(substream: Int, temporal: Int)
     }
 
     var kind: Kind
@@ -42,6 +45,9 @@ struct CallSignal: Sendable, Equatable {
             data["payload"] = ["candidate": inner]
         case .requestOffer:
             data["type"] = "requestoffer"
+        case .selectStream(let substream, let temporal):
+            data["type"] = "selectStream"
+            data["payload"] = ["substream": substream, "temporal": temporal]
         }
         return data
     }
@@ -186,5 +192,49 @@ struct CallRoster: Sendable {
         let change = Change(toDrop: Array(inCall.keys).sorted())
         inCall = [:]
         return change
+    }
+}
+
+/// What a participant says about their own media — on the data channel named "status", and
+/// as `mute`/`unmute` messages through the signaling server, the two ways Talk's clients
+/// tell each other; a client may hear either first.
+enum MediaStatus: String, Sendable, Equatable {
+    case audioOn, audioOff, videoOn, videoOff, speaking, stoppedSpeaking
+
+    /// The data channel message: `{"type": "videoOn"}`.
+    var dataChannelMessage: Data {
+        (try? JSONSerialization.data(withJSONObject: ["type": rawValue])) ?? Data()
+    }
+
+    init?(dataChannelMessage data: Data) {
+        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let type = object["type"] as? String
+        else { return nil }
+        self.init(rawValue: type)
+    }
+
+    /// The signaling message's `data`, for the ones that go that way too.
+    func signalingData(to session: String) -> [String: Any]? {
+        let (type, name): (String, String)
+        switch self {
+        case .audioOn: (type, name) = ("unmute", "audio")
+        case .audioOff: (type, name) = ("mute", "audio")
+        case .videoOn: (type, name) = ("unmute", "video")
+        case .videoOff: (type, name) = ("mute", "video")
+        case .speaking, .stoppedSpeaking: return nil
+        }
+        return ["to": session, "roomType": "video", "type": type, "payload": ["name": name]]
+    }
+
+    /// From a signaling message's `data`.
+    init?(signalingData data: [String: Any]) {
+        let name = (data["payload"] as? [String: Any])?["name"] as? String
+        switch (data["type"] as? String, name) {
+        case ("mute", "audio"): self = .audioOff
+        case ("unmute", "audio"): self = .audioOn
+        case ("mute", "video"): self = .videoOff
+        case ("unmute", "video"): self = .videoOn
+        default: return nil
+        }
     }
 }
