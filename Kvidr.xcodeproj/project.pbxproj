@@ -261,9 +261,9 @@
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Kvidr-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = kvidr;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
-				INFOPLIST_FILE = "Kvidr-Info.plist";
 				INFOPLIST_KEY_NSCameraUsageDescription = "kvidr shows your camera to the people in a video call, when you turn it on.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "kvidr uses the microphone for calls, and to record a voice message when you press the record button.";
@@ -290,9 +290,9 @@
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Kvidr-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = kvidr;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
-				INFOPLIST_FILE = "Kvidr-Info.plist";
 				INFOPLIST_KEY_NSCameraUsageDescription = "kvidr shows your camera to the people in a video call, when you turn it on.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "kvidr uses the microphone for calls, and to record a voice message when you press the record button.";
