@@ -235,6 +235,16 @@ struct ServiceRequestTests {
         #expect(form(transport.lastRequest) == ["all": "true"])
     }
 
+    @Test("A ringing call asks whether to keep ringing: 200 yes, 201 missed, 404 over")
+    func callNotificationState() async throws {
+        let ringing = StubTransport(json: ocsEnvelope("[]"))
+        #expect(try await CallService(client: client(ringing)).notificationState(token: "tok") == .ringing)
+        #expect(ringing.lastRequest?.url.path == "/ocs/v2.php/apps/spreed/api/v4/call/tok/notification-state")
+
+        let missed = StubTransport(json: ocsEnvelope("[]", statuscode: 201), status: 201)
+        #expect(try await CallService(client: client(missed)).notificationState(token: "tok") == .missed)
+    }
+
     @Test("A private reply names the conversation the quoted message is in")
     func sendPrivateReply() async throws {
         let transport = StubTransport(json: ocsEnvelope(messageJSON, statuscode: 201))

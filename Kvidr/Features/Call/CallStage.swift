@@ -160,10 +160,8 @@ struct CallStage: View {
             .padding(.leading, 20)
             .padding(.top, 50)
         }
-        .overlay(alignment: .bottomTrailing) {
-            SelfTile(me: me, isMuted: call.isMuted, video: call.isCameraOn ? call.localVideo : nil)
-                .padding(.trailing, 20)
-                .padding(.bottom, 20)
+        .overlay {
+            MovableSelfTile(me: me, isMuted: call.isMuted, video: call.isCameraOn ? call.localVideo : nil)
         }
     }
 
@@ -547,5 +545,98 @@ private struct RingingRings: View {
             }
             .allowsHitTesting(false)
         }
+    }
+}
+
+/// Your own tile, which can be picked up and put in any of seven places — the four corners and
+/// the middle of the left, top and right edges; the middle of the bottom is the controls'. Let
+/// go, it settles into the place nearest to where it was put down. The place is remembered for
+/// the next call.
+private struct MovableSelfTile: View {
+    let me: MessageActor
+    let isMuted: Bool
+    let video: VideoTrack?
+
+    enum Spot: String, CaseIterable {
+        case topLeading, top, topTrailing, leading, trailing, bottomLeading, bottomTrailing
+    }
+
+    @AppStorage("callSelfTileSpot") private var spotName = Spot.bottomTrailing.rawValue
+    @State private var drag: CGSize = .zero
+    @State private var isDragging = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// Clear of the edges; at the top, clear of the minimize button and the name as well.
+    private static let margin: CGFloat = 20
+    private static let topInset: CGFloat = 140
+
+    private var spot: Spot { Spot(rawValue: spotName) ?? .bottomTrailing }
+
+    /// The tile's size, as ``SelfTile`` draws itself.
+    private var tileSize: CGSize {
+        video == nil ? CGSize(width: 150, height: 100) : CGSize(width: 200, height: 132)
+    }
+
+    var body: some View {
+        GeometryReader { proxy in
+            let here = center(of: spot, in: proxy.size)
+            SelfTile(me: me, isMuted: isMuted, video: video)
+                .scaleEffect(isDragging ? 1.05 : 1)
+                .shadow(color: .black.opacity(isDragging ? 0.35 : 0.2), radius: isDragging ? 20 : 10, y: isDragging ? 10 : 4)
+                .position(x: here.x + drag.width, y: here.y + drag.height)
+                .gesture(
+                    DragGesture()
+                        .onChanged { value in
+                            drag = clamped(value.translation, from: here, in: proxy.size)
+                            if !isDragging {
+                                withAnimation(.smooth(duration: 0.2)) { isDragging = true }
+                            }
+                        }
+                        .onEnded { _ in
+                            // Where it was let go: the nearest place takes it.
+                            let now = CGPoint(x: here.x + drag.width, y: here.y + drag.height)
+                            let nearest = Spot.allCases.min { lhs, rhs in
+                                distance(center(of: lhs, in: proxy.size), now) < distance(center(of: rhs, in: proxy.size), now)
+                            } ?? spot
+                            withAnimation(reduceMotion ? .smooth(duration: 0.2) : .spring(response: 0.38, dampingFraction: 0.86)) {
+                                spotName = nearest.rawValue
+                                drag = .zero
+                                isDragging = false
+                            }
+                        }
+                )
+                .animation(.smooth(duration: 0.25), value: tileSize)
+        }
+    }
+
+    private func center(of spot: Spot, in size: CGSize) -> CGPoint {
+        let half = CGSize(width: tileSize.width / 2, height: tileSize.height / 2)
+        let left = Self.margin + half.width
+        let right = size.width - Self.margin - half.width
+        let top = Self.topInset + half.height
+        let bottom = size.height - Self.margin - half.height
+        let middleX = size.width / 2
+        let middleY = (top + bottom) / 2
+        switch spot {
+        case .topLeading: return CGPoint(x: left, y: top)
+        case .top: return CGPoint(x: middleX, y: top)
+        case .topTrailing: return CGPoint(x: right, y: top)
+        case .leading: return CGPoint(x: left, y: middleY)
+        case .trailing: return CGPoint(x: right, y: middleY)
+        case .bottomLeading: return CGPoint(x: left, y: bottom)
+        case .bottomTrailing: return CGPoint(x: right, y: bottom)
+        }
+    }
+
+    /// A drag that keeps the whole tile inside the stage.
+    private func clamped(_ translation: CGSize, from here: CGPoint, in size: CGSize) -> CGSize {
+        let half = CGSize(width: tileSize.width / 2, height: tileSize.height / 2)
+        let x = min(max(here.x + translation.width, half.width + 6), size.width - half.width - 6)
+        let y = min(max(here.y + translation.height, half.height + 6), size.height - half.height - 6)
+        return CGSize(width: x - here.x, height: y - here.y)
+    }
+
+    private func distance(_ a: CGPoint, _ b: CGPoint) -> CGFloat {
+        hypot(a.x - b.x, a.y - b.y)
     }
 }

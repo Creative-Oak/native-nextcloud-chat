@@ -27,6 +27,7 @@ enum Endpoint {
     static func participants(_ token: String) -> String { "\(spreedV4)/room/\(segment(token))/participants" }
     static func activeParticipants(_ token: String) -> String { "\(spreedV4)/room/\(segment(token))/participants/active" }
     static func call(_ token: String) -> String { "\(spreedV4)/call/\(segment(token))" }
+    static func callNotificationState(_ token: String) -> String { "\(spreedV4)/call/\(segment(token))/notification-state" }
     static func sessionState(_ token: String) -> String { "\(spreedV4)/room/\(segment(token))/participants/state" }
     static func conversationAvatar(_ token: String, dark: Bool = false) -> String {
         "\(spreedV1)/room/\(segment(token))/avatar" + (dark ? "/dark" : "")
@@ -172,7 +173,7 @@ enum Endpoint {
         "ocs", "v2.php", "index.php", "remote.php", "apps", "spreed", "api", "v1", "v2", "v4",
         "cloud", "capabilities", "user", "core", "apppassword", "login", "autocomplete", "get",
         "room", "note-to-self", "favorite", "archive", "important", "sensitive", "notify", "participants", "active", "state",
-        "avatar", "dark", "chat", "read", "context", "mentions", "reminder", "upcoming-reminders", "pin", "self", "notifications", "schedule", "outOfOffice", "now", "v3", "signaling", "settings", "backend", "reaction", "poll", "threads", "recent",
+        "avatar", "dark", "chat", "read", "context", "mentions", "reminder", "upcoming-reminders", "pin", "self", "notifications", "schedule", "outOfOffice", "now", "v3", "signaling", "settings", "backend", "reaction", "poll", "threads", "recent", "notification-state",
         "search", "providers", "preview", "files_sharing", "shares", "dav", "files",
         "attendees", "share", "overview", "call",
         "users", "user_status", "status", "message", "custom", "predefined", "predefined_statuses"

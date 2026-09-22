@@ -318,7 +318,9 @@ struct RootView: View {
                             onJoinCall: app.activeCall == nil ? { startCall() } : nil,
                             callElsewhere: app.isCallFullScreen ? nil : app.activeCall,
                             onReturnToCall: { withAnimation(.smooth(duration: 0.45)) { app.expandCall() } },
-                            isInCall: app.activeCall?.token == chat.token
+                            // In it, or it's ringing: the stage or the ringing banner says so, and
+                            // a "call in progress" bar under it would say it twice.
+                            isInCall: app.activeCall?.token == chat.token || app.incoming?.coversCallBar(for: chat.token) == true
                         )
                             // A fresh view per conversation: no state bleeds between them.
                             .id(chat.token)
@@ -336,6 +338,20 @@ struct RootView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                // Someone calling: at the top of the messages pane, centred on it.
+                .overlay(alignment: .top) {
+                    if let incoming = app.incoming, let ringing = incoming.ringing {
+                        IncomingCallBanner(
+                            ringing: ringing,
+                            onAnswer: { withAnimation(.smooth(duration: 0.45)) { incoming.answer() } },
+                            onDecline: { withAnimation(.smooth(duration: 0.3)) { incoming.decline() } }
+                        )
+                        // Under the conversation's name, where the pane's other bars start.
+                        .padding(.top, ConversationHeader.depthBelowToolbar + 10)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                    }
+                }
+                .animation(.smooth(duration: 0.35), value: app.incoming?.ringing?.token)
                 // Read here, where the safe area still exists — the draft pane above ignores
                 // it, so it cannot measure its own.
                 .background {

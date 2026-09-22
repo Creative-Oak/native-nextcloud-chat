@@ -81,6 +81,8 @@ final class AppModel {
     private var typing: LiveTyping?
     /// The call this Mac is in, or was in until it ended with something to say.
     private(set) var call: CallController?
+    /// Someone calling. See ``IncomingCalls``.
+    private(set) var incoming: IncomingCalls?
 
     /// The call is shrunk to a pill so the rest of the app can be used.
     var isCallMinimized = false
@@ -98,7 +100,12 @@ final class AppModel {
     }
 
     /// Window/app activation, which gates read state. See `ReadStatePolicy`.
-    var isApplicationActive = true { didSet { activationChanged() } }
+    var isApplicationActive = true {
+        didSet {
+            activationChanged()
+            if oldValue != isApplicationActive { incoming?.applicationActiveChanged(isApplicationActive) }
+        }
+    }
     var isWindowKey = true { didSet { activationChanged() } }
 
     let dependencies: AppDependencies
@@ -132,6 +139,13 @@ final class AppModel {
         // Clicking a notification opens that conversation.
         notifications.onOpenConversation = { [weak self] token in
             self?.selectedToken = token
+        }
+        notifications.onAnswerCall = { [weak self] token in
+            Task { await self?.answerCall(token) }
+        }
+        notifications.onDeclineCall = { [weak self] token in
+            guard self?.incoming?.ringing?.token == token else { return }
+            self?.incoming?.decline()
         }
     }
 
@@ -236,6 +250,8 @@ final class AppModel {
         reminders?.tearDown()
         reminders = nil
         notificationPoller?.stop()
+        incoming?.stop()
+        incoming = nil
         notificationPoller = nil
         signalingStateTask?.cancel()
         signalingStateTask = nil
@@ -520,6 +536,7 @@ final class AppModel {
                 case .conversations(let result):
                     await list.apply(result)
                     self.notifications.updateBadge(count: list.totalUnreadCount)
+                    self.incoming?.conversationsChanged(list.index.allConversations)
                 case .offline(let isOffline):
                     self.connection = isOffline ? .offline : .online
                 case .failed(let error) where error.requiresReauthentication:
@@ -740,6 +757,7 @@ final class AppModel {
     /// Joins the open conversation's call, starting it if there is none.
     func joinCall() async {
         guard let session, let chat, activeCall == nil else { return }
+        incoming?.answered(chat.token)
         let ownSessionID: String? = if case .connected(let id) = signalingState { id } else { nil }
         if ownSessionID != nil, liveRoom != chat.token { await joinLive(chat.token) }
         let settings = await session.signaling.lastSettings
@@ -753,11 +771,45 @@ final class AppModel {
         )
         call = controller
         isCallMinimized = false
+        incoming?.joined(chat.token)
         guard ownSessionID != nil else {
             controller.fail("Calls go over the live connection to your server, and it isn’t up right now.")
             return
         }
         await controller.join()
+    }
+
+    /// Takes a call that is ringing: opens its conversation, waits until it has been joined
+    /// live — joining the call before that would race the conversation's own join, and the
+    /// later of the two would take the session the call needs — and joins.
+    func answerCall(_ token: String) async {
+        incoming?.answered(token)
+        if activeCall != nil, activeCall?.token != token { leaveCall() }
+        isCallMinimized = false
+        selectedToken = token
+        for _ in 0..<50 where liveRoom != token {
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+        guard selectedToken == token else { return }
+        await joinCall()
+    }
+
+    /// Ends a call that was ringing here, for everyone — a declined one-to-one. Talk only takes
+    /// that from someone in the conversation, so a conversation not already joined is joined for
+    /// the moment, without taking it over from other devices, and left again.
+    private func endRingingCall(_ token: String) async {
+        guard let session else { return }
+        let alreadyIn = liveRoom == token
+        if !alreadyIn {
+            _ = try? await session.conversations.joinSession(token: token, force: false)
+        }
+        do throws(TalkError) {
+            try await session.calls.leave(token: token, everyone: true)
+            Log.sync.notice("Call: declined, and ended for everyone")
+        } catch {
+            Log.sync.warning("Call: declining couldn’t end the call — \(error.userMessage)")
+        }
+        if !alreadyIn { try? await session.conversations.leave(token: token) }
     }
 
     func leaveCall(theOtherWay: Bool = false) {
@@ -798,13 +850,10 @@ final class AppModel {
                 },
                 callStarted: { [weak self] notification in
                     guard let self, case .call(let token) = notification.kind else { return }
-                    // Looking at it already: the call bar says so, and a banner on top is noise.
-                    if self.selectedToken == token && self.isApplicationActive && self.isWindowKey { return }
-                    self.notifications.announceCall(
-                        notification,
-                        in: self.conversationList?[token],
-                        isDoNotDisturb: self.profile?.status?.status == .dnd
-                    )
+                    // Rings here — the live connection has usually beaten this to it.
+                    if let conversation = self.conversationList?[token] {
+                        self.incoming?.serverAnnounced(conversation)
+                    }
                     Task { await sync.refreshNow(full: false) }
                 },
                 gone: { [weak self] ids in
@@ -814,6 +863,17 @@ final class AppModel {
         )
         notificationPoller = poller
         poller.start()
+
+        let incoming = IncomingCalls(session: session, notifications: notifications, preferences: dependencies.preferences)
+        incoming.onAnswer = { [weak self] token in
+            Task { await self?.answerCall(token) }
+        }
+        incoming.onDeclineOneToOne = { [weak self] token in
+            Task { await self?.endRingingCall(token) }
+        }
+        incoming.isInCall = { [weak self] token in self?.activeCall?.token == token }
+        incoming.isDoNotDisturb = { [weak self] in self?.profile?.status?.status == .dnd }
+        self.incoming = incoming
     }
 
     func refreshNow() {

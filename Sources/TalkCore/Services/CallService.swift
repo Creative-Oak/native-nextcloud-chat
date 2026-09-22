@@ -24,8 +24,29 @@ actor CallService {
 
     /// - Parameter everyone: ends the call for everyone in it, not just this session — what a
     ///   one-to-one's hang-up does in Talk's apps, and what moderators can do in a group.
+    /// Whether a call should still be ringing for this user: the question Talk's apps ask while
+    /// they ring. Cap `call-notification-state-api`.
+    func notificationState(token: String) async throws(TalkError) -> CallNotificationState {
+        do {
+            let response = try await client.send(OCSRequest.get(Endpoint.callNotificationState(token)), as: EmptyResponse.self)
+            return response.status == 201 ? .missed : .ringing
+        } catch .notFound {
+            return .over
+        }
+    }
+
     func leave(token: String, everyone: Bool = false) async throws(TalkError) {
         let request = OCSRequest.delete(Endpoint.call(token), form: everyone ? ["all": "true"] : [:])
         _ = try await client.send(request, as: EmptyResponse.self)
     }
+}
+
+/// What a ringing call should do now, as the server sees it.
+enum CallNotificationState: Sendable, Equatable {
+    /// Keep ringing.
+    case ringing
+    /// Stop: nobody answered, and it's a missed call now.
+    case missed
+    /// Stop: answered on another device, or the caller gave up.
+    case over
 }

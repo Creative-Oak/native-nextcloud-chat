@@ -18,6 +18,9 @@ final class NotificationController: NSObject {
     var onOpenConversation: ((String) -> Void)?
     /// Set by the app so a reminder's click can show the message it is about.
     var onOpenMessage: ((String, Int) -> Void)?
+    /// Set by the app: someone calling was answered or declined from their notification.
+    var onAnswerCall: ((String) -> Void)?
+    var onDeclineCall: ((String) -> Void)?
     /// Set by the app: whether the user's own status is Do Not Disturb right now.
     var isDoNotDisturb: () -> Bool = { false }
 
@@ -31,12 +34,23 @@ final class NotificationController: NSObject {
                 actions: [UNNotificationAction(identifier: Self.joinAction, title: "Join in Browser", options: [.foreground])],
                 intentIdentifiers: [],
                 options: []
-            )
+            ),
+            // One action, so macOS shows it as a button rather than folding two into an
+            // Options menu; the notification's own close button declines.
+            UNNotificationCategory(
+                identifier: Self.incomingCallCategory,
+                actions: [UNNotificationAction(identifier: Self.answerAction, title: "Answer", options: [.foreground])],
+                intentIdentifiers: [],
+                options: [.customDismissAction]
+            ),
         ])
     }
 
     nonisolated private static let callCategory = "call"
     nonisolated private static let joinAction = "join"
+    nonisolated private static let incomingCallCategory = "incoming-call"
+    nonisolated private static let answerAction = "answer"
+    private static let incomingPrefix = "incoming-"
     private static let callPrefix = "call-"
 
     func requestAuthorizationIfNeeded() async {
@@ -118,6 +132,25 @@ final class NotificationController: NSObject {
         center.add(request) { error in
             if let error { Log.notification.warning("Couldn’t post a call notification: \(error.localizedDescription)") }
         }
+    }
+
+    /// Someone calling while kvidr isn't in front: a banner with Answer and Decline. The ringing
+    /// itself is kvidr's own, so the banner makes no sound of its own.
+    func announceIncomingCall(_ conversation: Conversation) {
+        let content = UNMutableNotificationContent()
+        content.title = conversation.displayName
+        content.body = conversation.isVideoCall ? "Incoming video call" : "Incoming call"
+        content.categoryIdentifier = Self.incomingCallCategory
+        content.interruptionLevel = .timeSensitive
+        content.userInfo = ["token": conversation.token, "incoming": true]
+        let request = UNNotificationRequest(identifier: Self.incomingPrefix + conversation.token, content: content, trigger: nil)
+        center.add(request) { error in
+            if let error { Log.notification.warning("Couldn’t post an incoming call: \(error.localizedDescription)") }
+        }
+    }
+
+    func withdrawIncomingCall(token: String) {
+        center.removeDeliveredNotifications(withIdentifiers: [Self.incomingPrefix + token])
     }
 
     /// Takes down the banners for calls that have been answered, ended or missed.
@@ -210,10 +243,22 @@ extension NotificationController: UNUserNotificationCenterDelegate {
         let messageID = userInfo["messageID"] as? Int
         // Only a web link, and only one the server gave — checked again here, since this
         // is where it is opened.
+        let action = response.actionIdentifier
+        let isIncomingCall = userInfo["incoming"] as? Bool == true
         let joinLink = response.actionIdentifier == Self.joinAction
             ? (userInfo["link"] as? String).flatMap(URL.init(string:)).flatMap { $0.isWebLink ? $0 : nil }
             : nil
         await MainActor.run { [weak self] in
+            if isIncomingCall, let token {
+                if action == UNNotificationDismissActionIdentifier {
+                    self?.onDeclineCall?(token)
+                } else {
+                    // Answer, or a click on the banner itself: both mean "take the call".
+                    NSApplication.shared.activate(ignoringOtherApps: true)
+                    self?.onAnswerCall?(token)
+                }
+                return
+            }
             if let joinLink {
                 NSWorkspace.shared.open(joinLink)
                 return
