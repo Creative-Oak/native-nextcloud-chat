@@ -597,6 +597,20 @@ struct RootView: View {
             // The pins, once their bar has been hidden: Talk can't un-hide it, so this is
             // how they stay reachable. Just left of the details button, in a circle of its
             // own — a fixed spacer is what parts two items of one placement.
+            // The conversation's threads, once it has any.
+            if let chat = app.chat, chat.capabilities.supportsThreads, !chat.threads.isEmpty {
+                ToolbarItem(placement: .primaryAction) {
+                    Menu {
+                        ThreadsMenu(model: chat)
+                    } label: {
+                        Label("Threads", systemImage: "bubble.left.and.bubble.right")
+                    }
+                    .menuIndicator(.hidden)
+                    .help("Threads (\(chat.threads.count))")
+                }
+                ToolbarSpacer(.fixed, placement: .primaryAction)
+            }
+
             if let chat = app.chat, chat.hasHiddenPins {
                 ToolbarItem(placement: .primaryAction) {
                     Menu {

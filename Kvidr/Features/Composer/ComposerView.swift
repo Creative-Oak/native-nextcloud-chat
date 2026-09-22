@@ -12,6 +12,7 @@ struct ComposerView: View {
     @State private var isShowingNewPoll = false
     /// Made the first time the record button is pressed.
     @State private var recorder: VoiceRecorder?
+    @FocusState private var isThreadTitleFocused: Bool
 
     var body: some View {
         VStack(spacing: 0) {
@@ -78,6 +79,13 @@ struct ComposerView: View {
                                 Divider()
                                 Button("Poll…", systemImage: "chart.bar.doc.horizontal") { isShowingNewPoll = true }
                             }
+                            if model.canCreateThread {
+                                Divider()
+                                Button("New Thread", systemImage: "bubble.left.and.bubble.right") {
+                                    model.beginNewThread()
+                                    isThreadTitleFocused = true
+                                }
+                            }
                             if model.canSchedule, model.editing == nil {
                                 Divider()
                                 // Straight to the capsule in the field; the quick times are in there.
@@ -110,6 +118,20 @@ struct ComposerView: View {
     /// single control rather than a row of parts spread across the window.
     private var field: some View {
         VStack(alignment: .leading, spacing: 0) {
+            // A new thread's title, as the first line of the field — like the subject line
+            // Messages can show. Return moves on to the message itself.
+            if model.newThreadTitle != nil {
+                ThreadTitleField(
+                    title: Binding(get: { model.newThreadTitle ?? "" }, set: { model.newThreadTitle = $0 }),
+                    isFocused: $isThreadTitleFocused,
+                    onSubmit: { isFocused = true },
+                    onCancel: {
+                        model.cancelNewThread()
+                        isFocused = true
+                    }
+                )
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
             // Send Later sits inside the field, above the words it will send — as in Messages.
             // The room under it keeps it clear of the send button's circle.
             if model.sendLater != nil {
@@ -208,6 +230,7 @@ struct ComposerView: View {
         .padding(.bottom, model.sendLater != nil ? 4 : 0)
         }
         .animation(.smooth(duration: 0.2), value: model.sendLater != nil)
+        .animation(.smooth(duration: 0.2), value: model.newThreadTitle != nil)
         .padding(.leading, 12)
         .padding(.trailing, 6)
         .padding(.vertical, 5)
@@ -250,7 +273,10 @@ struct ComposerView: View {
     }
 
     private var placeholder: String {
-        model.editing != nil ? "Edit message" : "Message \(model.conversation.displayName)"
+        if model.editing != nil { return "Edit message" }
+        if model.newThreadTitle != nil { return "First message in the thread" }
+        if let thread = model.openThread { return "Reply in \(thread.title.isEmpty ? "thread" : thread.title)" }
+        return "Message \(model.conversation.displayName)"
     }
 
     private var sendHelp: String {
@@ -285,6 +311,8 @@ struct ComposerView: View {
             model.cancelSendLater()
         } else if model.replyingTo != nil {
             model.cancelReply()
+        } else if model.newThreadTitle != nil {
+            model.cancelNewThread()
         } else if model.openThread != nil {
             // Nothing left to cancel here: Esc leaves the thread, as the bar's Back does.
             model.closeThread()

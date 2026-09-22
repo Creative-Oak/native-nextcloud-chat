@@ -59,4 +59,22 @@ struct ThreadTests {
         ])
         #expect(counts == [10: 5, 20: 0])
     }
+
+    @Test("Thread info decodes the thread, this user's notifications and its first message")
+    func threadInfo() throws {
+        let json = """
+        {"thread":{"id":10,"roomToken":"tok","title":"Plans","lastMessageId":15,"lastActivity":1757700100,"numReplies":4},
+         "attendee":{"notificationLevel":2},
+         "first":{"id":10,"token":"tok","actorType":"users","actorId":"alice","timestamp":1757700000,"message":"Let's plan","messageParameters":[],"messageType":"comment","reactions":[],"threadId":10,"isThread":true,"threadTitle":"Plans","threadReplies":4},
+         "last":null}
+        """
+        let summary = try JSONDecoder().decode(ThreadInfoDTO.self, from: Data(json.utf8)).model(token: "x")
+        #expect(summary.id == 10)
+        #expect(summary.token == "tok")
+        #expect(summary.title == "Plans")
+        #expect(summary.replies == 4)
+        #expect(summary.notificationLevel == .mentions)
+        #expect(summary.first?.text == "Let's plan")
+        #expect(summary.last == nil)
+    }
 }

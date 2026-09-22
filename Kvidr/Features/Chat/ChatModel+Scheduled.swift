@@ -35,18 +35,21 @@ extension ChatModel {
         let service = session.scheduledMessages
         let token = self.token
         let threadID = openThread?.id
+        let threadTitle = trimmedThreadTitle
+        newThreadTitle = nil
         Task { [weak self] in
             do throws(TalkError) {
                 if let editing {
                     try await service.update(token: token, id: editing.id, text: text, sendAt: sendAt, silent: editing.isSilent)
                 } else {
-                    try await service.schedule(token: token, text: text, sendAt: sendAt, replyTo: replyTo, threadID: threadID)
+                    try await service.schedule(token: token, text: text, sendAt: sendAt, replyTo: replyTo, threadID: threadID, threadTitle: threadTitle)
                 }
                 await self?.loadScheduled()
             } catch {
                 // Put the words back rather than lose them.
                 guard let self else { return }
                 if self.draftText.isEmpty { self.draftText = text }
+                if let threadTitle, self.newThreadTitle == nil { self.newThreadTitle = threadTitle }
                 self.sendLater = sendAt
                 self.editingScheduled = editing
                 self.lastError = error

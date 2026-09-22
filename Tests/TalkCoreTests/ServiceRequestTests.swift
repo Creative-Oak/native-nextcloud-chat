@@ -186,6 +186,41 @@ struct ServiceRequestTests {
         #expect(query(historyTransport.lastRequest)["threadId"] == "7")
     }
 
+    @Test("Starting a thread sends its title, never with a reply or into another thread")
+    func sendStartingThread() async throws {
+        let transport = StubTransport(json: ocsEnvelope(messageJSON, statuscode: 201))
+        let service = ChatService(client: try client(transport))
+
+        _ = try await service.send(token: "tok", message: "first", threadTitle: "Plans")
+        #expect(form(transport.lastRequest) == ["message": "first", "threadTitle": "Plans"])
+
+        _ = try await service.send(token: "tok", message: "answer", replyTo: 9, threadTitle: "Plans")
+        #expect(form(transport.lastRequest) == ["message": "answer", "replyTo": "9"])
+    }
+
+    @Test("Threads: listed, renamed with PUT, notifications with POST")
+    func threadRequests() async throws {
+        let info = #"{"thread":{"id":7,"roomToken":"tok","title":"T","lastMessageId":8,"lastActivity":1,"numReplies":1},"attendee":{"notificationLevel":0},"first":null,"last":null}"#
+
+        let list = StubTransport(json: ocsEnvelope("[\(info)]"))
+        let threads = try await ThreadService(client: client(list)).recent(token: "tok")
+        #expect(threads.map(\.id) == [7])
+        #expect(list.lastRequest?.url.path == "/ocs/v2.php/apps/spreed/api/v1/chat/tok/threads/recent")
+        #expect(query(list.lastRequest) == ["limit": "50"])
+
+        let rename = StubTransport(json: ocsEnvelope(info))
+        _ = try await ThreadService(client: client(rename)).rename(token: "tok", id: 7, title: "New")
+        #expect(rename.lastRequest?.method == .put)
+        #expect(rename.lastRequest?.url.path == "/ocs/v2.php/apps/spreed/api/v1/chat/tok/threads/7")
+        #expect(form(rename.lastRequest) == ["threadTitle": "New"])
+
+        let notify = StubTransport(json: ocsEnvelope(info))
+        _ = try await ThreadService(client: client(notify)).setNotificationLevel(.never, token: "tok", id: 7)
+        #expect(notify.lastRequest?.method == .post)
+        #expect(notify.lastRequest?.url.path == "/ocs/v2.php/apps/spreed/api/v1/chat/tok/threads/7/notify")
+        #expect(form(notify.lastRequest) == ["level": "3"])
+    }
+
     @Test("A private reply names the conversation the quoted message is in")
     func sendPrivateReply() async throws {
         let transport = StubTransport(json: ocsEnvelope(messageJSON, statuscode: 201))

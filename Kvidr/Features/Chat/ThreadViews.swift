@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// Over the first message of a thread: what the thread is called.
@@ -80,5 +81,129 @@ struct ThreadBar: View {
         .help("Back to the conversation (Esc)")
         .accessibilityLabel("Back to the conversation, from \(thread.title.isEmpty ? "the thread" : thread.title)")
         .glass(.panel, cornerRadius: 10)
+    }
+}
+
+/// The first line of the message field while a thread is being started: its title, set in
+/// bold over the message, with a way to change your mind.
+struct ThreadTitleField: View {
+    @Binding var title: String
+    var isFocused: FocusState<Bool>.Binding
+    var onSubmit: () -> Void
+    var onCancel: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 6) {
+                Image(systemName: "bubble.left.and.bubble.right.fill")
+                    .font(.system(size: 10))
+                    .foregroundStyle(Color.accentColor)
+                TextField("Thread Title", text: $title)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 13, weight: .semibold))
+                    .focused(isFocused)
+                    .onSubmit(onSubmit)
+                    .onExitCommand(perform: onCancel)
+                Button(action: onCancel) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 8, weight: .bold))
+                        .frame(width: 16, height: 16)
+                        .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .help("Don’t start a thread")
+                .accessibilityLabel("Don’t start a thread")
+            }
+            .padding(.top, 4)
+            .padding(.bottom, 6)
+            // On the next turn: the field has only just been put in the composer.
+            .task { isFocused.wrappedValue = true }
+            Divider()
+                .padding(.bottom, 4)
+        }
+        .padding(.trailing, 4)
+    }
+}
+
+/// The toolbar's list of threads: each by its title, with how many replies and when it was
+/// last busy; the open one ticked.
+struct ThreadsMenu: View {
+    let model: ChatModel
+
+    var body: some View {
+        ForEach(model.threads) { thread in
+            Toggle(isOn: Binding(
+                get: { model.openThread?.id == thread.id },
+                set: { _ in model.showThread(MessageThread(id: thread.id, title: thread.title, replies: thread.replies)) }
+            )) {
+                Text(thread.title.isEmpty ? "Thread" : thread.title)
+                Text("\(thread.replies == 1 ? "1 reply" : "\(thread.replies) replies") · \(thread.lastActivity.formatted(.relative(presentation: .named)))")
+            }
+        }
+    }
+}
+
+/// The thread bar's right-click menu: renaming, and how much the thread notifies.
+enum ThreadBarMenu {
+    @MainActor
+    static func make(
+        level: ThreadNotificationLevel,
+        onRename: (() -> Void)?,
+        onSetLevel: @escaping (ThreadNotificationLevel) -> Void
+    ) -> NSMenu {
+        let menu = NSMenu()
+        if let onRename {
+            menu.addItem(ClosureMenuItem("Rename Thread…", symbol: "character.cursor.ibeam", action: onRename))
+        }
+        let submenu = NSMenu()
+        for option in ThreadNotificationLevel.allCases {
+            let item = ClosureMenuItem(option.title) { onSetLevel(option) }
+            item.state = option == level ? .on : .off
+            submenu.addItem(item)
+        }
+        let item = NSMenuItem(title: "Thread Notifications", action: nil, keyEquivalent: "")
+        item.image = NSImage(systemSymbolName: "bell", accessibilityDescription: nil)
+        item.submenu = submenu
+        menu.addItem(item)
+        return menu
+    }
+}
+
+/// Takes right clicks only, and shows the menu made at that moment; left clicks go through
+/// to the bar underneath.
+struct ThreadBarMenuHost: NSViewRepresentable {
+    let makeMenu: () -> NSMenu
+
+    func makeNSView(context: Context) -> HostView {
+        HostView(frame: .zero)
+    }
+
+    func updateNSView(_ view: HostView, context: Context) {
+        view.makeMenu = makeMenu
+    }
+
+    final class HostView: NSView {
+        var makeMenu: (() -> NSMenu)?
+
+        override func hitTest(_ point: NSPoint) -> NSView? {
+            guard let event = NSApp.currentEvent, Self.isContextClick(event) else { return nil }
+            return bounds.contains(convert(point, from: superview)) ? self : nil
+        }
+
+        override func rightMouseDown(with event: NSEvent) { showMenu(for: event) }
+
+        override func mouseDown(with event: NSEvent) {
+            if Self.isContextClick(event) { showMenu(for: event) } else { super.mouseDown(with: event) }
+        }
+
+        private static func isContextClick(_ event: NSEvent) -> Bool {
+            event.type == .rightMouseDown || (event.type == .leftMouseDown && event.modifierFlags.contains(.control))
+        }
+
+        private func showMenu(for event: NSEvent) {
+            guard let menu = makeMenu?() else { return }
+            NSMenu.popUpContextMenu(menu, with: event, for: self)
+        }
     }
 }

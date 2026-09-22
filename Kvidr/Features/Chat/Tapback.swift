@@ -136,6 +136,11 @@ struct MessageMenuActions {
     var onReplyPrivately: (() -> Void)?
     /// Nil outside threads, and inside the one that is open.
     var onOpenThread: (() -> Void)?
+    /// Nil where this user can't rename the thread the message is in, or it is in none.
+    var onRenameThread: (() -> Void)?
+    /// The thread's notification level, and how to change it; nil outside threads.
+    var threadNotificationLevel: ThreadNotificationLevel?
+    var onSetThreadNotifications: ((ThreadNotificationLevel) -> Void)?
     /// Nil where the message can't be forwarded — a poll, a system line.
     var onForward: (() -> Void)?
     /// When this message's reminder is due, if it has one.
@@ -266,6 +271,21 @@ enum MessageMenu {
         }
         if let onOpenThread = actions.onOpenThread {
             menu.addItem(ClosureMenuItem("Open Thread", symbol: "bubble.left.and.bubble.right", action: onOpenThread))
+        }
+        if let onRenameThread = actions.onRenameThread {
+            menu.addItem(ClosureMenuItem("Rename Thread…", symbol: "character.cursor.ibeam", action: onRenameThread))
+        }
+        if let current = actions.threadNotificationLevel, let onSet = actions.onSetThreadNotifications {
+            let submenu = NSMenu()
+            for level in ThreadNotificationLevel.allCases {
+                let item = ClosureMenuItem(level.title) { onSet(level) }
+                item.state = level == current ? .on : .off
+                submenu.addItem(item)
+            }
+            let item = NSMenuItem(title: "Thread Notifications", action: nil, keyEquivalent: "")
+            item.image = NSImage(systemSymbolName: "bell", accessibilityDescription: nil)
+            item.submenu = submenu
+            menu.addItem(item)
         }
         if let onRemind = actions.onRemind {
             menu.addItem(remindMe(actions, onRemind: onRemind))

@@ -30,12 +30,14 @@ actor ScheduledMessageService {
         return (response.value ?? []).map { $0.model(token: token) }.sorted { $0.sendAt < $1.sendAt }
     }
 
-    func schedule(token: String, text: String, sendAt: Date, replyTo: Int? = nil, silent: Bool = false, threadID: Int? = nil) async throws(TalkError) {
+    func schedule(token: String, text: String, sendAt: Date, replyTo: Int? = nil, silent: Bool = false, threadID: Int? = nil, threadTitle: String? = nil) async throws(TalkError) {
         var form = ["message": text, "sendAt": String(Int(sendAt.timeIntervalSince1970))]
         if let replyTo, replyTo > 0 {
             form["replyTo"] = String(replyTo)
         } else if let threadID {
             form["threadId"] = String(threadID)
+        } else if let threadTitle, !threadTitle.isEmpty {
+            form["threadTitle"] = threadTitle
         }
         if silent { form["silent"] = "true" }
         _ = try await client.send(OCSRequest.post(Endpoint.schedule(token), form: form), as: EmptyResponse.self)

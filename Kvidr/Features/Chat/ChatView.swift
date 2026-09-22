@@ -46,6 +46,9 @@ struct ChatView: View {
     /// being over the header, and how far the frosted band reaches.
     @State private var toolbarDepth: CGFloat = 0
     @State private var isPointerOverHeader = false
+    /// The thread being renamed, and the title as typed so far.
+    @State private var renamingThread: MessageThread?
+    @State private var threadTitleDraft = ""
 
     var body: some View {
         VStack(spacing: 0) {
@@ -61,6 +64,18 @@ struct ChatView: View {
                                 isLoading: model.isLoadingThread,
                                 onClose: { model.closeThread() }
                             )
+                            // Built by AppKit when it opens, like a message's: a SwiftUI context
+                            // menu is rebuilt with every redraw of this view, and its submenu
+                            // blinked each time the conversation refreshed underneath it.
+                            .overlay {
+                                ThreadBarMenuHost { [model] in
+                                    ThreadBarMenu.make(
+                                        level: model.notificationLevel(ofThread: thread.id),
+                                        onRename: model.canRenameThread(thread) ? { beginRenaming(thread) } : nil,
+                                        onSetLevel: { model.setNotificationLevel($0, forThread: thread.id) }
+                                    )
+                                }
+                            }
                             .transition(.move(edge: .top).combined(with: .opacity))
                         }
                         if let error = model.lastError, error != .cancelled {
@@ -127,6 +142,15 @@ struct ChatView: View {
                 }
         }
         .background(Color(nsColor: .textBackgroundColor))
+        .alert("Rename Thread", isPresented: Binding(get: { renamingThread != nil }, set: { if !$0 { renamingThread = nil } })) {
+            TextField("Title", text: $threadTitleDraft)
+            Button("Rename") {
+                if let renamingThread { model.renameThread(renamingThread, to: threadTitleDraft) }
+                renamingThread = nil
+            }
+            .disabled(threadTitleDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            Button("Cancel", role: .cancel) { renamingThread = nil }
+        }
         // Where the pointer counts as over the header — the toolbar and the name
         // capsule under it — which is what brings the frosted band up; the band itself
         // is the transcript's top scroll edge, hardened.
@@ -425,6 +449,11 @@ struct ChatView: View {
     /// rows has not laid them out yet, and `scrollTo` for an id the scroll view does not
     /// hold is dropped without complaint — which left the transcript at the offset it had
     /// while the content was empty, the top, with `didInitialScroll` already spent.
+    private func beginRenaming(_ thread: MessageThread) {
+        threadTitleDraft = thread.title
+        renamingThread = thread
+    }
+
     private func positionInitially(_ proxy: ScrollViewProxy) {
         guard !didInitialScroll, !model.rows.isEmpty else { return }
         didInitialScroll = true
@@ -463,6 +492,9 @@ struct ChatView: View {
                 threadReplies: model.openThread == nil && message.isThreadRoot ? message.thread.map(model.replyCount(for:)) : nil,
                 onOpenThread: model.capabilities.supportsThreads && message.thread != nil && model.openThread?.id != message.thread?.id
                     ? { model.showThread($0) } : nil,
+                onRenameThread: message.thread.map(model.canRenameThread) == true ? { beginRenaming($0) } : nil,
+                threadNotificationLevel: message.thread.map { model.notificationLevel(ofThread: $0.id) },
+                onSetThreadNotifications: { model.setNotificationLevel($1, forThread: $0.id) },
                 reminder: reminders?.reminder(token: message.token, messageID: message.messageID),
                 onRemind: reminders?.canSetReminders == true ? { date in reminders?.set(on: message, at: date) } : nil,
                 onRemoveReminder: { reminders?.remove($0) },

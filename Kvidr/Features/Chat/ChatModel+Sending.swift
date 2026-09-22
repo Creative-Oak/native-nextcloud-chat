@@ -17,6 +17,8 @@ extension ChatModel {
     /// stayed grey.
     var canSend: Bool {
         guard conversation.canPostMessages else { return false }
+        // A thread can't start without a title.
+        if newThreadTitle != nil, trimmedThreadTitle == nil { return false }
         // Only words can be scheduled.
         if sendLater != nil || editingScheduled != nil {
             return !trimmedDraft.isEmpty && !attachments.hasStaged
@@ -63,7 +65,13 @@ extension ChatModel {
         if attachments.hasStaged {
             // A file's share can't quote a message from another conversation, so a private
             // reply with a file goes without the quote.
-            attachments.send(caption: text, replyTo: replyingTo.flatMap { $0.token == token ? $0.messageID : nil }, threadID: openThread?.id)
+            attachments.send(
+                caption: text,
+                replyTo: replyingTo.flatMap { $0.token == token ? $0.messageID : nil },
+                threadID: openThread?.id,
+                threadTitle: trimmedThreadTitle
+            )
+            newThreadTitle = nil
             draftText = ""
             replyingTo = nil
             return
@@ -101,6 +109,8 @@ extension ChatModel {
             thread: replyingTo.flatMap { $0.token == token ? $0.thread : nil } ?? openThread
         )
 
+        if let title = trimmedThreadTitle { pendingThreadTitles[optimistic.localID] = title }
+        newThreadTitle = nil
         mutateTimeline { $0.addPending(optimistic) }
         draftText = ""
         replyingTo = nil
@@ -142,8 +152,13 @@ extension ChatModel {
                     replyTo: replyTo,
                     replyToToken: replyToToken,
                     referenceID: referenceID,
-                    threadID: optimistic.thread?.id
+                    threadID: optimistic.thread?.id,
+                    threadTitle: self.pendingThreadTitles[optimistic.localID]
                 )
+                if self.pendingThreadTitles.removeValue(forKey: optimistic.localID) != nil {
+                    // A new thread: into the list.
+                    Task { await self.loadThreads() }
+                }
                 // The long poll may have delivered this already; the timeline handles both
                 // orders and will not duplicate.
                 self.mutateTimeline { $0.apply([sent]) }

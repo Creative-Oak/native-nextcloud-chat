@@ -143,7 +143,8 @@ actor ChatService {
         replyToToken: String? = nil,
         referenceID: String? = nil,
         silent: Bool = false,
-        threadID: Int? = nil
+        threadID: Int? = nil,
+        threadTitle: String? = nil
     ) async throws(TalkError) -> Message {
         var form = ["message": message]
         if let replyTo, replyTo > 0 {
@@ -156,6 +157,10 @@ actor ChatService {
         if silent { form["silent"] = "true" }
         // Into a thread without quoting anything in it; a reply goes where its message is.
         if let threadID, replyTo == nil || replyTo == 0 { form["threadId"] = String(threadID) }
+        // Starts a thread with this message as its first. Not for a reply.
+        if let threadTitle, !threadTitle.isEmpty, replyTo == nil || replyTo == 0, threadID == nil {
+            form["threadTitle"] = threadTitle
+        }
 
         let response = try await client.require(OCSRequest.post(Endpoint.chat(token), form: form), as: MessageDTO.self)
         return response.value.model(token: token)

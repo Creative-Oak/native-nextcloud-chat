@@ -22,6 +22,7 @@ struct Session: Sendable {
     let polls: PollService
     let reminders: ReminderService
     let pins: PinService
+    let threads: ThreadService
     let serverNotifications: NotificationsService
     let scheduledMessages: ScheduledMessageService
     let absences: AbsenceService
@@ -54,6 +55,7 @@ struct Session: Sendable {
         polls = PollService(client: client)
         reminders = ReminderService(client: client)
         pins = PinService(client: client)
+        threads = ThreadService(client: client)
         serverNotifications = NotificationsService(client: client)
         scheduledMessages = ScheduledMessageService(client: client)
         absences = AbsenceService(client: client)

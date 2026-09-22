@@ -51,6 +51,8 @@ struct FileTransfer: Sendable, Identifiable, Equatable {
     var replyToMessageID: Int?
     /// The thread it is sent into, when it isn't a reply (a reply goes where its message is).
     var threadID: Int?
+    /// Set on the file that starts a thread: the first, which carries the words too.
+    var threadTitle: String?
     /// Where the upload put it, once it has been uploaded. The share step needs this, and
     /// so does taking the file back out of the composer.
     var remotePath: String?
@@ -86,12 +88,16 @@ extension FileTransfer {
         caption: String,
         replyTo: Int?,
         threadID: Int? = nil,
+        threadTitle: String? = nil,
         to transfers: inout [FileTransfer]
     ) -> Set<UUID> {
         let caption = caption.trimmingCharacters(in: .whitespacesAndNewlines)
         var committed: Set<UUID> = []
         for index in transfers.indices where !transfers[index].state.isFinished {
-            if committed.isEmpty { transfers[index].caption = caption }
+            if committed.isEmpty {
+                transfers[index].caption = caption
+                transfers[index].threadTitle = threadTitle
+            }
             transfers[index].replyToMessageID = replyTo
             transfers[index].threadID = threadID
             committed.insert(transfers[index].id)
@@ -357,7 +363,8 @@ actor AttachmentService {
         replyTo: Int? = nil,
         referenceID: String? = nil,
         isVoiceMessage: Bool = false,
-        threadID: Int? = nil
+        threadID: Int? = nil,
+        threadTitle: String? = nil
     ) async throws(TalkError) {
         var metadata: [String: Any] = ["messageType": isVoiceMessage ? "voice-message" : "comment"]
         let caption = caption.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -366,6 +373,8 @@ actor AttachmentService {
             metadata["replyTo"] = replyTo
         } else if let threadID {
             metadata["threadId"] = threadID
+        } else if let threadTitle, !threadTitle.isEmpty {
+            metadata["threadTitle"] = threadTitle
         }
 
         var form: [String: String] = [

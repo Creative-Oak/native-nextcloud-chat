@@ -24,6 +24,10 @@ struct MessageRow: View {
     var threadReplies: Int?
     /// Nil outside threads, and inside the one that is open.
     var onOpenThread: ((MessageThread) -> Void)?
+    /// Nil where the thread can't be renamed by this user, or there is none.
+    var onRenameThread: ((MessageThread) -> Void)?
+    var threadNotificationLevel: ThreadNotificationLevel?
+    var onSetThreadNotifications: ((MessageThread, ThreadNotificationLevel) -> Void)?
     /// The reminder set on this message, if any.
     var reminder: Reminder?
     /// Nil where reminders can't be set.
@@ -320,6 +324,9 @@ struct MessageRow: View {
             onReply: { onReply(message) },
             onReplyPrivately: onReplyPrivately.map { handler in { handler(message) } },
             onOpenThread: openThread,
+            onRenameThread: message.thread.flatMap { thread in onRenameThread.map { handler in { handler(thread) } } },
+            threadNotificationLevel: message.thread == nil ? nil : threadNotificationLevel,
+            onSetThreadNotifications: message.thread.flatMap { thread in onSetThreadNotifications.map { handler in { handler(thread, $0) } } },
             onForward: onForward.map { handler in { handler(message) } },
             reminder: reminder?.date,
             onRemind: onRemind,

@@ -35,7 +35,17 @@ final class ChatModel {
     /// With a thread open, only that thread's messages. See `ChatModel+Threads`.
     private(set) var rows: [ChatRow] = []
     /// The thread the transcript is showing instead of the whole conversation.
-    private(set) var openThread: MessageThread?
+    var openThread: MessageThread?
+    /// The title of a thread being started, while the composer is starting one — see
+    /// `ChatModel+Threads`.
+    var newThreadTitle: String?
+    /// The conversation's threads, most recently active first.
+    var threads: [ThreadSummary] = []
+    /// Titles of threads being started, by the local id of the message starting them — so a
+    /// retried send still starts its thread.
+    @ObservationIgnored var pendingThreadTitles: [String: String] = [:]
+    /// Threads seen in messages that the list didn't have, already asked about once.
+    @ObservationIgnored var threadsAskedAbout: Set<Int> = []
     /// The open thread's messages as fetched when it opened, by local id; newer ones come
     /// with the conversation's own long poll.
     @ObservationIgnored var threadHistory: [String: Message] = [:]
@@ -160,6 +170,7 @@ final class ChatModel {
 
     func rebuildRows() {
         threadReplyCounts = MessageThread.replyCounts(in: timeline.messages + threadHistory.values)
+        noticeNewThreads()
         if let openThread {
             rows = ChatRow.build(messages: messages(inThread: openThread.id), firstUnreadMessageID: nil)
         } else {
@@ -177,7 +188,9 @@ final class ChatModel {
         if let replyingTo, replyingTo.thread?.id != thread.id { self.replyingTo = nil }
         threadHistory = [:]
         openThread = thread
+        newThreadTitle = nil
         rebuildRows()
+        Task { await refreshThread(thread.id) }
         isLoadingThread = true
         let session = self.session
         let token = self.token
@@ -299,6 +312,7 @@ final class ChatModel {
             }
         }
         Task { await loadPins() }
+        Task { await loadThreads() }
         Task { await loadScheduled() }
         Task { await loadAbsence() }
     }
