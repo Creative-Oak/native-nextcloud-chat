@@ -58,6 +58,9 @@ final class CallController {
     private(set) var cameraProblem: String?
     /// When this Mac's own connection came up.
     private(set) var connectedAt: Date?
+    /// When the first other person's media reached this Mac — the call "answered", which is
+    /// where its timer starts, as a phone's does.
+    private(set) var answeredAt: Date?
 
     @ObservationIgnored private let session: Session
     @ObservationIgnored private let ownSessionID: String
@@ -121,7 +124,24 @@ final class CallController {
         end(reason: reason)
     }
 
-    func leave() {
+    /// Whether hanging up ends the call for everyone, as Talk's apps do in a one-to-one: with
+    /// only two people in it, one hanging up is the call over.
+    var hangUpEndsCall: Bool { conversation.isOneToOne }
+
+    /// Whether the other way of hanging up is offered: leaving a one-to-one's call without
+    /// ending it, or, for a moderator, ending a group's for everyone.
+    var canHangUpTheOtherWay: Bool { conversation.isOneToOne || conversation.isModerator }
+
+    /// Hangs up the usual way; see ``hangUpEndsCall``.
+    func hangUp() {
+        leave(everyone: hangUpEndsCall)
+    }
+
+    func hangUpTheOtherWay() {
+        leave(everyone: !hangUpEndsCall)
+    }
+
+    func leave(everyone: Bool = false) {
         guard !isEnded else { return }
         tearDown()
         phase = .ended(reason: nil)
@@ -129,7 +149,7 @@ final class CallController {
         let token = self.token
         Task {
             do throws(TalkError) {
-                try await calls.leave(token: token)
+                try await calls.leave(token: token, everyone: everyone)
                 Log.sync.notice("Call: left")
             } catch {
                 Log.sync.warning("Call: leaving failed — \(error.userMessage)")
@@ -417,6 +437,7 @@ final class CallController {
             Log.sync.notice("Call: subscriber \(sessionID.prefix(6)) connected=\(connected) failed=\(failed)")
             guard let self, let index = self.participants.firstIndex(where: { $0.id == sessionID }) else { return }
             self.participants[index].isConnected = connected
+            if connected, self.answeredAt == nil { self.answeredAt = Date() }
         }
         do {
             try await peer.setRemote(.offer, sdp: offer)

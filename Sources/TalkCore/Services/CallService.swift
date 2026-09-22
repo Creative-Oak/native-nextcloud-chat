@@ -22,7 +22,10 @@ actor CallService {
         _ = try await client.send(OCSRequest.put(Endpoint.call(token), form: ["flags": String(flags.rawValue)]), as: EmptyResponse.self)
     }
 
-    func leave(token: String) async throws(TalkError) {
-        _ = try await client.send(OCSRequest.delete(Endpoint.call(token)), as: EmptyResponse.self)
+    /// - Parameter everyone: ends the call for everyone in it, not just this session — what a
+    ///   one-to-one's hang-up does in Talk's apps, and what moderators can do in a group.
+    func leave(token: String, everyone: Bool = false) async throws(TalkError) {
+        let request = OCSRequest.delete(Endpoint.call(token), form: everyone ? ["all": "true"] : [:])
+        _ = try await client.send(request, as: EmptyResponse.self)
     }
 }

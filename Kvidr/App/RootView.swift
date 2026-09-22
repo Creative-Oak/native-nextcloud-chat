@@ -288,6 +288,7 @@ struct RootView: View {
                                     call: callHere,
                                     me: MessageActor(kind: .users, id: app.session?.account.userID ?? "", displayName: app.session?.account.displayName ?? ""),
                                     onLeave: { withAnimation(.smooth(duration: 0.45)) { app.leaveCall() } },
+                                    onLeaveTheOtherWay: { withAnimation(.smooth(duration: 0.45)) { app.leaveCall(theOtherWay: true) } },
                                     onDismiss: { withAnimation(.smooth(duration: 0.45)) { app.dismissEndedCall() } },
                                     onMinimize: { withAnimation(.smooth(duration: 0.45)) { app.isCallMinimized = true } }
                                 )

@@ -221,6 +221,20 @@ struct ServiceRequestTests {
         #expect(form(notify.lastRequest) == ["level": "3"])
     }
 
+    @Test("Leaving a call, or ending it for everyone")
+    func leaveCall() async throws {
+        let transport = StubTransport(json: ocsEnvelope("[]"))
+        let service = CallService(client: try client(transport))
+
+        try await service.leave(token: "tok")
+        #expect(transport.lastRequest?.method == .delete)
+        #expect(transport.lastRequest?.url.path == "/ocs/v2.php/apps/spreed/api/v4/call/tok")
+        #expect(form(transport.lastRequest).isEmpty)
+
+        try await service.leave(token: "tok", everyone: true)
+        #expect(form(transport.lastRequest) == ["all": "true"])
+    }
+
     @Test("A private reply names the conversation the quoted message is in")
     func sendPrivateReply() async throws {
         let transport = StubTransport(json: ocsEnvelope(messageJSON, statuscode: 201))

@@ -760,8 +760,8 @@ final class AppModel {
         await controller.join()
     }
 
-    func leaveCall() {
-        call?.leave()
+    func leaveCall(theOtherWay: Bool = false) {
+        if theOtherWay { call?.hangUpTheOtherWay() } else { call?.hangUp() }
         call = nil
         isCallMinimized = false
     }

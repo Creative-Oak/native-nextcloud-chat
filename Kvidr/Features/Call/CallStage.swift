@@ -9,6 +9,8 @@ struct CallStage: View {
     let call: CallController
     let me: MessageActor
     var onLeave: () -> Void
+    /// Hangs up the other way: leaving without ending, or ending for everyone.
+    var onLeaveTheOtherWay: () -> Void = {}
     var onDismiss: () -> Void
     /// Shrinks the call to a pill, back to the messages.
     var onMinimize: () -> Void
@@ -103,19 +105,36 @@ struct CallStage: View {
                     // Their video is the backdrop, and their name is already at the top.
                     Color.clear
                 } else if let only = soloParticipant {
-                    // No video: their picture, large, as the iPhone shows whoever you're talking to.
-                    ZStack(alignment: .bottomTrailing) {
-                        ActorAvatarView(actor: only.actor, size: 200)
-                            .shadow(color: .black.opacity(0.25), radius: 24, y: 10)
-                            .opacity(only.isConnected ? 1 : 0.6)
-                        if !only.isAudioOn {
-                            Image(systemName: "mic.slash.fill")
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundStyle(.white)
-                                .frame(width: 40, height: 40)
-                                .glassEffect(.regular, in: .circle)
+                    // No video: their picture, large, as the iPhone shows whoever you're talking
+                    // to — still ringing until their audio arrives, then still, with a note
+                    // that it's their camera that's off, not the call that hasn't started.
+                    VStack(spacing: 18) {
+                        ZStack(alignment: .bottomTrailing) {
+                            ActorAvatarView(actor: only.actor, size: 200)
+                                .shadow(color: .black.opacity(0.25), radius: 24, y: 10)
+                                .opacity(only.isConnected ? 1 : 0.7)
+                                .background {
+                                    if !only.isConnected { RingingRings(diameter: 200) }
+                                }
+                            if !only.isAudioOn {
+                                Image(systemName: "mic.slash.fill")
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundStyle(.white)
+                                    .frame(width: 40, height: 40)
+                                    .glassEffect(.regular, in: .circle)
+                            }
+                        }
+                        if only.isConnected {
+                            Label("Camera off", systemImage: "video.slash.fill")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(.white.opacity(0.85))
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .glassEffect(.regular, in: .capsule)
+                                .transition(.opacity)
                         }
                     }
+                    .animation(.smooth(duration: 0.3), value: only.isConnected)
                 } else {
                     tiles
                 }
@@ -152,9 +171,10 @@ struct CallStage: View {
     private var header: some View {
         VStack(spacing: 4) {
             Group {
-                if let since = call.connectedAt, !call.participants.isEmpty {
+                if let since = call.answeredAt, !call.participants.isEmpty {
                     Text(since, style: .timer).monospacedDigit()
-                } else if call.phase == .joining {
+                } else if call.phase == .joining || !call.participants.isEmpty {
+                    // Joining ourselves, or they've picked up and their audio is on its way.
                     Text("Connecting…")
                 } else {
                     Text("Calling…")
@@ -178,9 +198,11 @@ struct CallStage: View {
         .shadow(color: .black.opacity(soloVideo == nil ? 0 : 0.5), radius: 6)
     }
 
+    /// Nobody has picked up: their picture, with rings going out from it like a phone ringing.
     private var waiting: some View {
         AvatarView(conversation: call.conversation, size: 200)
             .shadow(color: .black.opacity(0.25), radius: 24, y: 10)
+            .background { RingingRings(diameter: 200) }
     }
 
     private var tiles: some View {
@@ -237,8 +259,14 @@ struct CallStage: View {
                         .background(.red, in: .circle)
                 }
                 .buttonStyle(.plain)
-                .help("Leave the call")
-                .accessibilityLabel("Leave the call")
+                .help(call.hangUpEndsCall ? "End the call" : "Leave the call")
+                .accessibilityLabel(call.hangUpEndsCall ? "End the call" : "Leave the call")
+                // The other way, a right-click away, as Talk's iPhone app has it on a long press.
+                .contextMenu {
+                    if call.canHangUpTheOtherWay {
+                        Button(call.hangUpEndsCall ? "Leave Call" : "End Call for Everyone", systemImage: "phone.down.fill", action: onLeaveTheOtherWay)
+                    }
+                }
                 CallButtonTitle("End")
             }
         }
@@ -396,8 +424,10 @@ struct ReturnToCallPill: View {
                     Text(call.participants.count == 1 ? call.participants[0].name : call.conversation.displayName)
                         .fontWeight(.semibold)
                         .lineLimit(1)
-                    if let since = call.connectedAt {
+                    if let since = call.answeredAt {
                         Text(since, style: .timer).monospacedDigit()
+                    } else {
+                        Text("Calling…")
                     }
                     Image(systemName: "arrow.up.left.and.arrow.down.right")
                         .font(.system(size: 10, weight: .bold))
@@ -488,5 +518,34 @@ private struct AudioDeviceMenu: View {
         .fixedSize()
         .help("More — camera, microphone and speaker")
         .accessibilityLabel("More")
+    }
+}
+
+/// Rings going out from a picture and fading, one after another — a call ringing. Still, with
+/// Reduce Motion: a single faint ring.
+private struct RingingRings: View {
+    let diameter: CGFloat
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        if reduceMotion {
+            Circle()
+                .stroke(.white.opacity(0.25), lineWidth: 2)
+                .frame(width: diameter * 1.25, height: diameter * 1.25)
+        } else {
+            TimelineView(.animation) { context in
+                let time = context.date.timeIntervalSinceReferenceDate
+                ZStack {
+                    ForEach(0..<3, id: \.self) { index in
+                        let phase = (time / 2.4 + Double(index) / 3).truncatingRemainder(dividingBy: 1)
+                        Circle()
+                            .stroke(.white.opacity(0.45 * (1 - phase)), lineWidth: 2)
+                            .frame(width: diameter, height: diameter)
+                            .scaleEffect(1 + 0.7 * phase)
+                    }
+                }
+            }
+            .allowsHitTesting(false)
+        }
     }
 }
