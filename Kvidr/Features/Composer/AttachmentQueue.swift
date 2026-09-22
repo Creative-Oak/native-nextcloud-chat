@@ -184,8 +184,8 @@ final class AttachmentQueue {
     ///
     /// A caption belongs to one share, so it goes on the first file and the rest arrive
     /// bare — see `docs/plans/2026-09-15-attachments-photos-polls-design.md` § 1.
-    func send(caption: String, replyTo: Int?) {
-        committed.formUnion(FileTransfer.apply(caption: caption, replyTo: replyTo, to: &transfers))
+    func send(caption: String, replyTo: Int?, threadID: Int? = nil) {
+        committed.formUnion(FileTransfer.apply(caption: caption, replyTo: replyTo, threadID: threadID, to: &transfers))
         start()
     }
 
@@ -324,7 +324,8 @@ final class AttachmentQueue {
                 token: token,
                 caption: transfer.caption,
                 replyTo: transfer.replyToMessageID,
-                referenceID: reference
+                referenceID: reference,
+                threadID: transfer.threadID
             )
             update(transfer.id) { $0.state = .completed }
         } catch {

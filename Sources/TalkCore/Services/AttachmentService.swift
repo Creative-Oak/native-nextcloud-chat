@@ -49,6 +49,8 @@ struct FileTransfer: Sendable, Identifiable, Equatable {
     /// on what else is staged beside it.
     var caption: String = ""
     var replyToMessageID: Int?
+    /// The thread it is sent into, when it isn't a reply (a reply goes where its message is).
+    var threadID: Int?
     /// Where the upload put it, once it has been uploaded. The share step needs this, and
     /// so does taking the file back out of the composer.
     var remotePath: String?
@@ -83,6 +85,7 @@ extension FileTransfer {
     static func apply(
         caption: String,
         replyTo: Int?,
+        threadID: Int? = nil,
         to transfers: inout [FileTransfer]
     ) -> Set<UUID> {
         let caption = caption.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -90,6 +93,7 @@ extension FileTransfer {
         for index in transfers.indices where !transfers[index].state.isFinished {
             if committed.isEmpty { transfers[index].caption = caption }
             transfers[index].replyToMessageID = replyTo
+            transfers[index].threadID = threadID
             committed.insert(transfers[index].id)
         }
         return committed
@@ -352,12 +356,17 @@ actor AttachmentService {
         caption: String = "",
         replyTo: Int? = nil,
         referenceID: String? = nil,
-        isVoiceMessage: Bool = false
+        isVoiceMessage: Bool = false,
+        threadID: Int? = nil
     ) async throws(TalkError) {
         var metadata: [String: Any] = ["messageType": isVoiceMessage ? "voice-message" : "comment"]
         let caption = caption.trimmingCharacters(in: .whitespacesAndNewlines)
         if !caption.isEmpty { metadata["caption"] = caption }
-        if let replyTo, replyTo > 0 { metadata["replyTo"] = replyTo }
+        if let replyTo, replyTo > 0 {
+            metadata["replyTo"] = replyTo
+        } else if let threadID {
+            metadata["threadId"] = threadID
+        }
 
         var form: [String: String] = [
             "shareType": "10",

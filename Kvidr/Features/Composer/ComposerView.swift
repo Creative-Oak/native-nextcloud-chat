@@ -47,7 +47,7 @@ struct ComposerView: View {
                 if let recorder, recorder.phase != .idle {
                     VoiceRecordingBar(recorder: recorder) {
                         let replyTo = model.replyingTo.flatMap { $0.token == model.token ? $0.messageID : nil }
-                        recorder.send(replyTo: replyTo)
+                        recorder.send(replyTo: replyTo, threadID: model.openThread?.id)
                         model.cancelReply()
                     }
                 } else {
@@ -285,6 +285,9 @@ struct ComposerView: View {
             model.cancelSendLater()
         } else if model.replyingTo != nil {
             model.cancelReply()
+        } else if model.openThread != nil {
+            // Nothing left to cancel here: Esc leaves the thread, as the bar's Back does.
+            model.closeThread()
         }
     }
 }

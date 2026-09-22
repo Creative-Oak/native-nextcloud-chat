@@ -134,6 +134,8 @@ struct MessageMenuActions {
     var onReply: () -> Void
     /// Nil where a private reply isn't possible.
     var onReplyPrivately: (() -> Void)?
+    /// Nil outside threads, and inside the one that is open.
+    var onOpenThread: (() -> Void)?
     /// Nil where the message can't be forwarded — a poll, a system line.
     var onForward: (() -> Void)?
     /// When this message's reminder is due, if it has one.
@@ -261,6 +263,9 @@ enum MessageMenu {
         }
         if let onReplyPrivately = actions.onReplyPrivately {
             menu.addItem(ClosureMenuItem("Reply Privately", symbol: "person.fill", action: onReplyPrivately))
+        }
+        if let onOpenThread = actions.onOpenThread {
+            menu.addItem(ClosureMenuItem("Open Thread", symbol: "bubble.left.and.bubble.right", action: onOpenThread))
         }
         if let onRemind = actions.onRemind {
             menu.addItem(remindMe(actions, onRemind: onRemind))

@@ -32,7 +32,16 @@ final class ChatModel {
     /// the conversation doesn't bring back a bar that was just dismissed.
     var onHiddenPinChanged: (Int) -> Void = { _ in }
     /// The transcript's display list. Rebuilt when the timeline changes — never per render.
+    /// With a thread open, only that thread's messages. See `ChatModel+Threads`.
     private(set) var rows: [ChatRow] = []
+    /// The thread the transcript is showing instead of the whole conversation.
+    private(set) var openThread: MessageThread?
+    /// The open thread's messages as fetched when it opened, by local id; newer ones come
+    /// with the conversation's own long poll.
+    @ObservationIgnored var threadHistory: [String: Message] = [:]
+    var isLoadingThread = false
+    /// Each thread's reply count, from the newest of its messages here.
+    private(set) var threadReplyCounts: [Int: Int] = [:]
     /// Files on their way into this conversation.
     let attachments: AttachmentQueue
     private(set) var syncState: ChatSyncState = .idle
@@ -150,7 +159,83 @@ final class ChatModel {
     }
 
     func rebuildRows() {
-        rows = ChatRow.build(messages: timeline.messages, firstUnreadMessageID: firstUnreadMessageID)
+        threadReplyCounts = MessageThread.replyCounts(in: timeline.messages + threadHistory.values)
+        if let openThread {
+            rows = ChatRow.build(messages: messages(inThread: openThread.id), firstUnreadMessageID: nil)
+        } else {
+            // A thread's replies live in the thread; the conversation shows its first
+            // message, with the way in.
+            let messages = timeline.messages.filter { $0.thread == nil || $0.isThreadRoot }
+            rows = ChatRow.build(messages: messages, firstUnreadMessageID: firstUnreadMessageID)
+        }
+    }
+
+    /// Shows only this thread, with what the server has of it.
+    func showThread(_ thread: MessageThread) {
+        guard capabilities.supportsThreads else { return }
+        editing = nil
+        if let replyingTo, replyingTo.thread?.id != thread.id { self.replyingTo = nil }
+        threadHistory = [:]
+        openThread = thread
+        rebuildRows()
+        isLoadingThread = true
+        let session = self.session
+        let token = self.token
+        Task { [weak self] in
+            defer { if self?.openThread?.id == thread.id { self?.isLoadingThread = false } }
+            do throws(TalkError) {
+                let batch = try await session.chat.history(token: token, limit: 200, threadID: thread.id)
+                guard let self, self.openThread?.id == thread.id else { return }
+                self.threadHistory = Dictionary(batch.messages.map { ($0.localID, $0) }, uniquingKeysWith: { _, new in new })
+                self.rebuildRows()
+            } catch {
+                self?.lastError = error
+            }
+        }
+    }
+
+    /// Back to the whole conversation.
+    func closeThread() {
+        guard openThread != nil else { return }
+        if let replyingTo, replyingTo.thread != nil { self.replyingTo = nil }
+        openThread = nil
+        threadHistory = [:]
+        isLoadingThread = false
+        rebuildRows()
+    }
+
+    /// The open thread's messages: what was fetched, with the conversation's newer or
+    /// fresher copies over it, and messages on their way at the end.
+    private func messages(inThread id: Int) -> [Message] {
+        // By server id where there is one: a message sent from here keeps the local id it
+        // was sent with, and the fetched copy of it has another.
+        func key(_ message: Message) -> String {
+            message.messageID > 0 ? "#\(message.messageID)" : message.localID
+        }
+        var byID = Dictionary(threadHistory.values.map { (key($0), $0) }, uniquingKeysWith: { _, new in new })
+        for message in timeline.messages where message.thread?.id == id || message.messageID == id {
+            byID[key(message)] = message
+        }
+        // Everything in a thread answers its first message; quoting it on each one says
+        // nothing. A reply to anything else in it keeps its quote.
+        let messages = byID.values.map { message in
+            var message = message
+            if message.parent?.messageID == id { message.parent = nil }
+            return message
+        }
+        return messages.sorted { lhs, rhs in
+            switch (lhs.messageID, rhs.messageID) {
+            case (0, 0): lhs.timestamp < rhs.timestamp
+            case (0, _): false
+            case (_, 0): true
+            default: lhs.messageID < rhs.messageID
+            }
+        }
+    }
+
+    /// How many replies a thread has, as far as this conversation knows.
+    func replyCount(for thread: MessageThread) -> Int {
+        threadReplyCounts[thread.id] ?? thread.replies
     }
 
     /// Parsed content for a message, memoized. Re-parses only when the text actually
@@ -347,6 +432,8 @@ final class ChatModel {
     @discardableResult
     func reveal(messageID: Int) async -> Bool {
         guard messageID > 0 else { return false }
+        // Found in the whole conversation, not in a thread.
+        closeThread()
         unreachableMessageID = nil
         if timeline.message(id: messageID) != nil {
             highlightRequest = messageID

@@ -75,6 +75,12 @@ struct Message: Sendable, Hashable, Identifiable, Codable {
     var isSilent: Bool
     var isDeleted: Bool
     var deliveryState: MessageDeliveryState
+    /// The thread this message is in — its first message, or a reply in it. Nil outside
+    /// threads, and in caches from before threads (cap `threads`).
+    var thread: MessageThread?
+
+    /// The first message of a thread, which carries its title.
+    var isThreadRoot: Bool { thread.map { $0.id == messageID } ?? false }
 
     var isSystem: Bool { kind == .system || !systemMessage.isEmpty }
 
@@ -135,7 +141,8 @@ struct Message: Sendable, Hashable, Identifiable, Codable {
         lastEdit: EditInfo? = nil,
         isSilent: Bool = false,
         isDeleted: Bool = false,
-        deliveryState: MessageDeliveryState = .sent
+        deliveryState: MessageDeliveryState = .sent,
+        thread: MessageThread? = nil
     ) {
         self.messageID = messageID
         self.localID = localID ?? Self.localID(token: token, messageID: messageID)
@@ -157,6 +164,7 @@ struct Message: Sendable, Hashable, Identifiable, Codable {
         self.isSilent = isSilent
         self.isDeleted = isDeleted
         self.deliveryState = deliveryState
+        self.thread = thread
     }
 
     struct EditInfo: Sendable, Hashable, Codable {
@@ -186,5 +194,26 @@ struct ParentMessage: Sendable, Hashable, Codable {
         self.isDeleted = isDeleted
         self.timestamp = timestamp
         self.token = token
+    }
+}
+
+/// A thread a message belongs to. Talk threads hang off one message — the first — and take
+/// its id; every reply under it, however deep, is in it.
+struct MessageThread: Sendable, Hashable, Codable {
+    var id: Int
+    var title: String
+    /// How many replies it had when the server sent this message: the newest message in a
+    /// thread knows the count best.
+    var replies: Int
+
+    /// Each thread's reply count, by thread id: the newest of its messages knows it best.
+    static func replyCounts(in messages: some Sequence<Message>) -> [Int: Int] {
+        var newest: [Int: (id: Int, replies: Int)] = [:]
+        for message in messages where message.messageID > 0 {
+            guard let thread = message.thread else { continue }
+            if let known = newest[thread.id], known.id >= message.messageID { continue }
+            newest[thread.id] = (message.messageID, thread.replies)
+        }
+        return newest.mapValues(\.replies)
     }
 }

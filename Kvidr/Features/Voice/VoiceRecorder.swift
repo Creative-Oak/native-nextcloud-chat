@@ -144,7 +144,7 @@ final class VoiceRecorder {
 
     /// Stops a recording still going, then uploads it and shares it into the conversation as
     /// a voice message.
-    func send(replyTo: Int?) {
+    func send(replyTo: Int?, threadID: Int? = nil) {
         if phase == .recording { stop() }
         guard phase == .recorded, let fileURL else { return }
         preview?.stop()
@@ -168,7 +168,7 @@ final class VoiceRecorder {
             let folder = session.capabilitySnapshot.config.attachmentsFolder ?? AttachmentService.defaultFolder
             do throws(TalkError) {
                 let path = try await session.attachments.upload(data, fileName: name, folder: folder, progress: { _ in })
-                try await session.attachments.share(path: path, token: token, replyTo: replyTo, isVoiceMessage: true)
+                try await session.attachments.share(path: path, token: token, replyTo: replyTo, isVoiceMessage: true, threadID: threadID)
                 self?.samples = []
                 self?.elapsed = 0
                 self?.phase = .idle

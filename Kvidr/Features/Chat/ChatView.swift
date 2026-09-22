@@ -54,6 +54,15 @@ struct ChatView: View {
                     // The transient bar, one at a time, then the pinned message under it —
                     // a pin is standing information and shouldn't give way to a call.
                     VStack(spacing: 6) {
+                        if let thread = model.openThread {
+                            ThreadBar(
+                                thread: thread,
+                                replies: model.replyCount(for: thread),
+                                isLoading: model.isLoadingThread,
+                                onClose: { model.closeThread() }
+                            )
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                        }
                         if let error = model.lastError, error != .cancelled {
                             InlineStatusBar(error: error, state: model.syncState)
                                 .transition(.move(edge: .top).combined(with: .opacity))
@@ -82,7 +91,7 @@ struct ChatView: View {
                             .transition(.move(edge: .top).combined(with: .opacity))
                         }
 
-                        if let absence = model.absence {
+                        if model.openThread == nil, let absence = model.absence {
                             AbsenceBar(
                                 name: model.conversation.displayName,
                                 absence: absence,
@@ -92,7 +101,7 @@ struct ChatView: View {
                             .transition(.move(edge: .top).combined(with: .opacity))
                         }
 
-                        if let pin = model.visiblePin {
+                        if model.openThread == nil, let pin = model.visiblePin {
                             PinnedBar(model: model, pin: pin) { messageID in
                                 Task { await model.reveal(messageID: messageID) }
                             }
@@ -109,6 +118,7 @@ struct ChatView: View {
                 .animation(.smooth(duration: 0.25), value: model.visiblePin?.id)
                 .animation(.smooth(duration: 0.25), value: model.forwardedTo?.token)
                 .animation(.smooth(duration: 0.25), value: model.absence)
+                .animation(.smooth(duration: 0.25), value: model.openThread?.id)
                 // An inset rather than another row in the stack: the composer floats over
                 // the transcript the way Messages' does, and the scroll view still knows
                 // not to hide the newest message behind it.
@@ -216,7 +226,7 @@ struct ChatView: View {
                     }
 
                     // Waiting to be sent: after everything that has been, as in Messages.
-                    ForEach(model.scheduled) { message in
+                    ForEach(model.openThread == nil ? model.scheduled : []) { message in
                         ScheduledMessageRow(model: model, message: message)
                             .id("scheduled-\(message.id)")
                     }
@@ -275,7 +285,7 @@ struct ChatView: View {
                 if model.isScrolledToLatest != edges.isAtBottom {
                     model.isScrolledToLatest = edges.isAtBottom
                 }
-                guard didInitialScroll, edges.isNearTop,
+                guard didInitialScroll, edges.isNearTop, model.openThread == nil,
                       model.canLoadOlder, !model.isLoadingOlder
                 else { return }
                 Task { await loadOlderKeepingPosition(proxy) }
@@ -322,6 +332,11 @@ struct ChatView: View {
             // rather than `isEmpty`: emptiness is a Bool, so it changes once and never
             // again, and if that one attempt came too early there was nothing left to try.
             .onChange(of: model.rows.count) { _, _ in positionInitially(proxy) }
+            // Into a thread and back out: a different transcript, which starts at its end.
+            .onChange(of: model.openThread?.id) { _, _ in
+                didInitialScroll = false
+                positionInitially(proxy)
+            }
             .onAppear { positionInitially(proxy) }
             // The inspector (and anything else outside this view) asks for a message by
             // setting `highlightRequest`; the scrolling itself stays here.
@@ -445,6 +460,9 @@ struct ChatView: View {
                 onReply: { model.beginReply(to: $0); composerFocused = true },
                 onReplyPrivately: model.canReplyPrivately(to: message) ? onReplyPrivately : nil,
                 onForward: ForwardPlan.plan(for: message) != nil ? onForward : nil,
+                threadReplies: model.openThread == nil && message.isThreadRoot ? message.thread.map(model.replyCount(for:)) : nil,
+                onOpenThread: model.capabilities.supportsThreads && message.thread != nil && model.openThread?.id != message.thread?.id
+                    ? { model.showThread($0) } : nil,
                 reminder: reminders?.reminder(token: message.token, messageID: message.messageID),
                 onRemind: reminders?.canSetReminders == true ? { date in reminders?.set(on: message, at: date) } : nil,
                 onRemoveReminder: { reminders?.remove($0) },
@@ -475,7 +493,7 @@ struct ChatView: View {
                 Spacer()
             }
             .padding(.vertical, 10)
-        } else if !model.canLoadOlder && !model.rows.isEmpty {
+        } else if model.openThread == nil, !model.canLoadOlder, !model.rows.isEmpty {
             Text("Beginning of the conversation")
                 .font(.caption)
                 .foregroundStyle(.tertiary)

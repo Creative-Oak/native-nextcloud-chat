@@ -170,6 +170,22 @@ struct ServiceRequestTests {
         #expect(message.messageID == 42)
     }
 
+    @Test("Into a thread: the thread id goes along, unless the message is a reply")
+    func sendIntoThread() async throws {
+        let transport = StubTransport(json: ocsEnvelope(messageJSON, statuscode: 201))
+        let service = ChatService(client: try client(transport))
+
+        _ = try await service.send(token: "tok", message: "in it", threadID: 7)
+        #expect(form(transport.lastRequest) == ["message": "in it", "threadId": "7"])
+
+        _ = try await service.send(token: "tok", message: "answer", replyTo: 9, threadID: 7)
+        #expect(form(transport.lastRequest) == ["message": "answer", "replyTo": "9"])
+
+        let historyTransport = StubTransport(json: ocsEnvelope("[]"))
+        _ = try await ChatService(client: try client(historyTransport)).history(token: "tok", threadID: 7)
+        #expect(query(historyTransport.lastRequest)["threadId"] == "7")
+    }
+
     @Test("A private reply names the conversation the quoted message is in")
     func sendPrivateReply() async throws {
         let transport = StubTransport(json: ocsEnvelope(messageJSON, statuscode: 201))

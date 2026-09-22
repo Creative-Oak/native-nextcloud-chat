@@ -19,6 +19,11 @@ struct MessageRow: View {
     var onReplyPrivately: ((Message) -> Void)?
     /// Nil where the message can't be forwarded.
     var onForward: ((Message) -> Void)?
+    /// How many replies the thread this message starts has; nil when it starts none, or it
+    /// is the thread on screen.
+    var threadReplies: Int?
+    /// Nil outside threads, and inside the one that is open.
+    var onOpenThread: ((MessageThread) -> Void)?
     /// The reminder set on this message, if any.
     var reminder: Reminder?
     /// Nil where reminders can't be set.
@@ -70,6 +75,9 @@ struct MessageRow: View {
 
             VStack(alignment: isFromMe ? .trailing : .leading, spacing: 2) {
                 if group.showsHeader { header }
+                if threadReplies != nil, let thread = message.thread, !thread.title.isEmpty {
+                    ThreadTitle(title: thread.title)
+                }
                 if let parent = message.parent { QuotedMessageView(parent: parent, onTap: { onShowParent(parent.messageID) }) }
 
                 bubble
@@ -96,6 +104,10 @@ struct MessageRow: View {
                 if !message.isDeleted, let link = content.firstWebLink {
                     LinkPreviewCard(url: link, isFromMe: isFromMe)
                         .padding(.top, 2)
+                }
+
+                if let threadReplies, let openThread {
+                    ThreadRepliesButton(count: threadReplies, action: openThread)
                 }
 
                 if message.deliveryState.isPending { deliveryStatus }
@@ -287,6 +299,11 @@ struct MessageRow: View {
         }
     }
 
+    private var openThread: (() -> Void)? {
+        guard let onOpenThread, let thread = message.thread else { return nil }
+        return { onOpenThread(thread) }
+    }
+
     /// Deleted and not-yet-sent messages have no menu and no reactions.
     private var isActionable: Bool {
         !message.isDeleted && message.kind != .commentDeleted && !message.deliveryState.isPending
@@ -302,6 +319,7 @@ struct MessageRow: View {
             myReactions: message.myReactions,
             onReply: { onReply(message) },
             onReplyPrivately: onReplyPrivately.map { handler in { handler(message) } },
+            onOpenThread: openThread,
             onForward: onForward.map { handler in { handler(message) } },
             reminder: reminder?.date,
             onRemind: onRemind,

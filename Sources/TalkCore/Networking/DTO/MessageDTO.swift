@@ -27,12 +27,17 @@ struct MessageDTO: Decodable, Sendable {
     let lastEditActorId: String?
     let lastEditActorDisplayName: String?
     let lastEditTimestamp: Int?
+    let threadId: Int?
+    let isThread: Bool?
+    let threadTitle: String?
+    let threadReplies: Int?
 
     private enum CodingKeys: String, CodingKey {
         case id, token, actorType, actorId, actorDisplayName, timestamp, systemMessage
         case messageType, message, messageParameters, isReplyable, referenceId
         case expirationTimestamp, parent, reactions, reactionsSelf, markdown, silent, deleted
         case lastEditActorType, lastEditActorId, lastEditActorDisplayName, lastEditTimestamp
+        case threadId, isThread, threadTitle, threadReplies
     }
 
     init(from decoder: any Decoder) throws {
@@ -58,6 +63,10 @@ struct MessageDTO: Decodable, Sendable {
         lastEditActorId = try? container.decodeIfPresent(String.self, forKey: .lastEditActorId)
         lastEditActorDisplayName = try? container.decodeIfPresent(String.self, forKey: .lastEditActorDisplayName)
         lastEditTimestamp = Lenient.int(container, .lastEditTimestamp)
+        threadId = Lenient.int(container, .threadId)
+        isThread = Lenient.bool(container, .isThread)
+        threadTitle = try? container.decodeIfPresent(String.self, forKey: .threadTitle)
+        threadReplies = Lenient.int(container, .threadReplies)
 
         // Both of these are `[]` rather than `{}` when empty — PHP's array serialization.
         messageParameters = (try? container.decodeIfPresent([String: RichObjectDTO].self, forKey: .messageParameters)) ?? [:]
@@ -103,7 +112,10 @@ struct MessageDTO: Decodable, Sendable {
             expirationTimestamp: expiration,
             lastEdit: edit,
             isSilent: silent ?? false,
-            isDeleted: deleted ?? (kind == .commentDeleted)
+            isDeleted: deleted ?? (kind == .commentDeleted),
+            // Every message has a `threadId` — its own id when it starts nothing — but only
+            // one in an actual thread says `isThread`.
+            thread: isThread == true ? threadId.map { MessageThread(id: $0, title: threadTitle ?? "", replies: threadReplies ?? 0) } : nil
         )
     }
 }

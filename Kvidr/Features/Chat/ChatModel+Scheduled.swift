@@ -34,12 +34,13 @@ extension ChatModel {
 
         let service = session.scheduledMessages
         let token = self.token
+        let threadID = openThread?.id
         Task { [weak self] in
             do throws(TalkError) {
                 if let editing {
                     try await service.update(token: token, id: editing.id, text: text, sendAt: sendAt, silent: editing.isSilent)
                 } else {
-                    try await service.schedule(token: token, text: text, sendAt: sendAt, replyTo: replyTo)
+                    try await service.schedule(token: token, text: text, sendAt: sendAt, replyTo: replyTo, threadID: threadID)
                 }
                 await self?.loadScheduled()
             } catch {

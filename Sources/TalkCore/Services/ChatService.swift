@@ -36,7 +36,8 @@ actor ChatService {
         token: String,
         lastKnownMessageID: Int? = nil,
         limit: Int = 100,
-        includeLastKnown: Bool = false
+        includeLastKnown: Bool = false,
+        threadID: Int? = nil
     ) async throws(TalkError) -> ChatBatch {
         var query: [URLQueryItem] = [
             URLQueryItem(name: "lookIntoFuture", value: "0"),
@@ -49,6 +50,8 @@ actor ChatService {
         if let lastKnownMessageID, lastKnownMessageID > 0 {
             query.append(URLQueryItem(name: "lastKnownMessageId", value: String(lastKnownMessageID)))
         }
+        // Only that thread's messages. Cap `threads`.
+        if let threadID { query.append(URLQueryItem(name: "threadId", value: String(threadID))) }
         return try await fetch(token: token, query: query, limit: limit, timeout: 30)
     }
 
@@ -139,7 +142,8 @@ actor ChatService {
         replyTo: Int? = nil,
         replyToToken: String? = nil,
         referenceID: String? = nil,
-        silent: Bool = false
+        silent: Bool = false,
+        threadID: Int? = nil
     ) async throws(TalkError) -> Message {
         var form = ["message": message]
         if let replyTo, replyTo > 0 {
@@ -150,6 +154,8 @@ actor ChatService {
         }
         if let referenceID { form["referenceId"] = referenceID }
         if silent { form["silent"] = "true" }
+        // Into a thread without quoting anything in it; a reply goes where its message is.
+        if let threadID, replyTo == nil || replyTo == 0 { form["threadId"] = String(threadID) }
 
         let response = try await client.require(OCSRequest.post(Endpoint.chat(token), form: form), as: MessageDTO.self)
         return response.value.model(token: token)

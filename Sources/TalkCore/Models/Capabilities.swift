@@ -83,6 +83,7 @@ struct TalkCapabilities: Sendable, Hashable, Codable {
     var supportsPolls: Bool { has("talk-polls") }
     var supportsTypingIndicators: Bool { has("typing-privacy") }
     var supportsPinnedMessages: Bool { has("pinned-messages") }
+    var supportsThreads: Bool { has("threads") }
 
     var canEditMessages: Bool { has("edit-messages") }
     /// Talk 20 allows editing in Note to Self even where general editing is unavailable.

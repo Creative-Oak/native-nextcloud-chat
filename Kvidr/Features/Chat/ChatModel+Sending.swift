@@ -63,7 +63,7 @@ extension ChatModel {
         if attachments.hasStaged {
             // A file's share can't quote a message from another conversation, so a private
             // reply with a file goes without the quote.
-            attachments.send(caption: text, replyTo: replyingTo.flatMap { $0.token == token ? $0.messageID : nil })
+            attachments.send(caption: text, replyTo: replyingTo.flatMap { $0.token == token ? $0.messageID : nil }, threadID: openThread?.id)
             draftText = ""
             replyingTo = nil
             return
@@ -96,7 +96,9 @@ extension ChatModel {
             // Talk only renders Markdown when it says so; assume it for our own message so
             // the bubble matches what everyone else will see.
             isMarkdown: capabilities.supportsMarkdown,
-            deliveryState: .sending
+            deliveryState: .sending,
+            // Shown in the thread at once; a reply goes into its message's thread.
+            thread: replyingTo.flatMap { $0.token == token ? $0.thread : nil } ?? openThread
         )
 
         mutateTimeline { $0.addPending(optimistic) }
@@ -139,7 +141,8 @@ extension ChatModel {
                     message: optimistic.text,
                     replyTo: replyTo,
                     replyToToken: replyToToken,
-                    referenceID: referenceID
+                    referenceID: referenceID,
+                    threadID: optimistic.thread?.id
                 )
                 // The long poll may have delivered this already; the timeline handles both
                 // orders and will not duplicate.
