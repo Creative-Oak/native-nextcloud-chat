@@ -1,9 +1,8 @@
 import AppKit
 import SwiftUI
 
-/// Calls happen in the browser for now: kvidr doesn't speak Talk's signaling, so what it can
-/// do is say that a call is running and hand you to the page where you join it. The web
-/// conversation page is that page — its Join Call button is the first thing on it.
+/// A call running in a conversation: the marker for it, and the way in — here, or in the
+/// browser while this Mac is in another call.
 
 /// The symbol for a running call, green as calls are everywhere on the Mac.
 struct CallSymbol: View {
@@ -46,7 +45,9 @@ struct CallBadge: View {
 /// and the way in.
 struct CallInProgressBar: View {
     let conversation: Conversation
-    var onJoin: () -> Void
+    /// Joins here; nil while in another call, when the browser is the way in.
+    var onJoin: (() -> Void)?
+    var onJoinInBrowser: () -> Void
 
     var body: some View {
         HStack(spacing: 10) {
@@ -62,9 +63,15 @@ struct CallInProgressBar: View {
                 }
             }
             .font(.callout)
-            Button("Join in Browser", action: onJoin)
-                .buttonStyle(.link)
-                .help("Opens this conversation in Nextcloud, where you can join the call")
+            if let onJoin {
+                Button("Join", action: onJoin)
+                    .buttonStyle(.link)
+                    .help("Join the call")
+            } else {
+                Button("Join in Browser", action: onJoinInBrowser)
+                    .buttonStyle(.link)
+                    .help("You’re in another call; this opens the conversation in Nextcloud")
+            }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)

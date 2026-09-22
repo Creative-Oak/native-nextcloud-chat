@@ -278,6 +278,20 @@ struct RootView: View {
                     } else if app.isShowingReminders, let reminders = app.reminders {
                         RemindersPage(store: reminders)
                     } else if let chat = app.chat {
+                        // In a call, the call takes the pane and the conversation moves over to a
+                        // column beside it — FaceTime's layout, grown out of the chat.
+                        let callHere = app.call.flatMap { $0.token == chat.token ? $0 : nil }
+                        HStack(spacing: 0) {
+                            if let callHere {
+                                CallStage(
+                                    call: callHere,
+                                    me: MessageActor(kind: .users, id: app.session?.account.userID ?? "", displayName: app.session?.account.displayName ?? ""),
+                                    onLeave: { withAnimation(.smooth(duration: 0.45)) { app.leaveCall() } },
+                                    onDismiss: { withAnimation(.smooth(duration: 0.45)) { app.dismissEndedCall() } }
+                                )
+                                .ignoresSafeArea(.container, edges: .top)
+                                .transition(.move(edge: .leading).combined(with: .opacity))
+                            }
                         ChatView(
                             model: chat,
                             composerFocused: $composerFocused,
@@ -297,10 +311,17 @@ struct RootView: View {
                                     await app.openOneToOne(with: userID)
                                     focusComposerOnceOpen()
                                 }
-                            }
+                            },
+                            onJoinCall: app.activeCall == nil ? { startCall() } : nil,
+                            callElsewhere: app.activeCall.flatMap { $0.token == chat.token ? nil : $0 },
+                            onReturnToCall: { app.selectedToken = app.activeCall?.token },
+                            isInCall: callHere != nil
                         )
                             // A fresh view per conversation: no state bleeds between them.
                             .id(chat.token)
+                            .frame(width: callHere == nil ? nil : 360)
+                        }
+                        .animation(.smooth(duration: 0.45), value: callHere == nil)
                     } else if app.phase == .ready {
                         NoConversationSelected(hasConversations: !(app.conversationList?.index.isEmpty ?? true))
                     } else {
@@ -643,12 +664,32 @@ struct RootView: View {
                 ToolbarSpacer(.fixed, placement: .primaryAction)
             }
 
+            // Calls: start one, or join the one going on. Gone while in a call — the call's own
+            // bar has the controls then.
+            if let chat = app.chat, app.activeCall == nil, chat.capabilities.config.callEnabled != false,
+               chat.conversation.canStartCall || chat.conversation.hasCall {
+                ToolbarItem(placement: .primaryAction) {
+                    Button(action: startCall) {
+                        Label(chat.conversation.hasCall ? "Join Call" : "Call", systemImage: "phone")
+                    }
+                    .tint(chat.conversation.hasCall ? .green : nil)
+                    .help(chat.conversation.hasCall ? "Join the call" : "Call \(chat.conversation.displayName)")
+                }
+                ToolbarSpacer(.fixed, placement: .primaryAction)
+            }
+
             ToolbarItem(placement: .primaryAction) {
                 Button(action: toggleInspector) {
                     Label("Conversation Details", systemImage: "info.circle")
                 }
                 .help("Show conversation details (⌥⌘I)")
             }
+        }
+    }
+
+    private func startCall() {
+        withAnimation(.smooth(duration: 0.45)) {
+            Task { await app.joinCall() }
         }
     }
 

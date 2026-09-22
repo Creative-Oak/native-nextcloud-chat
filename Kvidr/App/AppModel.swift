@@ -79,6 +79,14 @@ final class AppModel {
     private var liveRoom: String?
     /// Typing indicators, both ways, while connected.
     private var typing: LiveTyping?
+    /// The call this Mac is in, or was in until it ended with something to say.
+    private(set) var call: CallController?
+
+    /// A call that is under way here — not one that has ended.
+    var activeCall: CallController? {
+        guard let call, !call.isEnded else { return nil }
+        return call
+    }
 
     /// Window/app activation, which gates read state. See `ReadStatePolicy`.
     var isApplicationActive = true { didSet { activationChanged() } }
@@ -228,6 +236,8 @@ final class AppModel {
         liveRoom = nil
         typing?.tearDown()
         typing = nil
+        call?.leave()
+        call = nil
     }
 
     /// The server's Talk configuration changed — refetch capabilities and rebuild around
@@ -320,7 +330,7 @@ final class AppModel {
             inspector = nil
             Task {
                 await previous?.deactivate()
-                if let previous { await self.leaveLive(previous.token) }
+                if let previous, previous.token != self.activeCall?.token { await self.leaveLive(previous.token) }
             }
             return
         }
@@ -360,11 +370,15 @@ final class AppModel {
             // Tear the old one down *completely* first: the long-poll engine is shared, so
             // overlapping activate/stop would leave the new conversation without a sync loop.
             await previous?.deactivate()
-            if let previous, previous.token != model.token { await self.leaveLive(previous.token) }
+            // The conversation a call is in stays joined: leaving it would leave the call.
+            if let previous, previous.token != model.token, previous.token != self.activeCall?.token {
+                await self.leaveLive(previous.token)
+            }
             await model.activate()
             await self.applyPendingReveal(to: model)
             self.applyPendingPrivateReply(to: model)
-            await self.joinLive(model.token)
+            // One conversation at a time on the signaling server, and during a call it's the call's.
+            if self.activeCall == nil || self.activeCall?.token == model.token { await self.joinLive(model.token) }
         }
     }
 
@@ -474,7 +488,7 @@ final class AppModel {
                 await self.reminders?.load()
                 // Back in front after another device took the conversation over: take it back,
                 // now that this is where the user is.
-                if let token = chat?.token, self.liveRoom != token, case .connected = self.signalingState {
+                if let token = chat?.token, self.liveRoom != token, self.activeCall == nil, case .connected = self.signalingState {
                     await self.joinLive(token)
                 }
             } else {
@@ -636,6 +650,8 @@ final class AppModel {
                     typing.connected(sessionID: sessionID)
                 } else {
                     typing.connected(sessionID: nil)
+                    // The call rides on this connection's session; a new one can't carry it on.
+                    self?.activeCall?.signalingLost()
                 }
             }
         }
@@ -651,7 +667,14 @@ final class AppModel {
                     let full = change == .removed || change == .deleted
                     Log.sync.info("Live: a conversation changed (\(String(describing: change))), refreshing")
                     await sync.refreshNow(full: full)
-                case .participantsChanged(let token) where token == self.selectedToken:
+                case .participantsChanged(let token, let users, let everyone) where token == self.activeCall?.token:
+                    self.activeCall?.participantsChanged(users, everyone: everyone)
+                    if token == self.selectedToken { await sync.refreshNow(full: false) }
+                case .callSignal(let from, let signal):
+                    self.activeCall?.handle(signal, from: from)
+                case .error(_, let code, let message) where self.activeCall != nil:
+                    Log.sync.notice("Call: signaling error \(code): \(message)")
+                case .participantsChanged(let token, _, _) where token == self.selectedToken:
                     await sync.refreshNow(full: false)
                 case .room(let roomID):
                     self.liveRoom = roomID.isEmpty ? nil : roomID
@@ -660,6 +683,7 @@ final class AppModel {
                     typing.joined(sessions)
                 case .sessionsLeft(let ids):
                     typing.left(ids)
+                    self.activeCall?.sessionsLeft(ids)
                 case .typing(let from, let isTyping):
                     typing.received(fromSession: from, isTyping: isTyping)
                 default:
@@ -691,6 +715,40 @@ final class AppModel {
         liveRoom = nil
         await session.signaling.leaveRoom()
         try? await session.conversations.leave(token: token)
+    }
+
+    // MARK: - Calls
+
+    /// Joins the open conversation's call, starting it if there is none.
+    func joinCall() async {
+        guard let session, let chat, activeCall == nil else { return }
+        let ownSessionID: String? = if case .connected(let id) = signalingState { id } else { nil }
+        if ownSessionID != nil, liveRoom != chat.token { await joinLive(chat.token) }
+        let settings = await session.signaling.lastSettings
+        let controller = CallController(
+            session: session,
+            conversation: chat.conversation,
+            ownSessionID: ownSessionID ?? "",
+            iceServers: settings?.iceServers ?? [],
+            nick: session.account.displayName,
+            nameForSession: { [weak self] in self?.typing?.displayName(forSession: $0) }
+        )
+        call = controller
+        guard ownSessionID != nil else {
+            controller.fail("Calls go over the live connection to your server, and it isn’t up right now.")
+            return
+        }
+        await controller.join()
+    }
+
+    func leaveCall() {
+        call?.leave()
+        call = nil
+    }
+
+    /// Put away a call that ended with something to say, once it has been read.
+    func dismissEndedCall() {
+        if call?.isEnded == true { call = nil }
     }
 
     /// The Mac woke from sleep: the socket may have died without saying so.

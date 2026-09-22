@@ -30,9 +30,14 @@ final class URLSessionTransport: HTTPTransport, @unchecked Sendable {
         // whatever the caller asked for, so each session's ceiling sits above every request
         // timeout that can be routed to it. A 600-second upload used to land on a session
         // whose ceiling was 180 and die after three minutes regardless.
-        standard = PolicedSession(userAgent: userAgent, request: 30, resource: 120)
-        longPoll = PolicedSession(userAgent: userAgent, request: 90, resource: 300)
-        transfer = PolicedSession(userAgent: userAgent, request: 600, resource: 1800)
+        //
+        // One jar of cookies for all three, kept in memory only. Talk ties "this session is in
+        // this conversation" to the server's session cookie: without it, joining a call after
+        // joining the conversation finds no one to put in the call.
+        let cookies = URLSessionConfiguration.ephemeral.httpCookieStorage
+        standard = PolicedSession(userAgent: userAgent, request: 30, resource: 120, cookies: cookies)
+        longPoll = PolicedSession(userAgent: userAgent, request: 90, resource: 300, cookies: cookies)
+        transfer = PolicedSession(userAgent: userAgent, request: 600, resource: 1800, cookies: cookies)
     }
 
     func send(_ request: HTTPRequest) async throws(TalkError) -> HTTPResponse {
@@ -238,13 +243,16 @@ private struct PolicedSession: @unchecked Sendable {
     let session: URLSession
     let delegate: TransportDelegate
 
-    init(userAgent: String, request: TimeInterval, resource: TimeInterval) {
+    init(userAgent: String, request: TimeInterval, resource: TimeInterval, cookies: HTTPCookieStorage?) {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.httpAdditionalHeaders = ["User-Agent": userAgent]
         configuration.timeoutIntervalForRequest = request
         configuration.timeoutIntervalForResource = resource
-        configuration.httpCookieStorage = nil
-        configuration.httpShouldSetCookies = false
+        // In memory, shared by this transport's sessions, gone when the app quits — and only
+        // ever sent back to the server that set them.
+        configuration.httpCookieStorage = cookies
+        configuration.httpShouldSetCookies = true
+        configuration.httpCookieAcceptPolicy = .onlyFromMainDocumentDomain
         // Credentials go in the Authorization header we build ourselves; never cache them.
         configuration.urlCredentialStorage = nil
         configuration.requestCachePolicy = .reloadIgnoringLocalCacheData

@@ -14,6 +14,8 @@ struct SignalingSettings: Sendable, Equatable {
     var helloToken: String?
     /// Sign-in for protocol 1.0: a ticket the signaling server checks with Nextcloud itself.
     var ticket: String?
+    /// STUN and TURN servers for calls.
+    var iceServers: [IceServerConfig] = []
 
     var isExternal: Bool { mode == "external" && !server.isEmpty }
 
@@ -40,6 +42,28 @@ struct SignalingSettingsDTO: Decodable, Sendable {
     let userId: String?
     let ticket: String?
     let helloAuthParams: HelloAuthParams?
+    let stunservers: [IceServerDTO]
+    let turnservers: [IceServerDTO]
+
+    struct IceServerDTO: Decodable, Sendable {
+        let urls: [String]
+        let username: String?
+        let credential: String?
+
+        private enum CodingKeys: String, CodingKey { case urls, url, username, credential }
+
+        init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            // A list, or on older servers a single address.
+            if let list = try? container.decodeIfPresent([String].self, forKey: .urls) {
+                urls = list
+            } else {
+                urls = [(try? container.decodeIfPresent(String.self, forKey: .urls)) ?? (try? container.decodeIfPresent(String.self, forKey: .url)) ?? nil].compactMap { $0 }
+            }
+            username = Lenient.string(container, .username)
+            credential = Lenient.string(container, .credential)
+        }
+    }
 
     struct HelloAuthParams: Decodable, Sendable {
         let v2: Token?
@@ -48,7 +72,7 @@ struct SignalingSettingsDTO: Decodable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case signalingMode, server, userId, ticket, helloAuthParams
+        case signalingMode, server, userId, ticket, helloAuthParams, stunservers, turnservers
     }
 
     init(from decoder: any Decoder) throws {
@@ -63,6 +87,8 @@ struct SignalingSettingsDTO: Decodable, Sendable {
         userId = Lenient.string(container, .userId)
         ticket = try? container.decodeIfPresent(String.self, forKey: .ticket)
         helloAuthParams = try? container.decodeIfPresent(HelloAuthParams.self, forKey: .helloAuthParams)
+        stunservers = (try? container.decodeIfPresent([IceServerDTO].self, forKey: .stunservers)) ?? []
+        turnservers = (try? container.decodeIfPresent([IceServerDTO].self, forKey: .turnservers)) ?? []
     }
 
     func model() -> SignalingSettings {
@@ -71,7 +97,10 @@ struct SignalingSettingsDTO: Decodable, Sendable {
             server: server ?? "",
             userID: userId,
             helloToken: helloAuthParams?.v2?.token,
-            ticket: ticket
+            ticket: ticket,
+            iceServers: (stunservers + turnservers)
+                .filter { !$0.urls.isEmpty }
+                .map { IceServerConfig(urls: $0.urls, username: $0.username, credential: $0.credential) }
         )
     }
 }

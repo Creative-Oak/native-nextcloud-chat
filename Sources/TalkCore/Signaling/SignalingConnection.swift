@@ -112,6 +112,15 @@ actor SignalingConnection {
         try? await channel.send(SignalingOutbound.room(id: makeID(), roomID: "", sessionID: "").encoded())
     }
 
+    /// The settings of the last sign-in: the STUN and TURN servers for a call are in them.
+    private(set) var lastSettings: SignalingSettings?
+
+    /// Sends anything, if connected; what can't be sent is dropped, and a call negotiates again.
+    func send(_ message: SignalingOutbound) async {
+        guard case .connected = state, let channel else { return }
+        try? await channel.send(message.encoded())
+    }
+
     /// Sends a message to one session, if connected; one that can't be sent is dropped.
     func send(toSession session: String, data: [String: String]) async {
         guard case .connected = state, let channel else { return }
@@ -159,6 +168,7 @@ actor SignalingConnection {
         let current: SignalingSettings
         do {
             current = try await settings()
+            lastSettings = current
         } catch {
             throw error
         }
@@ -177,6 +187,8 @@ actor SignalingConnection {
         if case .welcome(let offered)? = try? await withTimeout(Self.welcomeTimeout, { try await Self.receive(channel) }) {
             features = offered
         }
+        // Which of these are there decides how calls work — "mcu" above all.
+        Log.sync.notice("Signaling server features: \(features.sorted().joined(separator: ", "))")
 
         let sessionID: String
         var resumed = false

@@ -220,7 +220,7 @@ struct SignalingConnectionTests {
         #expect(decode(#"{"type":"event","event":{"target":"roomlist","type":"disinvite","disinvite":{"roomid":"abc"}}}"#) == .roomList(.removed, token: "abc"))
         #expect(decode(#"{"type":"event","event":{"target":"roomlist","type":"update","update":{"roomid":"abc","properties":{"name":"New"}}}}"#) == .roomList(.updated, token: "abc"))
         #expect(decode(#"{"type":"event","event":{"target":"roomlist","type":"delete","delete":{"roomid":"abc"}}}"#) == .roomList(.deleted, token: "abc"))
-        #expect(decode(#"{"type":"event","event":{"target":"participants","type":"update","update":{"roomid":"abc","users":[]}}}"#) == .participantsChanged(token: "abc"))
+        #expect(decode(#"{"type":"event","event":{"target":"participants","type":"update","update":{"roomid":"abc","users":[]}}}"#) == .participantsChanged(token: "abc", users: [], everyone: nil))
         #expect(decode(#"{"type":"event","event":{"target":"room","type":"message","message":{"roomid":"abc","data":{"type":"chat","chat":{"refresh":true}}}}}"#) == .roomMessage(token: "abc"))
         #expect(decode(#"{"type":"room","room":{"roomid":"abc","properties":{}}}"#) == .room(roomID: "abc"))
     }

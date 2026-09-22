@@ -5,14 +5,21 @@
 	<!-- A messaging client has no business reading the user's disk. -->
 	<key>com.apple.security.app-sandbox</key>
 	<true/>
-	<!-- Outgoing HTTPS to the user's Nextcloud. No server socket, ever. -->
+	<!-- Outgoing HTTPS to the user's Nextcloud. -->
 	<key>com.apple.security.network.client</key>
+	<true/>
+	<!-- Calls: WebRTC opens its own UDP ports for the audio and video, and the media server's
+	     connectivity checks and media arrive on them. Nothing else listens. -->
+	<key>com.apple.security.network.server</key>
 	<true/>
 	<!-- Phase 7, for attaching files the user picks. -->
 	<key>com.apple.security.files.user-selected.read-only</key>
 	<true/>
-	<!-- Recording a voice message, from the record button in a conversation. -->
+	<!-- Calls, and recording a voice message from the record button in a conversation. -->
 	<key>com.apple.security.device.audio-input</key>
+	<true/>
+	<!-- The camera, in a video call once the user turns it on. -->
+	<key>com.apple.security.device.camera</key>
 	<true/>
 	<!-- The data-protection keychain, where the app password and the cache keys live.
 	     A Mac app without an access group can't use it at all: every write fails with

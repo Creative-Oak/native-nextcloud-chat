@@ -66,6 +66,11 @@ final class LiveTyping {
         publish()
     }
 
+    /// A session's name, as the signaling server gave it when they joined the conversation.
+    func displayName(forSession id: String) -> String? {
+        tracker.sessions[id]?.displayName
+    }
+
     // MARK: - From the composer
 
     /// The text in the composer of `token` changed by the user's hand.

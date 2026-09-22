@@ -16,6 +16,8 @@ enum SignalingOutbound: Sendable, Equatable {
     /// A message straight to one session, with no id: the server answers these only with an
     /// error. Talk's typing signals travel this way, one to each session in the conversation.
     case message(toSession: String, data: [String: String])
+    /// WebRTC negotiation for a call, to a session — this client's own, for what it sends.
+    case callSignal(toSession: String, CallSignal, nick: String?)
 
     func encoded() -> Data {
         let object: [String: Any]
@@ -35,6 +37,8 @@ enum SignalingOutbound: Sendable, Equatable {
             object = ["id": id, "type": "bye", "bye": [String: String]()]
         case let .room(id, roomID, sessionID):
             object = ["id": id, "type": "room", "room": ["roomid": roomID, "sessionid": sessionID]]
+        case let .callSignal(session, signal, nick):
+            object = ["type": "message", "message": ["recipient": ["type": "session", "sessionid": session], "data": signal.data(to: session, nick: nick)] as [String: Any]]
         case let .message(session, data):
             object = ["type": "message", "message": ["recipient": ["type": "session", "sessionid": session], "data": data] as [String: Any]]
         }
@@ -51,8 +55,11 @@ enum SignalingInbound: Sendable, Equatable {
     case room(roomID: String)
     /// A conversation the user is in changed, or they were added to or removed from one.
     case roomList(RoomListChange, token: String)
-    /// Someone joined or left the open conversation, or a call started or stopped in it.
-    case participantsChanged(token: String)
+    /// Someone joined or left the open conversation, or a call started or stopped in it: the
+    /// participants that changed, or — the call ended for everyone — `everyone` with the flags.
+    case participantsChanged(token: String, users: [CallParticipantState], everyone: CallFlags?)
+    /// WebRTC negotiation for a call, from a session.
+    case callSignal(fromSession: String, CallSignal)
     /// Something was posted in the open conversation.
     case roomMessage(token: String)
     /// Sessions that are in the open conversation on the signaling server: those that came in
@@ -93,6 +100,9 @@ enum SignalingInbound: Sendable, Equatable {
             switch payload["type"] as? String {
             case "startedTyping" where !sender.isEmpty: return .typing(fromSession: sender, isTyping: true)
             case "stoppedTyping" where !sender.isEmpty: return .typing(fromSession: sender, isTyping: false)
+            case "offer", "answer", "candidate":
+                guard !sender.isEmpty, let signal = CallSignal.decode(payload) else { return .other(type: type, json: data) }
+                return .callSignal(fromSession: sender, signal)
             default: return .other(type: type, json: data)
             }
         default:
@@ -116,7 +126,10 @@ enum SignalingInbound: Sendable, Equatable {
         case ("roomlist", "disinvite") where !token.isEmpty: return .roomList(.removed, token: token)
         case ("roomlist", "update") where !token.isEmpty: return .roomList(.updated, token: token)
         case ("roomlist", "delete") where !token.isEmpty: return .roomList(.deleted, token: token)
-        case ("participants", _) where !token.isEmpty: return .participantsChanged(token: token)
+        case ("participants", _) where !token.isEmpty:
+            let users = (body["users"] as? [[String: Any]] ?? []).compactMap(CallParticipantState.init(json:))
+            let everyone = (body["all"] as? Bool == true) ? CallFlags(rawValue: (body["incall"] as? NSNumber)?.intValue ?? 0) : nil
+            return .participantsChanged(token: token, users: users, everyone: everyone)
         case ("room", "message") where !token.isEmpty: return .roomMessage(token: token)
         default: return .other(type: "event", json: data)
         }

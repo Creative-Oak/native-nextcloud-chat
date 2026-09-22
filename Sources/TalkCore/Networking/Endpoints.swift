@@ -26,6 +26,7 @@ enum Endpoint {
     static func notify(_ token: String) -> String { "\(spreedV4)/room/\(segment(token))/notify" }
     static func participants(_ token: String) -> String { "\(spreedV4)/room/\(segment(token))/participants" }
     static func activeParticipants(_ token: String) -> String { "\(spreedV4)/room/\(segment(token))/participants/active" }
+    static func call(_ token: String) -> String { "\(spreedV4)/call/\(segment(token))" }
     static func sessionState(_ token: String) -> String { "\(spreedV4)/room/\(segment(token))/participants/state" }
     static func conversationAvatar(_ token: String, dark: Bool = false) -> String {
         "\(spreedV1)/room/\(segment(token))/avatar" + (dark ? "/dark" : "")

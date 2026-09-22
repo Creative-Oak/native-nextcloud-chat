@@ -30,6 +30,13 @@ struct ChatView: View {
     var onOpenConversation: (String) -> Void = { _ in }
     /// Opens the one-to-one with a user — an out-of-office's stand-in.
     var onMessageUser: (String) -> Void = { _ in }
+    /// Joins this conversation's call here; nil while in another.
+    var onJoinCall: (() -> Void)?
+    /// A call going on in another conversation, and the way back to it.
+    var callElsewhere: CallController?
+    var onReturnToCall: () -> Void = {}
+    /// This Mac is in this conversation's call: the stage beside it says so.
+    var isInCall = false
 
     @State private var highlightedMessageID: Int?
     @State private var didInitialScroll = false
@@ -57,6 +64,10 @@ struct ChatView: View {
                     // The transient bar, one at a time, then the pinned message under it —
                     // a pin is standing information and shouldn't give way to a call.
                     VStack(spacing: 6) {
+                        if let callElsewhere {
+                            ReturnToCallPill(call: callElsewhere, onReturn: onReturnToCall)
+                                .transition(.move(edge: .top).combined(with: .opacity))
+                        }
                         if let thread = model.openThread {
                             ThreadBar(
                                 thread: thread,
@@ -99,8 +110,8 @@ struct ChatView: View {
                                 onOpenConversation(target.token)
                             }
                             .transition(.move(edge: .top).combined(with: .opacity))
-                        } else if let live = liveConversation, live.hasCall {
-                            CallInProgressBar(conversation: live) {
+                        } else if !isInCall, let live = liveConversation, live.hasCall {
+                            CallInProgressBar(conversation: live, onJoin: onJoinCall) {
                                 NSWorkspace.shared.open(model.webURL)
                             }
                             .transition(.move(edge: .top).combined(with: .opacity))
