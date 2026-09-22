@@ -100,6 +100,8 @@ struct RootView: View {
         context.replyToLatest = { app.chat?.replyToLatest() }
         context.editLatest = { app.chat?.beginEditingLatestOwnMessage() }
         context.markUnread = { app.markSelectedUnread() }
+        context.canSummarize = UnreadSummary.availability != .unsupported
+        context.summarize = { app.chat?.summarize() }
         context.toggleFavorite = { app.toggleFavoriteOnSelection() }
         context.toggleArchive = { app.toggleArchiveOnSelection() }
         context.toggleInspector = toggleInspector
@@ -542,6 +544,21 @@ struct RootView: View {
                     Label("Go to Anything", systemImage: "magnifyingglass")
                 }
                 .help("Go to Anything (⌘P)")
+            }
+        }
+
+        // Beside search, in the same capsule: what Apple Intelligence can do with the open
+        // conversation, done on this Mac.
+        if !app.isShowingDraft, let chat = app.chat, UnreadSummary.availability != .unsupported {
+            ToolbarItem(placement: .automatic) {
+                Menu {
+                    Button("Summarize Conversation", systemImage: "text.append") { chat.summarize() }
+                        .keyboardShortcut("s", modifiers: [.command, .option])
+                } label: {
+                    Label("Apple Intelligence", systemImage: "apple.intelligence")
+                }
+                .menuIndicator(.hidden)
+                .help("Apple Intelligence")
             }
         }
 

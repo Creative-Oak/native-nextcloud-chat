@@ -116,6 +116,14 @@ struct ChatView: View {
                             .transition(.move(edge: .top).combined(with: .opacity))
                         }
 
+                        if model.openThread == nil, let summary = model.unreadSummary {
+                            SummaryBar(summary: summary) {
+                                summary.cancel()
+                                model.unreadSummary = nil
+                            }
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                        }
+
                         if model.openThread == nil, let pin = model.visiblePin {
                             PinnedBar(model: model, pin: pin) { messageID in
                                 Task { await model.reveal(messageID: messageID) }
@@ -134,6 +142,7 @@ struct ChatView: View {
                 .animation(.smooth(duration: 0.25), value: model.forwardedTo?.token)
                 .animation(.smooth(duration: 0.25), value: model.absence)
                 .animation(.smooth(duration: 0.25), value: model.openThread?.id)
+                .animation(.smooth(duration: 0.25), value: model.unreadSummary == nil)
                 // An inset rather than another row in the stack: the composer floats over
                 // the transcript the way Messages' does, and the scroll view still knows
                 // not to hide the newest message behind it.

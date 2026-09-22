@@ -39,6 +39,8 @@ final class ChatModel {
     /// The title of a thread being started, while the composer is starting one — see
     /// `ChatModel+Threads`.
     var newThreadTitle: String?
+    /// Offered when the conversation opens with a lot unread — see ``UnreadSummary``.
+    var unreadSummary: UnreadSummary?
     /// The conversation's threads, most recently active first.
     var threads: [ThreadSummary] = []
     /// Titles of threads being started, by the local id of the message starting them — so a
@@ -297,6 +299,7 @@ final class ChatModel {
         restorePendingMessages(from: cached)
         firstUnreadMessageID = computeFirstUnread()
         rebuildRows()
+        offerUnreadSummary()
 
         await restoreDraft()
         pushReadContext()
@@ -559,6 +562,46 @@ final class ChatModel {
         let chat = session.chat
         let token = self.token
         Task { try? await chat.markUnread(token: token) }
+    }
+
+    /// Asked once, as the conversation opens: what counts as unread is what was unread then.
+    private func offerUnreadSummary() {
+        guard unreadSummary == nil, conversation.unreadMessages >= SummaryInput.minimumMessages,
+              UnreadSummary.availability != .unsupported
+        else { return }
+        let firstID = conversation.lastReadMessageID + 1
+        unreadSummary = UnreadSummary(unreadCount: conversation.unreadMessages, conversationName: conversation.displayName) { [weak self] in
+            guard let self else { return [] }
+            // What has arrived by the time it is asked for, not just what was cached.
+            return SummaryInput.lines(from: self.timeline.messages, startingAt: firstID) { self.content(for: $0).preview }
+        }
+    }
+
+    /// From the menu: the unread messages if there are some, else the latest — written at once.
+    func summarize() {
+        guard UnreadSummary.availability != .unsupported else { return }
+        if let unreadSummary, case .offered = unreadSummary.state {
+            unreadSummary.write()
+            return
+        }
+        let unread = conversation.unreadMessages
+        let firstUnread = conversation.lastReadMessageID + 1
+        let summary = UnreadSummary(
+            unreadCount: unread > 0 ? unread : SummaryInput.recentMessages,
+            isRecent: unread == 0,
+            conversationName: conversation.displayName
+        ) { [weak self] in
+            guard let self else { return [] }
+            let messages = self.timeline.messages
+            let first = unread > 0
+                ? firstUnread
+                : messages.filter { !$0.isSystem }.suffix(SummaryInput.recentMessages).first?.messageID ?? 0
+            return SummaryInput.lines(from: messages, startingAt: first) { self.content(for: $0).preview }
+        }
+        closeThread()
+        unreadSummary?.cancel()
+        unreadSummary = summary
+        summary.write()
     }
 
     private func computeFirstUnread() -> Int? {

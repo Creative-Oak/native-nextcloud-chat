@@ -91,6 +91,7 @@ struct AppCommandRegistry {
         var isSelectionFavorite = false
         var isSelectionArchived = false
         var canArchive = false
+        var canSummarize = false
 
         var newConversation: () -> Void = {}
         var refresh: () -> Void = {}
@@ -106,6 +107,7 @@ struct AppCommandRegistry {
         var replyToLatest: () -> Void = {}
         var editLatest: () -> Void = {}
         var markUnread: () -> Void = {}
+        var summarize: () -> Void = {}
         var toggleFavorite: () -> Void = {}
         var toggleArchive: () -> Void = {}
         var toggleInspector: () -> Void = {}
@@ -208,6 +210,12 @@ struct AppCommandRegistry {
                 symbolName: "pencil", shortcut: KeyboardShortcut(.upArrow, modifiers: .command), placement: .conversation,
                 endsGroup: true, isEnabled: chat && c.canEditMessages,
                 disabledReason: c.hasChat ? "This server does not let you edit messages" : noChat, perform: c.editLatest
+            ),
+            AppCommand(
+                id: "conversation.summarize", title: "Summarize Conversation", aliases: ["summary", "catch up", "tl;dr", "apple intelligence"],
+                symbolName: "apple.intelligence", shortcut: KeyboardShortcut("s", modifiers: [.command, .option]), placement: .conversation,
+                isEnabled: chat && c.canSummarize,
+                disabledReason: c.hasChat ? "Apple Intelligence isn’t available on this Mac" : noChat, perform: c.summarize
             ),
             AppCommand(
                 id: "conversation.markUnread", title: "Mark as Unread", aliases: ["unread", "later"],
