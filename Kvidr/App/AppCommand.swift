@@ -92,6 +92,8 @@ struct AppCommandRegistry {
         var isSelectionArchived = false
         var canArchive = false
         var canSummarize = false
+        /// A call has the window: moving elsewhere waits until it is minimized.
+        var isCallFullScreen = false
 
         var newConversation: () -> Void = {}
         var refresh: () -> Void = {}
@@ -130,12 +132,17 @@ struct AppCommandRegistry {
         let noSession = "Sign in first"
         let noChat = "Open a conversation first"
         let noSelection = "Select a conversation first"
+        let inCall = "Minimize the call first"
+        // Somewhere to go: signed in, and no call filling the window.
+        let roam = session && !c.isCallFullScreen
+        let roamReason = c.isCallFullScreen ? inCall : noSession
 
         let commands: [AppCommand] = [
             AppCommand(
                 id: "conversation.new", title: "New Message", aliases: ["start", "create", "group", "new conversation", "message someone"],
                 symbolName: "square.and.pencil", shortcut: KeyboardShortcut("n", modifiers: .command), placement: .file,
-                isEnabled: live && c.canCreateConversations, disabledReason: c.hasSession ? "This server does not let you start conversations" : noSession,
+                isEnabled: live && c.canCreateConversations && !c.isCallFullScreen,
+                disabledReason: c.isCallFullScreen ? inCall : c.hasSession ? "This server does not let you start conversations" : noSession,
                 perform: c.newConversation
             ),
             AppCommand(
@@ -146,7 +153,7 @@ struct AppCommandRegistry {
             AppCommand(
                 id: "conversations.find", title: "Find Conversation…", aliases: ["filter", "sidebar search"],
                 symbolName: "magnifyingglass", shortcut: KeyboardShortcut("f", modifiers: .command), placement: .find,
-                isEnabled: session, disabledReason: noSession, perform: c.findConversation
+                isEnabled: roam, disabledReason: roamReason, perform: c.findConversation
             ),
             AppCommand(
                 id: "chat.find", title: "Find in Conversation…", aliases: ["search here", "find text"],
@@ -158,7 +165,7 @@ struct AppCommandRegistry {
             AppCommand(
                 id: "messages.search", title: "Search Messages…", aliases: ["server search", "history", "find message"],
                 symbolName: "doc.text.magnifyingglass", shortcut: KeyboardShortcut("f", modifiers: [.command, .shift]), placement: .find,
-                isEnabled: session, disabledReason: noSession, perform: c.searchMessages
+                isEnabled: roam, disabledReason: roamReason, perform: c.searchMessages
             ),
             // Where Show/Hide Sidebar would be, had this app one: the sidebar does not
             // hide, it folds down to a column of faces.
@@ -171,29 +178,29 @@ struct AppCommandRegistry {
             AppCommand(
                 id: "conversation.next", title: "Next Conversation", aliases: ["down"],
                 symbolName: "arrow.down", shortcut: KeyboardShortcut(.downArrow, modifiers: [.command, .option]), placement: .conversation,
-                isEnabled: session, disabledReason: noSession, perform: c.nextConversation
+                isEnabled: roam, disabledReason: roamReason, perform: c.nextConversation
             ),
             AppCommand(
                 id: "conversation.previous", title: "Previous Conversation", aliases: ["up"],
                 symbolName: "arrow.up", shortcut: KeyboardShortcut(.upArrow, modifiers: [.command, .option]), placement: .conversation,
-                isEnabled: session, disabledReason: noSession, perform: c.previousConversation
+                isEnabled: roam, disabledReason: roamReason, perform: c.previousConversation
             ),
             AppCommand(
                 id: "conversation.nextUnread", title: "Next Unread", aliases: ["unread", "jump"],
                 symbolName: "circle.fill", shortcut: KeyboardShortcut("]", modifiers: [.command, .shift]), placement: .conversation,
-                endsGroup: true, isEnabled: session, disabledReason: noSession, perform: c.nextUnread
+                endsGroup: true, isEnabled: roam, disabledReason: roamReason, perform: c.nextUnread
             ),
             AppCommand(
                 id: "palette", title: "Go to Anything…", aliases: ["palette", "spotlight", "search"],
                 symbolName: "command", shortcut: KeyboardShortcut("p", modifiers: .command), placement: .conversation,
-                isEnabled: session, disabledReason: noSession, isHiddenFromPalette: true, perform: c.openPalette
+                isEnabled: roam, disabledReason: roamReason, isHiddenFromPalette: true, perform: c.openPalette
             ),
             // The same palette under the shortcut it had as a switcher, so the fingers
             // that learned ⌘K keep working.
             AppCommand(
                 id: "palette.conversation", title: "Go to Conversation…", aliases: [],
                 symbolName: "command", shortcut: KeyboardShortcut("k", modifiers: .command), placement: .conversation,
-                isEnabled: session, disabledReason: noSession, isHiddenFromPalette: true, perform: c.openPalette
+                isEnabled: roam, disabledReason: roamReason, isHiddenFromPalette: true, perform: c.openPalette
             ),
             AppCommand(
                 id: "composer.focus", title: "Focus Message Field", aliases: ["type", "compose", "write"],

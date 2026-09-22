@@ -31,6 +31,11 @@ final class CallController {
         var isVideoOn = false
         /// Their camera, once it has arrived.
         var video: VideoTrack?
+
+        /// Who they are, for their picture.
+        var actor: MessageActor {
+            MessageActor(type: actorType ?? "users", id: actorID ?? userID ?? "", displayName: name)
+        }
     }
 
     let token: String
@@ -65,6 +70,9 @@ final class CallController {
     @ObservationIgnored private var audioTrack: RTCAudioTrack?
     @ObservationIgnored private var videoTrack: RTCVideoTrack?
     @ObservationIgnored private var capturer: RTCCameraVideoCapturer?
+    @ObservationIgnored private var statsTask: Task<Void, Never>?
+    /// The state being said again, per session — "" for everyone. See ``repeatState(to:)``.
+    @ObservationIgnored private var stateRepeats: [String: Task<Void, Never>] = [:]
     /// Made afresh for each start of the call's media: its audio opens the Mac's default
     /// microphone and speaker then, and keeps them.
     @ObservationIgnored private var factory = CallController.makeFactory()
@@ -94,6 +102,9 @@ final class CallController {
 
     /// Joins — starting the call if nobody is in it — and starts sending the microphone.
     func join() async {
+        // Left meanwhile — say, while the audio was restarting: don't walk back in.
+        guard phase == .joining else { return }
+        Log.sync.notice("Call: joining")
         do throws(TalkError) {
             // With video: the camera's track goes out from the start, off.
             try await session.calls.join(token: token, flags: [.inCall, .withAudio, .withVideo])
@@ -116,7 +127,14 @@ final class CallController {
         phase = .ended(reason: nil)
         let calls = session.calls
         let token = self.token
-        Task { try? await calls.leave(token: token) }
+        Task {
+            do throws(TalkError) {
+                try await calls.leave(token: token)
+                Log.sync.notice("Call: left")
+            } catch {
+                Log.sync.warning("Call: leaving failed — \(error.userMessage)")
+            }
+        }
     }
 
     /// Uses another microphone: it becomes the Mac's default, and the call's audio starts again.
@@ -137,6 +155,7 @@ final class CallController {
     /// connections that open the new devices. The others hear a moment's gap.
     private func restartAudio() async {
         guard !isEnded else { return }
+        Log.sync.notice("Call: restarting audio for another device")
         tearDown()
         roster = CallRoster(ownSessionID: ownSessionID)
         factory = Self.makeFactory()
@@ -196,6 +215,17 @@ final class CallController {
         videoTrack.isEnabled = true
         isCameraOn = true
         broadcast(.videoOn)
+        let dims = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
+        Log.sync.notice("Call: camera started, \(device.localizedName) \(dims.width)x\(dims.height) @\(fps)")
+        statsTask?.cancel()
+        statsTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(5))
+                guard let self, self.isCameraOn, let publisher = self.publisher else { return }
+                let summary = await publisher.sentVideoSummary()
+                Log.sync.notice("Call: video out — \(summary)")
+            }
+        }
     }
 
     private func stopCamera() {
@@ -226,17 +256,42 @@ final class CallController {
     /// receiving this Mac, and to each session through the signaling server.
     private func broadcast(_ status: MediaStatus) {
         publisher?.send(status)
-        guard status.signalingData(to: "") != nil else { return }
-        for id in roster.inCall.keys {
-            Task { await self.session.signaling.send(.mediaStatus(toSession: id, status)) }
+        if status.signalingData(to: "") != nil {
+            for id in roster.inCall.keys {
+                Task { await self.session.signaling.send(.mediaStatus(toSession: id, status)) }
+            }
         }
+        repeatState(to: nil)
     }
 
     /// Someone new hears where things stand.
     private func tellCurrentState(to id: String) {
-        Task {
-            await self.session.signaling.send(.mediaStatus(toSession: id, self.isMuted ? .audioOff : .audioOn))
-            await self.session.signaling.send(.mediaStatus(toSession: id, self.isCameraOn ? .videoOn : .videoOff))
+        repeatState(to: id)
+    }
+
+    /// The state again, now and after 1, 2, 4, 8 and 16 seconds — as Talk's web app sends it.
+    /// A message can arrive before the other side is ready for it (its data channel not open
+    /// yet, its connection to this Mac not made), and one that is lost like that would leave
+    /// them showing a camera as off that is on. Nil: to everyone, after a change here.
+    private func repeatState(to id: String?) {
+        let key = id ?? ""
+        stateRepeats[key]?.cancel()
+        stateRepeats[key] = Task { [weak self] in
+            var delay: Duration = .zero
+            while !Task.isCancelled {
+                if delay > .zero { try? await Task.sleep(for: delay) }
+                guard let self, !Task.isCancelled, !self.isEnded else { return }
+                let state: [MediaStatus] = [self.isMuted ? .audioOff : .audioOn, self.isCameraOn ? .videoOn : .videoOff]
+                let targets = id.map { [$0] } ?? Array(self.roster.inCall.keys)
+                for status in state {
+                    if id == nil { self.publisher?.send(status) }
+                    for target in targets {
+                        await self.session.signaling.send(.mediaStatus(toSession: target, status))
+                    }
+                }
+                delay = delay == .zero ? .seconds(1) : delay * 2
+                if delay > .seconds(16) { return }
+            }
         }
     }
 
@@ -429,6 +484,10 @@ final class CallController {
     }
 
     private func tearDown() {
+        for task in stateRepeats.values { task.cancel() }
+        stateRepeats = [:]
+        statsTask?.cancel()
+        statsTask = nil
         capturer?.stopCapture()
         capturer = nil
         videoTrack = nil

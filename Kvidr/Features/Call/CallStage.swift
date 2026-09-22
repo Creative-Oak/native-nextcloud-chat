@@ -10,6 +10,8 @@ struct CallStage: View {
     let me: MessageActor
     var onLeave: () -> Void
     var onDismiss: () -> Void
+    /// Shrinks the call to a pill, back to the messages.
+    var onMinimize: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -30,24 +32,37 @@ struct CallStage: View {
 
     // MARK: - Pieces
 
-    /// The conversation's picture, blown up and blurred into the dark — where FaceTime shows
-    /// the other person's camera.
+    /// Behind everything: one other person's video, filling the window as in FaceTime; or,
+    /// with no video, their picture — or the conversation's — blown up into a soft wash of
+    /// its own colours, the way the iPhone's call screen fills with a poster.
     private var backdrop: some View {
         ZStack {
-            Color(white: 0.07)
+            Color(white: 0.06)
             if let video = soloVideo {
-                // One other person with their camera on: they fill the window, as in FaceTime.
                 VideoView(video: video)
                     .transition(.opacity)
             } else {
-                AvatarView(conversation: call.conversation, size: 520)
-                    .blur(radius: 90)
-                    .opacity(0.45)
-                    .accessibilityHidden(true)
+                Group {
+                    if let solo = soloParticipant {
+                        ActorAvatarView(actor: solo.actor, size: 900)
+                    } else {
+                        AvatarView(conversation: call.conversation, size: 900)
+                    }
+                }
+                .blur(radius: 140)
+                .saturation(1.6)
+                .opacity(0.9)
+                .accessibilityHidden(true)
+                LinearGradient(colors: [.black.opacity(0.05), .black.opacity(0.55)], startPoint: .top, endPoint: .bottom)
             }
         }
         .ignoresSafeArea()
         .animation(.smooth(duration: 0.3), value: soloVideo)
+    }
+
+    /// The only other person in the call, when there is exactly one.
+    private var soloParticipant: CallController.Participant? {
+        call.participants.count == 1 ? call.participants.first : nil
     }
 
     /// The video of the only other person, when there is one and their camera is on.
@@ -84,17 +99,22 @@ struct CallStage: View {
             Group {
                 if call.participants.isEmpty {
                     waiting
-                } else if let only = call.participants.first, soloVideo != nil {
-                    // Their video is the backdrop; just their name, bottom-left, over it.
-                    VStack {
-                        Spacer()
-                        HStack(spacing: 6) {
-                            if !only.isAudioOn { Image(systemName: "mic.slash.fill").font(.system(size: 11, weight: .semibold)) }
-                            Text(only.name).font(.system(size: 14, weight: .semibold))
-                            Spacer()
+                } else if soloVideo != nil {
+                    // Their video is the backdrop, and their name is already at the top.
+                    Color.clear
+                } else if let only = soloParticipant {
+                    // No video: their picture, large, as the iPhone shows whoever you're talking to.
+                    ZStack(alignment: .bottomTrailing) {
+                        ActorAvatarView(actor: only.actor, size: 200)
+                            .shadow(color: .black.opacity(0.25), radius: 24, y: 10)
+                            .opacity(only.isConnected ? 1 : 0.6)
+                        if !only.isAudioOn {
+                            Image(systemName: "mic.slash.fill")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(.white)
+                                .frame(width: 40, height: 40)
+                                .glassEffect(.regular, in: .circle)
                         }
-                        .foregroundStyle(.white)
-                        .shadow(color: .black.opacity(0.6), radius: 4)
                     }
                 } else {
                     tiles
@@ -107,6 +127,20 @@ struct CallStage: View {
             controls
                 .padding(.bottom, 22)
         }
+        .overlay(alignment: .topLeading) {
+            Button(action: onMinimize) {
+                Image(systemName: "arrow.down.right.and.arrow.up.left")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 36, height: 36)
+                    .glassEffect(.regular.interactive(), in: .circle)
+            }
+            .buttonStyle(.plain)
+            .help("Minimize the call, and keep talking while you use kvidr")
+            .accessibilityLabel("Minimize the call")
+            .padding(.leading, 20)
+            .padding(.top, 50)
+        }
         .overlay(alignment: .bottomTrailing) {
             SelfTile(me: me, isMuted: call.isMuted, video: call.isCameraOn ? call.localVideo : nil)
                 .padding(.trailing, 20)
@@ -114,31 +148,39 @@ struct CallStage: View {
         }
     }
 
+    /// The iPhone's order: how long, small, over who — large.
     private var header: some View {
-        VStack(spacing: 2) {
-            Text(call.conversation.displayName)
-                .font(.system(size: 17, weight: .semibold))
-                .lineLimit(1)
+        VStack(spacing: 4) {
             Group {
-                if let since = call.connectedAt {
+                if let since = call.connectedAt, !call.participants.isEmpty {
                     Text(since, style: .timer).monospacedDigit()
-                } else {
+                } else if call.phase == .joining {
                     Text("Connecting…")
+                } else {
+                    Text("Calling…")
                 }
             }
-            .font(.system(size: 12))
-            .foregroundStyle(.secondary)
+            .font(.system(size: 15, weight: .medium))
+            .foregroundStyle(.white.opacity(0.8))
+            HStack(spacing: 10) {
+                Text(soloParticipant?.name ?? call.conversation.displayName)
+                    .font(.system(size: 40, weight: .semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                // Muted, said where their name is — the tile that would say it isn't there.
+                if soloVideo != nil, soloParticipant?.isAudioOn == false {
+                    Image(systemName: "mic.slash.fill")
+                        .font(.system(size: 20, weight: .semibold))
+                }
+            }
+            .foregroundStyle(.white)
         }
-        .foregroundStyle(.white)
+        .shadow(color: .black.opacity(soloVideo == nil ? 0 : 0.5), radius: 6)
     }
 
     private var waiting: some View {
-        VStack(spacing: 14) {
-            AvatarView(conversation: call.conversation, size: 120)
-            Text(call.phase == .joining ? "Calling…" : "Waiting for others to join…")
-                .font(.system(size: 14))
-                .foregroundStyle(.white.opacity(0.7))
-        }
+        AvatarView(conversation: call.conversation, size: 200)
+            .shadow(color: .black.opacity(0.25), radius: 24, y: 10)
     }
 
     private var tiles: some View {
@@ -155,15 +197,27 @@ struct CallStage: View {
         .defaultScrollAnchor(.center)
     }
 
+    /// Round glass buttons with their names under them, as on the iPhone; white while what
+    /// they do is on.
     private var controls: some View {
-        HStack(spacing: 14) {
+        HStack(alignment: .top, spacing: 26) {
             CallControlButton(
                 symbol: call.isMuted ? "mic.slash.fill" : "mic.fill",
-                label: call.isMuted ? "Unmute" : "Mute",
-                isOn: !call.isMuted,
+                title: "Mute",
+                help: call.isMuted ? "Unmute (⇧⌘M)" : "Mute (⇧⌘M)",
+                isActive: call.isMuted,
                 action: call.toggleMute
             )
             .keyboardShortcut("m", modifiers: [.command, .shift])
+
+            CallControlButton(
+                symbol: call.isCameraOn ? "video.fill" : "video.slash.fill",
+                title: "Camera",
+                help: call.isCameraOn ? "Turn camera off (⇧⌘V)" : "Turn camera on (⇧⌘V)",
+                isActive: call.isCameraOn,
+                action: call.toggleCamera
+            )
+            .keyboardShortcut("v", modifiers: [.command, .shift])
 
             AudioDeviceMenu(
                 devices: call.audioDevices,
@@ -174,27 +228,20 @@ struct CallStage: View {
                 onCamera: call.useCamera
             )
 
-            CallControlButton(
-                symbol: call.isCameraOn ? "video.fill" : "video.slash.fill",
-                label: call.isCameraOn ? "Turn Camera Off" : "Turn Camera On",
-                isOn: call.isCameraOn,
-                action: call.toggleCamera
-            )
-            .keyboardShortcut("v", modifiers: [.command, .shift])
-
-            Button(action: onLeave) {
-                Image(systemName: "phone.down.fill")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 52, height: 52)
-                    .background(.red, in: .circle)
+            VStack(spacing: 7) {
+                Button(action: onLeave) {
+                    Image(systemName: "phone.down.fill")
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 62, height: 62)
+                        .background(.red, in: .circle)
+                }
+                .buttonStyle(.plain)
+                .help("Leave the call")
+                .accessibilityLabel("Leave the call")
+                CallButtonTitle("End")
             }
-            .buttonStyle(.plain)
-            .help("Leave the call")
-            .accessibilityLabel("Leave the call")
         }
-        .padding(8)
-        .glassEffect(.regular, in: .capsule)
     }
 
     private func ended(reason: String?) -> some View {
@@ -290,57 +337,98 @@ private struct SelfTile: View {
     }
 }
 
-/// A round control on the call's glass bar: filled when on, dim when off.
+/// A round glass control with its name under it: white while it is on.
 private struct CallControlButton: View {
     let symbol: String
-    let label: String
-    let isOn: Bool
+    let title: String
+    let help: String
+    let isActive: Bool
     let action: () -> Void
 
     var body: some View {
-        Button(action: action) {
-            Image(systemName: symbol)
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(isOn ? .black : .white)
-                .frame(width: 52, height: 52)
-                .background(isOn ? Color.white : Color.white.opacity(0.18), in: .circle)
+        VStack(spacing: 7) {
+            Button(action: action) {
+                Image(systemName: symbol)
+                    .font(.system(size: 21, weight: .semibold))
+                    .foregroundStyle(isActive ? .black : .white)
+                    .frame(width: 62, height: 62)
+                    .background {
+                        if isActive { Circle().fill(.white) }
+                    }
+                    .glassEffect(isActive ? .identity : .regular.interactive(), in: .circle)
+                    .contentShape(.circle)
+            }
+            .buttonStyle(.plain)
+            .help(help)
+            .accessibilityLabel(title)
+            .accessibilityAddTraits(isActive ? .isSelected : [])
+            CallButtonTitle(title)
         }
-        .buttonStyle(.plain)
-        .help(label)
-        .accessibilityLabel(label)
     }
 }
 
-/// While the call goes on and another conversation is open: the way back to it.
+/// The name under a call button.
+private struct CallButtonTitle: View {
+    let text: String
+
+    init(_ text: String) { self.text = text }
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 12, weight: .medium))
+            .foregroundStyle(.white.opacity(0.9))
+            .shadow(color: .black.opacity(0.4), radius: 3)
+    }
+}
+
+/// While the call is minimized, or another conversation is open: who, how long, mute, and
+/// the way back to the full call.
 struct ReturnToCallPill: View {
     let call: CallController
     var onReturn: () -> Void
 
     var body: some View {
-        Button(action: onReturn) {
-            HStack(spacing: 8) {
-                Image(systemName: "phone.fill")
-                    .font(.system(size: 11, weight: .semibold))
-                Text(call.conversation.displayName)
-                    .fontWeight(.semibold)
-                    .lineLimit(1)
-                if let since = call.connectedAt {
-                    Text(since, style: .timer).monospacedDigit()
+        HStack(spacing: 10) {
+            Button(action: onReturn) {
+                HStack(spacing: 8) {
+                    Image(systemName: "phone.fill")
+                        .font(.system(size: 11, weight: .semibold))
+                    Text(call.participants.count == 1 ? call.participants[0].name : call.conversation.displayName)
+                        .fontWeight(.semibold)
+                        .lineLimit(1)
+                    if let since = call.connectedAt {
+                        Text(since, style: .timer).monospacedDigit()
+                    }
+                    Image(systemName: "arrow.up.left.and.arrow.down.right")
+                        .font(.system(size: 10, weight: .bold))
                 }
+                .contentShape(.rect)
             }
-            .font(.system(size: 12))
-            .foregroundStyle(.white)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 7)
-            .background(.green, in: .capsule)
+            .buttonStyle(.plain)
+            .help("Back to the call")
+
+            Button(action: call.toggleMute) {
+                Image(systemName: call.isMuted ? "mic.slash.fill" : "mic.fill")
+                    .font(.system(size: 11, weight: .semibold))
+                    .frame(width: 22, height: 22)
+                    .background(.white.opacity(call.isMuted ? 0.95 : 0.2), in: .circle)
+                    .foregroundStyle(call.isMuted ? Color.green : .white)
+            }
+            .buttonStyle(.plain)
+            .help(call.isMuted ? "Unmute" : "Mute")
+            .accessibilityLabel(call.isMuted ? "Unmute" : "Mute")
         }
-        .buttonStyle(.plain)
-        .help("Back to the call")
+        .font(.system(size: 12))
+        .foregroundStyle(.white)
+        .padding(.leading, 14)
+        .padding(.trailing, 6)
+        .padding(.vertical, 5)
+        .background(.green, in: .capsule)
     }
 }
 
-/// Which microphone and speaker the call uses — AirPods, a headset, the Mac's own. A glass
-/// button on the call's bar like the others, with the devices in its menu.
+/// The call's "more" button: which camera, microphone and speaker it uses — AirPods, a
+/// headset, the Mac's own — and, later, what else a call can do.
 private struct AudioDeviceMenu: View {
     let devices: AudioDevices
     let cameras: [(id: String, name: String)]
@@ -350,6 +438,13 @@ private struct AudioDeviceMenu: View {
     var onCamera: (String) -> Void
 
     var body: some View {
+        VStack(spacing: 7) {
+            menu
+            CallButtonTitle("More")
+        }
+    }
+
+    private var menu: some View {
         Menu {
             if cameras.count > 1 {
                 Section("Camera") {
@@ -381,23 +476,17 @@ private struct AudioDeviceMenu: View {
                 }
             }
         } label: {
-            Image(systemName: symbol)
-                .font(.system(size: 17, weight: .semibold))
+            Image(systemName: "ellipsis")
+                .font(.system(size: 21, weight: .semibold))
                 .foregroundStyle(.white)
-                .frame(width: 52, height: 52)
-                .background(Color.white.opacity(0.18), in: .circle)
+                .frame(width: 62, height: 62)
+                .glassEffect(.regular.interactive(), in: .circle)
         }
         .menuStyle(.button)
         .buttonStyle(.plain)
         .menuIndicator(.hidden)
         .fixedSize()
-        .help("Camera, microphone and speaker")
-        .accessibilityLabel("Camera, microphone and speaker")
-    }
-
-    /// AirPods when they are what's in use, a speaker otherwise.
-    private var symbol: String {
-        let name = devices.outputs.first { $0.id == devices.defaultOutput }?.name.lowercased() ?? ""
-        return name.contains("airpods") ? "airpods" : "speaker.wave.2.fill"
+        .help("More — camera, microphone and speaker")
+        .accessibilityLabel("More")
     }
 }

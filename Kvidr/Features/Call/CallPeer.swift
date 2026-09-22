@@ -125,6 +125,31 @@ final class CallPeer: NSObject {
         for status in pending { send(status) }
     }
 
+    /// What WebRTC says about the video this connection sends: a line for the log.
+    func sentVideoSummary() async -> String {
+        await withCheckedContinuation { continuation in
+            connection.statistics { report in
+                var parts: [String] = []
+                var codecs: [String: String] = [:]
+                for stat in report.statistics.values where stat.type == "codec" {
+                    codecs[stat.id] = stat.values["mimeType"].map { "\($0)" }
+                }
+                for stat in report.statistics.values {
+                    let values = stat.values
+                    func value(_ key: String) -> String { values[key].map { "\($0)" } ?? "-" }
+                    if stat.type == "media-source", value("kind") == "video" {
+                        parts.append("camera frames=\(value("frames")) \(value("width"))x\(value("height"))")
+                    }
+                    if stat.type == "outbound-rtp", value("kind") == "video" {
+                        let codec = codecs[value("codecId")] ?? "?"
+                        parts.append("sent codec=\(codec) encoded=\(value("framesEncoded")) bytes=\(value("bytesSent")) \(value("frameWidth"))x\(value("frameHeight")) limit=\(value("qualityLimitationReason")) encoder=\(value("encoderImplementation"))")
+                    }
+                }
+                continuation.resume(returning: parts.isEmpty ? "no video stats" : parts.joined(separator: " | "))
+            }
+        }
+    }
+
     func close() {
         statusChannel?.delegate = nil
         statusChannel?.close()

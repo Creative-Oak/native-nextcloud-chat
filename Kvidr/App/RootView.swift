@@ -101,6 +101,7 @@ struct RootView: View {
         context.editLatest = { app.chat?.beginEditingLatestOwnMessage() }
         context.markUnread = { app.markSelectedUnread() }
         context.canSummarize = UnreadSummary.availability != .unsupported
+        context.isCallFullScreen = app.isCallFullScreen
         context.summarize = { app.chat?.summarize() }
         context.toggleFavorite = { app.toggleFavoriteOnSelection() }
         context.toggleArchive = { app.toggleArchiveOnSelection() }
@@ -280,14 +281,15 @@ struct RootView: View {
                     } else if let chat = app.chat {
                         // In a call, the call takes the pane and the conversation moves over to a
                         // column beside it — FaceTime's layout, grown out of the chat.
-                        let callHere = app.call.flatMap { $0.token == chat.token ? $0 : nil }
+                        let callHere = app.isCallFullScreen ? app.call : nil
                         HStack(spacing: 0) {
                             if let callHere {
                                 CallStage(
                                     call: callHere,
                                     me: MessageActor(kind: .users, id: app.session?.account.userID ?? "", displayName: app.session?.account.displayName ?? ""),
                                     onLeave: { withAnimation(.smooth(duration: 0.45)) { app.leaveCall() } },
-                                    onDismiss: { withAnimation(.smooth(duration: 0.45)) { app.dismissEndedCall() } }
+                                    onDismiss: { withAnimation(.smooth(duration: 0.45)) { app.dismissEndedCall() } },
+                                    onMinimize: { withAnimation(.smooth(duration: 0.45)) { app.isCallMinimized = true } }
                                 )
                                 .ignoresSafeArea(.container, edges: .top)
                                 .transition(.move(edge: .leading).combined(with: .opacity))
@@ -313,9 +315,9 @@ struct RootView: View {
                                 }
                             },
                             onJoinCall: app.activeCall == nil ? { startCall() } : nil,
-                            callElsewhere: app.activeCall.flatMap { $0.token == chat.token ? nil : $0 },
-                            onReturnToCall: { app.selectedToken = app.activeCall?.token },
-                            isInCall: callHere != nil
+                            callElsewhere: app.isCallFullScreen ? nil : app.activeCall,
+                            onReturnToCall: { withAnimation(.smooth(duration: 0.45)) { app.expandCall() } },
+                            isInCall: app.activeCall?.token == chat.token
                         )
                             // A fresh view per conversation: no state bleeds between them.
                             .id(chat.token)
@@ -379,12 +381,15 @@ struct RootView: View {
             reconcileColumns()
         }
         .onChange(of: isShowingInspector) { _, _ in reconcileColumns() }
+        .onChange(of: isSidebarYieldingToCall) { _, _ in
+            withAnimation(.smooth(duration: 0.45)) { reconcileColumns() }
+        }
         .onChange(of: columnVisibility) { _, visibility in
             // The sidebar hides only for the inspector. Its split view item cannot be
             // collapsed by hand — see `SidebarDividerTracker` — but should AppKit ever
             // report it gone for another reason, it is put back rather than left with
             // no way to bring it up: there is no toggle, and ⌃⌘S changes the width.
-            if visibility == .detailOnly && !isSidebarYieldingToInspector {
+            if visibility == .detailOnly && !isSidebarYielding {
                 withoutColumnAnimation { columnVisibility = .all }
             } else {
                 reconcileColumns()
@@ -495,8 +500,18 @@ struct RootView: View {
         isShowingInspector && isTooNarrowForThreeColumns
     }
 
+    /// The call's conversation is on screen: the call takes the window, as FaceTime does, and
+    /// the sidebar steps aside until the call is over or another conversation is opened.
+    private var isSidebarYieldingToCall: Bool {
+        app.isCallFullScreen
+    }
+
+    private var isSidebarYielding: Bool {
+        isSidebarYieldingToInspector || isSidebarYieldingToCall
+    }
+
     private func reconcileColumns() {
-        if isSidebarYieldingToInspector {
+        if isSidebarYielding {
             didSidebarYieldToInspector = true
             guard columnVisibility != .detailOnly else { return }
             withoutColumnAnimation { columnVisibility = .detailOnly }
@@ -539,7 +554,9 @@ struct RootView: View {
         // in it collapses to a shorter row — which drags the traffic lights up with it, so
         // they jumped every time a draft opened, and left the band centring itself in a strip
         // that had just changed height underneath it.
-        if app.isShowingDraft {
+        // A call filling the window hides them too: new messages and searching wait until
+        // it is minimized.
+        if app.isShowingDraft || app.isCallFullScreen {
             ToolbarItem(placement: .navigation) {
                 Color.clear.frame(width: 1, height: GlassMetrics.control)
             }
@@ -559,7 +576,7 @@ struct RootView: View {
         // share a capsule; a different placement is enough to part them. (An item that
         // opts out of the sharing is drawn bare, and an invisible item between them
         // is given the toolbar's minimum width, so neither of those would do.)
-        if !app.isShowingDraft {
+        if !app.isShowingDraft, !app.isCallFullScreen {
             ToolbarItem(placement: .automatic) {
                 Button(action: openPalette) {
                     Label("Go to Anything", systemImage: "magnifyingglass")
@@ -570,7 +587,7 @@ struct RootView: View {
 
         // Beside search, in the same capsule: what Apple Intelligence can do with the open
         // conversation, done on this Mac.
-        if !app.isShowingDraft, let chat = app.chat, UnreadSummary.availability != .unsupported {
+        if !app.isShowingDraft, !app.isCallFullScreen, let chat = app.chat, UnreadSummary.availability != .unsupported {
             ToolbarItem(placement: .automatic) {
                 Menu {
                     Button("Summarize Conversation", systemImage: "text.append") { chat.summarize() }

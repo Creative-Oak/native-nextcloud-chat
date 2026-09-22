@@ -82,6 +82,15 @@ final class AppModel {
     /// The call this Mac is in, or was in until it ended with something to say.
     private(set) var call: CallController?
 
+    /// The call is shrunk to a pill so the rest of the app can be used.
+    var isCallMinimized = false
+
+    /// The call has the window: its conversation is open and it isn't minimized.
+    var isCallFullScreen: Bool {
+        guard let call, let chat else { return false }
+        return call.token == chat.token && !isCallMinimized
+    }
+
     /// A call that is under way here — not one that has ended.
     var activeCall: CallController? {
         guard let call, !call.isEnded else { return nil }
@@ -701,6 +710,9 @@ final class AppModel {
     /// another device that has it open, as those apps do; that device is moved out.
     private func joinLive(_ token: String) async {
         guard let session, selectedToken == token else { return }
+        // Already in it for a call: joining again makes a new session, and the call — which
+        // belongs to the old one — would be dropped by the server.
+        if activeCall?.token == token, liveRoom == token { return }
         do throws(TalkError) {
             guard let sessionID = try await session.conversations.joinSession(token: token, force: true),
                   selectedToken == token
@@ -713,6 +725,10 @@ final class AppModel {
 
     private func leaveLive(_ token: String) async {
         guard let session else { return }
+        // During a call the signaling server's room is the call's, whichever conversation is
+        // on screen: leaving "the room" would leave the call. Other conversations weren't
+        // joined live meanwhile, so there is nothing of theirs to leave.
+        if let call = activeCall, call.token != token { return }
         typing?.stopTyping()
         liveRoom = nil
         await session.signaling.leaveRoom()
@@ -736,6 +752,7 @@ final class AppModel {
             nameForSession: { [weak self] in self?.typing?.displayName(forSession: $0) }
         )
         call = controller
+        isCallMinimized = false
         guard ownSessionID != nil else {
             controller.fail("Calls go over the live connection to your server, and it isn’t up right now.")
             return
@@ -746,11 +763,22 @@ final class AppModel {
     func leaveCall() {
         call?.leave()
         call = nil
+        isCallMinimized = false
+    }
+
+    /// Back to the call, full size, from wherever the pill was clicked.
+    func expandCall() {
+        guard let token = activeCall?.token else { return }
+        isCallMinimized = false
+        selectedToken = token
     }
 
     /// Put away a call that ended with something to say, once it has been read.
     func dismissEndedCall() {
-        if call?.isEnded == true { call = nil }
+        if call?.isEnded == true {
+            call = nil
+            isCallMinimized = false
+        }
     }
 
     /// The Mac woke from sleep: the socket may have died without saying so.
