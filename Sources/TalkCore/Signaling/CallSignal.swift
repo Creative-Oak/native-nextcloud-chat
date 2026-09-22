@@ -14,6 +14,11 @@ struct CallSignal: Sendable, Equatable {
         /// Which of a publisher's simulcast layers the media server should pass on: 0 lowest,
         /// 2 best — spatially and in frame rate.
         case selectStream(substream: Int, temporal: Int)
+        /// Have the media server offer this client's screen to a session. The receiving side
+        /// can't know a screen is being shared, so the one sharing sets it off.
+        case sendOffer
+        /// The screen isn't being shared any more. To the whole room.
+        case unshareScreen
     }
 
     var kind: Kind
@@ -48,6 +53,10 @@ struct CallSignal: Sendable, Equatable {
         case .selectStream(let substream, let temporal):
             data["type"] = "selectStream"
             data["payload"] = ["substream": substream, "temporal": temporal]
+        case .sendOffer:
+            data["type"] = "sendoffer"
+        case .unshareScreen:
+            data["type"] = "unshareScreen"
         }
         return data
     }
@@ -73,6 +82,8 @@ struct CallSignal: Sendable, Equatable {
             kind = .candidate(IceCandidate(candidate: text, sdpMid: inner["sdpMid"] as? String, sdpMLineIndex: index))
         case "requestoffer":
             kind = .requestOffer
+        case "unshareScreen":
+            kind = .unshareScreen
         default:
             return nil
         }

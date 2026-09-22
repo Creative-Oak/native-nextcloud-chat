@@ -109,4 +109,24 @@ struct CallSignalingTests {
         #expect(decode(#"{"type":"message","message":{"sender":{"type":"session","sessionid":"s1"},"data":{"type":"unmute","roomType":"video","payload":{"name":"video"}}}}"#)
             == .mediaStatus(fromSession: "s1", .videoOn))
     }
+
+    @Test("Screen sharing: an offer set off for a session, and the end told to the whole room")
+    func screenSharing() throws {
+        let offer = CallSignal(kind: .sendOffer, roomType: "screen").data(to: "them")
+        #expect(offer["type"] as? String == "sendoffer")
+        #expect(offer["roomType"] as? String == "screen")
+
+        let data = SignalingOutbound.roomCallSignal(CallSignal(kind: .unshareScreen, roomType: "screen")).encoded()
+        let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let message = try #require(object["message"] as? [String: Any])
+        #expect((message["recipient"] as? [String: String]) == ["type": "room"])
+        let body = try #require(message["data"] as? [String: Any])
+        #expect(body["type"] as? String == "unshareScreen")
+        #expect(body["to"] == nil)
+
+        #expect(decode(#"{"type":"message","message":{"sender":{"type":"session","sessionid":"s1"},"data":{"roomType":"screen","type":"unshareScreen"}}}"#)
+            == .callSignal(fromSession: "s1", CallSignal(kind: .unshareScreen, roomType: "screen")))
+        #expect(decode(#"{"type":"message","message":{"sender":{"type":"session","sessionid":"s1"},"data":{"type":"offer","roomType":"screen","sid":"z","payload":{"type":"offer","sdp":"v=0"}}}}"#)
+            == .callSignal(fromSession: "s1", CallSignal(kind: .offer(sdp: "v=0"), sid: "z", roomType: "screen")))
+    }
 }

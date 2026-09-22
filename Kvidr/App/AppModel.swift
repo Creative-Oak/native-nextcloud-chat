@@ -81,6 +81,8 @@ final class AppModel {
     private var typing: LiveTyping?
     /// The call this Mac is in, or was in until it ended with something to say.
     private(set) var call: CallController?
+    /// The small call that floats while the screen is shared. See ``SharingMiniCall``.
+    private let miniCall = SharingMiniCall()
     /// Someone calling. See ``IncomingCalls``.
     private(set) var incoming: IncomingCalls?
 
@@ -103,7 +105,10 @@ final class AppModel {
     var isApplicationActive = true {
         didSet {
             activationChanged()
-            if oldValue != isApplicationActive { incoming?.applicationActiveChanged(isApplicationActive) }
+            if oldValue != isApplicationActive {
+                incoming?.applicationActiveChanged(isApplicationActive)
+                sharingActivationChanged()
+            }
         }
     }
     var isWindowKey = true { didSet { activationChanged() } }
@@ -772,11 +777,48 @@ final class AppModel {
         call = controller
         isCallMinimized = false
         incoming?.joined(chat.token)
+        controller.onScreenSharingChanged = { [weak self, weak controller] sharing in
+            guard let self, let controller else { return }
+            if sharing {
+                self.miniCall.start(
+                    call: controller,
+                    me: MessageActor(kind: .users, id: session.account.userID, displayName: session.account.displayName),
+                    avatarLoader: self.avatarLoader,
+                    onReturn: { [weak self] in self?.miniCall.close() },
+                    onLeave: { [weak self] in
+                        self?.miniCall.close()
+                        self?.leaveCall()
+                    }
+                )
+            } else {
+                self.miniCall.close()
+            }
+        }
         guard ownSessionID != nil else {
             controller.fail("Calls go over the live connection to your server, and it isn’t up right now.")
             return
         }
         await controller.join()
+    }
+
+    /// While sharing the screen: kvidr in front shows the call in its window, so the mini call
+    /// goes; kvidr behind brings it back.
+    private func sharingActivationChanged() {
+        guard let session, let call = activeCall, call.isSharingScreen else { return }
+        if isApplicationActive {
+            miniCall.hide()
+        } else {
+            miniCall.show(
+                call: call,
+                me: MessageActor(kind: .users, id: session.account.userID, displayName: session.account.displayName),
+                avatarLoader: avatarLoader,
+                onReturn: { [weak self] in self?.miniCall.close() },
+                onLeave: { [weak self] in
+                    self?.miniCall.close()
+                    self?.leaveCall()
+                }
+            )
+        }
     }
 
     /// Takes a call that is ringing: opens its conversation, waits until it has been joined

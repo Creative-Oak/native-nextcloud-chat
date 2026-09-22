@@ -9,23 +9,29 @@ struct VideoView: View {
     let video: VideoTrack
     /// Your own camera, as a mirror shows you.
     var isMirrored = false
+    /// All of it, with bars where it doesn't match — for a shared screen, where cutting off
+    /// the edges would cut off what's being shown.
+    var fits = false
 
     var body: some View {
-        TrackView(video: video)
+        TrackView(video: video, fits: fits)
             .scaleEffect(x: isMirrored ? -1 : 1, y: 1)
     }
 }
 
 private struct TrackView: NSViewRepresentable {
     let video: VideoTrack
+    let fits: Bool
 
     func makeNSView(context: Context) -> FillingVideoView {
         let view = FillingVideoView()
+        view.fits = fits
         view.attach(video.track)
         return view
     }
 
     func updateNSView(_ view: FillingVideoView, context: Context) {
+        view.fits = fits
         view.attach(video.track)
     }
 
@@ -37,6 +43,9 @@ private struct TrackView: NSViewRepresentable {
         private let renderer = RTCMTLNSVideoView(frame: .zero)
         private var track: RTCVideoTrack?
         private var videoSize = CGSize(width: 16, height: 9)
+        var fits = false {
+            didSet { if fits != oldValue { needsLayout = true } }
+        }
 
         override init(frame: NSRect) {
             super.init(frame: frame)
@@ -59,7 +68,9 @@ private struct TrackView: NSViewRepresentable {
         override func layout() {
             super.layout()
             // Fill: the larger of the two scales, centred, the rest clipped.
-            let scale = max(bounds.width / max(videoSize.width, 1), bounds.height / max(videoSize.height, 1))
+            let widthScale = bounds.width / max(videoSize.width, 1)
+            let heightScale = bounds.height / max(videoSize.height, 1)
+            let scale = fits ? min(widthScale, heightScale) : max(widthScale, heightScale)
             let size = CGSize(width: videoSize.width * scale, height: videoSize.height * scale)
             renderer.frame = CGRect(x: (bounds.width - size.width) / 2, y: (bounds.height - size.height) / 2, width: size.width, height: size.height)
         }

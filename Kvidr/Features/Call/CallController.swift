@@ -31,6 +31,8 @@ final class CallController {
         var isVideoOn = false
         /// Their camera, once it has arrived.
         var video: VideoTrack?
+        /// Their screen, while they share it.
+        var screen: VideoTrack?
 
         /// Who they are, for their picture.
         var actor: MessageActor {
@@ -56,6 +58,22 @@ final class CallController {
     private(set) var cameraID: String?
     /// Why the camera didn't come on, until the next try.
     private(set) var cameraProblem: String?
+    /// This Mac's screen is going out to the call.
+    private(set) var isSharingScreen = false {
+        didSet { if isSharingScreen != oldValue { onScreenSharingChanged(isSharingScreen) } }
+    }
+    /// What this Mac is sharing, to show it back while kvidr is in front.
+    private(set) var localScreen: VideoTrack?
+    /// Set by the app: sharing started or stopped — the window steps aside for the mini call.
+    @ObservationIgnored var onScreenSharingChanged: (Bool) -> Void = { _ in }
+
+    /// Someone else's shared screen, when there is one — the first, if more than one share.
+    var sharedScreen: (participant: Participant, screen: VideoTrack)? {
+        for participant in participants {
+            if let screen = participant.screen { return (participant, screen) }
+        }
+        return nil
+    }
     /// When this Mac's own connection came up.
     private(set) var connectedAt: Date?
     /// When the first other person's media reached this Mac — the call "answered", which is
@@ -69,7 +87,11 @@ final class CallController {
     @ObservationIgnored private let nameForSession: (String) -> String?
     @ObservationIgnored private var roster: CallRoster
     @ObservationIgnored private var publisher: CallPeer?
+    /// Keyed by session, and by "session#screen" for someone's shared screen.
     @ObservationIgnored private var subscribers: [String: CallPeer] = [:]
+    @ObservationIgnored private var screenPublisher: CallPeer?
+    @ObservationIgnored private var screenShare: ScreenShare?
+    @ObservationIgnored private var screenTrack: RTCVideoTrack?
     @ObservationIgnored private var audioTrack: RTCAudioTrack?
     @ObservationIgnored private var videoTrack: RTCVideoTrack?
     @ObservationIgnored private var capturer: RTCCameraVideoCapturer?
@@ -342,18 +364,101 @@ final class CallController {
     }
 
     func handle(_ signal: CallSignal, from sender: String) {
+        let isScreen = signal.roomType == "screen"
         switch signal.kind {
         case .answer(let sdp) where sender == ownSessionID:
-            guard let publisher else { return }
-            Task { try? await publisher.setRemote(.answer, sdp: sdp) }
+            guard let peer = isScreen ? screenPublisher : publisher else { return }
+            Task { try? await peer.setRemote(.answer, sdp: sdp) }
         case .offer(let sdp) where sender != ownSessionID:
-            Task { await subscribe(to: sender, offer: sdp, sid: signal.sid ?? UUID().uuidString) }
+            Task { await subscribe(to: sender, offer: sdp, sid: signal.sid ?? UUID().uuidString, roomType: signal.roomType) }
         case .candidate(let candidate):
-            let peer = sender == ownSessionID ? publisher : subscribers[sender]
+            let peer = sender == ownSessionID
+                ? (isScreen ? screenPublisher : publisher)
+                : subscribers[Self.key(sender, signal.roomType)]
             peer?.add(candidate)
+        case .unshareScreen:
+            subscribers.removeValue(forKey: Self.key(sender, "screen"))?.close()
+            if let index = participants.firstIndex(where: { $0.id == sender }) { participants[index].screen = nil }
         default:
             break
         }
+    }
+
+    private static func key(_ session: String, _ roomType: String) -> String {
+        roomType == "screen" ? session + "#screen" : session
+    }
+
+    // MARK: - Sharing the screen
+
+    /// Opens the system's picker; sharing starts once a window or display is chosen.
+    func shareScreen() {
+        guard !isEnded, screenShare == nil else { return }
+        let source = factory.videoSource(forScreenCast: true)
+        let track = factory.videoTrack(with: source, trackId: "screen")
+        let share = ScreenShare(source: source)
+        share.onStart = { [weak self] in
+            guard let self else { return }
+            self.localScreen = VideoTrack(track)
+            self.isSharingScreen = true
+            Task { await self.publishScreen(track) }
+        }
+        share.onStop = { [weak self] in self?.stopSharingScreen() }
+        screenShare = share
+        screenTrack = track
+        share.pick()
+    }
+
+    func stopSharingScreen() {
+        let wasPublishing = screenPublisher != nil
+        screenShare?.stop()
+        screenShare = nil
+        screenPublisher?.close()
+        screenPublisher = nil
+        screenTrack = nil
+        localScreen = nil
+        isSharingScreen = false
+        if wasPublishing, !isEnded {
+            Task { await self.session.signaling.send(.roomCallSignal(CallSignal(kind: .unshareScreen, roomType: "screen"))) }
+        }
+    }
+
+    private func publishScreen(_ track: RTCVideoTrack) async {
+        let sid = String(Int(Date().timeIntervalSince1970 * 1000))
+        guard let peer = CallPeer(factory: factory, iceServers: iceServers, remoteSession: ownSessionID, sid: sid, roomType: "screen") else {
+            stopSharingScreen()
+            return
+        }
+        let options = RTCRtpTransceiverInit()
+        options.direction = .sendOnly
+        options.streamIds = [ownSessionID + "-screen"]
+        peer.connection.addTransceiver(with: track, init: options)
+        screenPublisher = peer
+        wire(peer)
+        var offered = false
+        peer.onConnectionChange = { [weak self] connected, failed in
+            guard let self else { return }
+            Log.sync.notice("Call: screen connected=\(connected) failed=\(failed)")
+            // Up at the media server: have it offer the screen to everyone in the call.
+            if connected, !offered {
+                offered = true
+                for id in self.roster.inCall.keys { self.offerScreen(to: id) }
+            }
+            if failed { self.stopSharingScreen() }
+        }
+        do {
+            let offer = try await peer.makeOffer()
+            try await peer.setLocal(.offer, sdp: offer)
+            await send(CallSignal(kind: .offer(sdp: offer), sid: sid, roomType: "screen"), to: ownSessionID)
+        } catch {
+            Log.sync.warning("Call: the screen couldn’t be offered — \(error.localizedDescription)")
+            stopSharingScreen()
+        }
+    }
+
+    /// The others can't know a screen is being shared, so the media server is asked to offer
+    /// it to each of them.
+    private func offerScreen(to id: String) {
+        Task { await self.send(CallSignal(kind: .sendOffer, roomType: "screen"), to: id) }
     }
 
     /// The signaling connection went away: without it, the call can't go on.
@@ -421,13 +526,30 @@ final class CallController {
         }
     }
 
-    private func subscribe(to sessionID: String, offer: String, sid: String) async {
-        subscribers[sessionID]?.close()
+    private func subscribe(to sessionID: String, offer: String, sid: String, roomType: String = "video") async {
+        let key = Self.key(sessionID, roomType)
+        subscribers[key]?.close()
         guard !isEnded,
-              let peer = CallPeer(factory: factory, iceServers: iceServers, remoteSession: sessionID, sid: sid)
+              let peer = CallPeer(factory: factory, iceServers: iceServers, remoteSession: sessionID, sid: sid, roomType: roomType)
         else { return }
-        subscribers[sessionID] = peer
+        subscribers[key] = peer
         wire(peer)
+        if roomType == "screen" {
+            // Someone's screen: its own connection beside their camera's.
+            peer.onRemoteVideo = { [weak self] track in
+                guard let self, let index = self.participants.firstIndex(where: { $0.id == sessionID }) else { return }
+                self.participants[index].screen = VideoTrack(track)
+            }
+            do {
+                try await peer.setRemote(.offer, sdp: offer)
+                let answer = try await peer.makeAnswer()
+                try await peer.setLocal(.answer, sdp: answer)
+                await send(CallSignal(kind: .answer(sdp: answer), sid: sid, roomType: roomType), to: sessionID)
+            } catch {
+                Log.sync.warning("Couldn’t receive a shared screen: \(error.localizedDescription)")
+            }
+            return
+        }
         peer.onRemoteVideo = { [weak self] track in
             guard let self, let index = self.participants.firstIndex(where: { $0.id == sessionID }) else { return }
             self.participants[index].video = VideoTrack(track)
@@ -456,13 +578,14 @@ final class CallController {
     private func wire(_ peer: CallPeer) {
         peer.onCandidate = { [weak self, weak peer] candidate in
             guard let self, let peer else { return }
-            Task { await self.send(CallSignal(kind: .candidate(candidate), sid: peer.sid), to: peer.remoteSession) }
+            Task { await self.send(CallSignal(kind: .candidate(candidate), sid: peer.sid, roomType: peer.roomType), to: peer.remoteSession) }
         }
     }
 
     private func apply(_ change: CallRoster.Change) {
         for id in change.toDrop {
             subscribers.removeValue(forKey: id)?.close()
+            subscribers.removeValue(forKey: Self.key(id, "screen"))?.close()
         }
         participants.removeAll { change.toDrop.contains($0.id) }
         for user in change.toSubscribe {
@@ -478,6 +601,8 @@ final class CallController {
                 ))
             }
             tellCurrentState(to: user.sessionID)
+            // Joined while this Mac shares its screen: they need the offer too.
+            if isSharingScreen, screenPublisher != nil { offerScreen(to: user.sessionID) }
             let session = user.sessionID
             Log.sync.notice("Call: requesting offer from \(session.prefix(6))")
             Task { await self.send(CallSignal(kind: .requestOffer), to: session) }
@@ -505,6 +630,13 @@ final class CallController {
     }
 
     private func tearDown() {
+        screenShare?.stop()
+        screenShare = nil
+        screenPublisher?.close()
+        screenPublisher = nil
+        screenTrack = nil
+        localScreen = nil
+        isSharingScreen = false
         for task in stateRepeats.values { task.cancel() }
         stateRepeats = [:]
         statsTask?.cancel()

@@ -11,6 +11,8 @@ final class CallPeer: NSObject {
     let remoteSession: String
     /// The negotiation's id, chosen by whoever made the offer.
     var sid: String
+    /// `video` for the camera and microphone, `screen` for a shared screen.
+    let roomType: String
     let connection: RTCPeerConnection
 
     var onCandidate: (IceCandidate) -> Void = { _ in }
@@ -30,7 +32,7 @@ final class CallPeer: NSObject {
     /// Candidates that came before the description they belong to.
     private var pendingCandidates: [RTCIceCandidate] = []
 
-    init?(factory: RTCPeerConnectionFactory, iceServers: [IceServerConfig], remoteSession: String, sid: String) {
+    init?(factory: RTCPeerConnectionFactory, iceServers: [IceServerConfig], remoteSession: String, sid: String, roomType: String = "video") {
         let configuration = RTCConfiguration()
         configuration.iceServers = iceServers.map {
             RTCIceServer(urlStrings: $0.urls, username: $0.username, credential: $0.credential)
@@ -43,6 +45,7 @@ final class CallPeer: NSObject {
         self.connection = connection
         self.remoteSession = remoteSession
         self.sid = sid
+        self.roomType = roomType
         super.init()
         connection.delegate = self
     }

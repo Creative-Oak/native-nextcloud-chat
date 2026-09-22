@@ -18,6 +18,8 @@ enum SignalingOutbound: Sendable, Equatable {
     case message(toSession: String, data: [String: String])
     /// WebRTC negotiation for a call, to a session — this client's own, for what it sends.
     case callSignal(toSession: String, CallSignal, nick: String?)
+    /// A call signal to everyone in the room — a screen no longer shared.
+    case roomCallSignal(CallSignal)
     /// This client's microphone or camera went on or off, told to one session.
     case mediaStatus(toSession: String, MediaStatus)
 
@@ -41,6 +43,10 @@ enum SignalingOutbound: Sendable, Equatable {
             object = ["id": id, "type": "room", "room": ["roomid": roomID, "sessionid": sessionID]]
         case let .callSignal(session, signal, nick):
             object = ["type": "message", "message": ["recipient": ["type": "session", "sessionid": session], "data": signal.data(to: session, nick: nick)] as [String: Any]]
+        case let .roomCallSignal(signal):
+            var data = signal.data(to: "")
+            data["to"] = nil
+            object = ["type": "message", "message": ["recipient": ["type": "room"], "data": data] as [String: Any]]
         case let .mediaStatus(session, status):
             object = ["type": "message", "message": ["recipient": ["type": "session", "sessionid": session], "data": status.signalingData(to: session) ?? [:]] as [String: Any]]
         case let .message(session, data):
@@ -109,7 +115,7 @@ enum SignalingInbound: Sendable, Equatable {
             case "mute", "unmute":
                 guard !sender.isEmpty, let status = MediaStatus(signalingData: payload) else { return .other(type: type, json: data) }
                 return .mediaStatus(fromSession: sender, status)
-            case "offer", "answer", "candidate":
+            case "offer", "answer", "candidate", "unshareScreen":
                 guard !sender.isEmpty, let signal = CallSignal.decode(payload) else { return .other(type: type, json: data) }
                 return .callSignal(fromSession: sender, signal)
             default: return .other(type: type, json: data)

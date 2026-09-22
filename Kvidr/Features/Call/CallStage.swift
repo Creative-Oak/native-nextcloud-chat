@@ -69,6 +69,8 @@ struct CallStage: View {
 
     /// The video of the only other person, when there is one and their camera is on.
     private var soloVideo: VideoTrack? {
+        // A shared screen has the stage; the backdrop stays dark behind it.
+        if call.sharedScreen != nil || call.localScreen != nil { return nil }
         guard call.participants.count == 1, let only = call.participants.first, only.isVideoOn else { return nil }
         return only.video
     }
@@ -98,8 +100,38 @@ struct CallStage: View {
                     .padding(.top, 10)
             }
 
+            if call.isSharingScreen {
+                Button(action: call.stopSharingScreen) {
+                    Label("You’re sharing your screen · Stop", systemImage: "rectangle.inset.filled.and.person.filled")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 7)
+                        .background(.green, in: .capsule)
+                }
+                .buttonStyle(.plain)
+                .help("Stop sharing your screen")
+                .padding(.top, 10)
+            }
+
             Group {
-                if call.participants.isEmpty {
+                if let shared = call.sharedScreen {
+                    // Someone's screen: all of it, as large as the stage allows, with who.
+                    VStack(spacing: 8) {
+                        VideoView(video: shared.screen, fits: true)
+                        Label("\(shared.participant.name)’s screen", systemImage: "rectangle.on.rectangle")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.8))
+                    }
+                } else if let own = call.localScreen {
+                    // What this Mac is sharing, shown back while kvidr is in front.
+                    VStack(spacing: 8) {
+                        VideoView(video: own, fits: true)
+                        Label("Your screen", systemImage: "rectangle.inset.filled.and.person.filled")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.8))
+                    }
+                } else if call.participants.isEmpty {
                     waiting
                 } else if soloVideo != nil {
                     // Their video is the backdrop, and their name is already at the top.
@@ -238,6 +270,14 @@ struct CallStage: View {
                 action: call.toggleCamera
             )
             .keyboardShortcut("v", modifiers: [.command, .shift])
+
+            CallControlButton(
+                symbol: call.isSharingScreen ? "rectangle.slash" : "rectangle.inset.filled.and.person.filled",
+                title: "Share",
+                help: call.isSharingScreen ? "Stop sharing your screen" : "Share your screen or a window",
+                isActive: call.isSharingScreen,
+                action: { call.isSharingScreen ? call.stopSharingScreen() : call.shareScreen() }
+            )
 
             AudioDeviceMenu(
                 devices: call.audioDevices,
