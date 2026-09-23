@@ -103,6 +103,7 @@ struct RootView: View {
         context.canSummarize = UnreadSummary.availability != .unsupported
         context.isCallFullScreen = app.isCallFullScreen
         context.summarize = { app.chat?.summarize() }
+        context.ask = { app.chat?.isAsking = true }
         context.toggleFavorite = { app.toggleFavoriteOnSelection() }
         context.toggleArchive = { app.toggleArchiveOnSelection() }
         context.toggleInspector = toggleInspector
@@ -231,6 +232,7 @@ struct RootView: View {
                 onDiscardDraft: { app.discardDraft() },
                 profile: app.profile,
                 reminderCount: app.reminders?.reminders.count ?? 0,
+                catchUpCount: UnreadSummary.availability == .unsupported ? 0 : app.unreadConversationCount,
                 onOpenSettings: { app.showSettings() }
             )
             // No sidebar toggle, as in Messages: the sidebar is not something you
@@ -278,6 +280,8 @@ struct RootView: View {
                         SettingsPage(profile: profile)
                     } else if app.isShowingReminders, let reminders = app.reminders {
                         RemindersPage(store: reminders)
+                    } else if app.isShowingCatchUp, let catchUp = app.catchUp {
+                        CatchUpPage(model: catchUp)
                     } else if let chat = app.chat {
                         // In a call, the call takes the pane and the conversation moves over to a
                         // column beside it — FaceTime's layout, grown out of the chat.
@@ -290,7 +294,16 @@ struct RootView: View {
                                     onLeave: { withAnimation(.smooth(duration: 0.45)) { app.leaveCall() } },
                                     onLeaveTheOtherWay: { withAnimation(.smooth(duration: 0.45)) { app.leaveCall(theOtherWay: true) } },
                                     onDismiss: { withAnimation(.smooth(duration: 0.45)) { app.dismissEndedCall() } },
-                                    onMinimize: { withAnimation(.smooth(duration: 0.45)) { app.isCallMinimized = true } }
+                                    onMinimize: { withAnimation(.smooth(duration: 0.45)) { app.isCallMinimized = true } },
+                                    onUseInChat: { notes in
+                                        let token = callHere.token
+                                        withAnimation(.smooth(duration: 0.45)) { app.dismissEndedCall() }
+                                        app.selectedToken = token
+                                        if app.chat?.token == token {
+                                            app.chat?.draftText = notes
+                                            composerFocused = true
+                                        }
+                                    }
                                 )
                                 .ignoresSafeArea(.container, edges: .top)
                                 .transition(.move(edge: .leading).combined(with: .opacity))
@@ -301,6 +314,10 @@ struct RootView: View {
                             isHeaderAlwaysFrosted: isSidebarYieldingToInspector,
                             liveConversation: app.conversationList?[chat.token],
                             reminders: app.reminders,
+                            translator: app.translator,
+                            breakoutRooms: app.breakoutRooms(of: chat.token),
+                            breakoutParent: chat.conversation.breakoutParentToken.flatMap { app.conversationList?[$0] },
+                            onOpenNewConversation: { await app.openFresh($0) },
                             onReplyPrivately: { message in
                                 Task {
                                     await app.replyPrivately(to: message)
@@ -366,7 +383,11 @@ struct RootView: View {
                     InspectorView(
                         model: inspector,
                         onOpenMessage: { messageID in app.chat?.highlightRequest = messageID },
-                        onSearch: { app.chat?.isSearching = true }
+                        onSearch: { app.chat?.isSearching = true },
+                        breakout: app.chat?.breakoutRooms,
+                        breakoutRooms: app.breakoutRooms(of: inspector.conversation.token),
+                        liveConversation: app.conversationList?[inspector.conversation.token],
+                        onOpenConversation: { app.selectedToken = $0 }
                     )
                     .frame(width: Self.inspectorWidth)
                     .transition(.move(edge: .trailing))
@@ -603,16 +624,17 @@ struct RootView: View {
         }
 
         // Beside search, in the same capsule: what Apple Intelligence can do with the open
-        // conversation, done on this Mac.
-        if !app.isShowingDraft, !app.isCallFullScreen, let chat = app.chat, UnreadSummary.availability != .unsupported {
+        // conversation, done on this Mac. Translating needs no Apple Intelligence, so the
+        // menu is there without it, holding just that.
+        if !app.isShowingDraft, !app.isCallFullScreen, let chat = app.chat {
             ToolbarItem(placement: .automatic) {
-                Menu {
-                    Button("Summarize Conversation", systemImage: "text.append") { chat.summarize() }
-                        .keyboardShortcut("s", modifiers: [.command, .option])
+                // Built by AppKit when clicked: a SwiftUI menu here is rebuilt with every redraw
+                // of the chat, and Summarize More blinked while it was open.
+                PopUpMenuButton {
+                    appleIntelligenceMenu(chat)
                 } label: {
                     Label("Apple Intelligence", systemImage: "apple.intelligence")
                 }
-                .menuIndicator(.hidden)
                 .help("Apple Intelligence")
             }
         }
@@ -699,8 +721,10 @@ struct RootView: View {
             }
 
             // Calls: start one, or join the one going on. Gone while in a call — the call's own
-            // bar has the controls then.
+            // bar has the controls then — and while held in the lobby, which keeps its call
+            // to moderators as well.
             if let chat = app.chat, app.activeCall == nil, chat.capabilities.config.callEnabled != false,
+               !chat.conversation.isLobbyBlocking,
                chat.conversation.canStartCall || chat.conversation.hasCall {
                 ToolbarItem(placement: .primaryAction) {
                     Button(action: startCall) {
@@ -719,6 +743,34 @@ struct RootView: View {
                 .help("Show conversation details (⌥⌘I)")
             }
         }
+    }
+
+    /// What Apple Intelligence can do with the open conversation; translating needs none.
+    private func appleIntelligenceMenu(_ chat: ChatModel) -> [PopUpMenuItem] {
+        var items: [PopUpMenuItem] = []
+        let isAvailable = UnreadSummary.availability != .unsupported
+        if isAvailable {
+            items.append(.action("Summarize Conversation", systemImage: "text.append", keys: KeyboardShortcut("s", modifiers: [.command, .option])) { chat.summarize() })
+            if chat.openThread != nil {
+                items.append(.action("Summarize Thread", systemImage: "bubble.left.and.text.bubble.right") { chat.summarizeThread() })
+            }
+            items.append(.submenu("Summarize More", systemImage: "calendar", [
+                .action("Last 24 Hours") { chat.summarize(.day) },
+                .action("Last Week") { chat.summarize(.week) },
+            ]))
+            items.append(.divider)
+        }
+        items.append(.action("Ask This Conversation…", systemImage: "questionmark.bubble", keys: KeyboardShortcut("a", modifiers: [.command, .option]), isEnabled: isAvailable) { chat.isAsking = true })
+        items.append(.action("Catch Up on Everything", systemImage: "list.bullet.clipboard", isEnabled: isAvailable) {
+            app.selectedToken = CatchUpToken.value
+        })
+        items.append(.divider)
+        let translator = app.translator
+        let isAutomatic = translator.isAutomatic(in: chat.token)
+        items.append(.action("Translate Automatically", systemImage: "translate", isChecked: isAutomatic) {
+            translator.setAutomatic(!isAutomatic, in: chat.token)
+        })
+        return items
     }
 
     private func startCall() {

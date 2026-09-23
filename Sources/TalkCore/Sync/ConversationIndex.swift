@@ -43,13 +43,13 @@ struct ConversationIndex: Sendable, Equatable {
     /// sidebar render.
     var totalUnreadCount: Int {
         conversations.reduce(0) { total, conversation in
-            guard !conversation.isArchived, conversation.notificationLevel != .never else { return total }
+            guard !conversation.isArchived, !conversation.isBreakoutRoom, conversation.notificationLevel != .never else { return total }
             return total + conversation.unreadMessages
         }
     }
 
     var hasUnreadMention: Bool {
-        conversations.contains { !$0.isArchived && $0.unreadMention && $0.unreadMessages > 0 }
+        conversations.contains { !$0.isArchived && !$0.isBreakoutRoom && $0.unreadMention && $0.unreadMessages > 0 }
     }
 
     /// The most recent `lastActivity`, which is what the next incremental fetch asks from —
@@ -115,12 +115,14 @@ struct ConversationIndex: Sendable, Equatable {
     /// The sidebar's groups. Favourites first because the user said they matter, then
     /// everything else by activity, then archived out of the way at the bottom.
     enum Section: String, Sendable, Hashable, CaseIterable, Identifiable {
-        case favorites, conversations, archived
+        /// One of the user's own tags, whose name heads it.
+        case favorites, tagged, conversations, archived
         var id: String { rawValue }
 
         var title: String {
             switch self {
             case .favorites: "Favourites"
+            case .tagged: "Tagged"
             case .conversations: "Conversations"
             case .archived: "Archived"
             }
@@ -129,6 +131,7 @@ struct ConversationIndex: Sendable, Equatable {
         var symbolName: String {
             switch self {
             case .favorites: "star"
+            case .tagged: "tag"
             case .conversations: "bubble.left.and.bubble.right"
             case .archived: "archivebox"
             }
@@ -138,29 +141,60 @@ struct ConversationIndex: Sendable, Equatable {
     /// A section and its rows. A struct rather than a tuple because Swift has no key paths
     /// into tuple elements, and `ForEach(_:id:)` needs one.
     struct SectionGroup: Sendable, Identifiable, Equatable {
-        var id: Section { section }
+        /// One per tag, and one for each of the other kinds.
+        var id: String { tag.map { "tag-\($0.id)" } ?? section.rawValue }
         var section: Section
         var items: [Conversation]
+        /// The tag a `.tagged` section is; on `.conversations`, Talk's built-in tag for
+        /// everything untagged, when there is one — its name and whether it's folded.
+        var tag: ConversationTag?
+
+        init(section: Section, items: [Conversation], tag: ConversationTag? = nil) {
+            self.section = section
+            self.items = items
+            self.tag = tag
+        }
+
+        /// What heads it: a tag's name, or the section's own.
+        var title: String { tag?.name ?? section.title }
     }
 
     /// Groups the (already filtered) conversations for display. Empty sections are dropped,
-    /// so a user with no favourites never sees an empty "Favourites" heading.
-    static func sections(for conversations: [Conversation]) -> [SectionGroup] {
+    /// so a user with no favourites never sees an empty "Favourites" heading. Breakout rooms
+    /// aren't listed — as in Talk's own apps, they're reached from the conversation they
+    /// belong to — nor counted in the unread totals above, where an unread one would be a
+    /// badge nothing in the sidebar could clear.
+    ///
+    /// With the user's own tags (cap `conversation-tags`), everything that isn't a favourite
+    /// is sorted into them, a section each in the user's order, and whatever has none goes
+    /// under Talk's built-in tag for the rest — as Talk's web app lays it out. Something
+    /// with two tags is in both. Favourites stay only among the faces at the top.
+    static func sections(for conversations: [Conversation], tags: [ConversationTag] = []) -> [SectionGroup] {
         var favorites: [Conversation] = []
         var regular: [Conversation] = []
         var archived: [Conversation] = []
+        let custom = tags.filter { $0.kind == .custom }
+        let known = Set(custom.map(\.id))
+        var tagged: [String: [Conversation]] = [:]
 
-        for conversation in conversations {
-            if conversation.isArchived { archived.append(conversation) }
-            else if conversation.isFavorite { favorites.append(conversation) }
-            else { regular.append(conversation) }
+        for conversation in conversations where !conversation.isBreakoutRoom {
+            if conversation.isArchived { archived.append(conversation); continue }
+            // A tagged favourite is in both places, as Talk's web app shows it: among the
+            // faces, and in its tags' sections.
+            let mine = conversation.tagIDs.filter(known.contains)
+            for id in mine { tagged[id, default: []].append(conversation) }
+            if conversation.isFavorite {
+                favorites.append(conversation)
+            } else if mine.isEmpty {
+                regular.append(conversation)
+            }
         }
 
-        return [
-            SectionGroup(section: .favorites, items: favorites),
-            SectionGroup(section: .conversations, items: regular),
-            SectionGroup(section: .archived, items: archived)
-        ].filter { !$0.items.isEmpty }
+        var groups = [SectionGroup(section: .favorites, items: favorites)]
+        groups += custom.map { SectionGroup(section: .tagged, items: tagged[$0.id] ?? [], tag: $0) }
+        groups.append(SectionGroup(section: .conversations, items: regular, tag: tags.first { $0.kind == .other }))
+        groups.append(SectionGroup(section: .archived, items: archived))
+        return groups.filter { !$0.items.isEmpty }
     }
 
     /// Everything, including archived — used when the sidebar is showing the archive.

@@ -54,7 +54,7 @@ final class AppModel {
             guard oldValue != selectedToken else { return }
             // Neither the draft nor Settings is a conversation, and neither is restored next launch.
             if !ConversationDraftToken.isDraft(selectedToken), !SettingsToken.isSettings(selectedToken),
-               !RemindersToken.isReminders(selectedToken) {
+               !RemindersToken.isReminders(selectedToken), !CatchUpToken.isCatchUp(selectedToken) {
                 dependencies.preferences.lastSelectedToken = selectedToken
             }
             openSelectedConversation()
@@ -64,11 +64,21 @@ final class AppModel {
     var isShowingDraft: Bool { ConversationDraftToken.isDraft(selectedToken) && draft != nil }
     var isShowingSettings: Bool { SettingsToken.isSettings(selectedToken) && session != nil }
     var isShowingReminders: Bool { RemindersToken.isReminders(selectedToken) && reminders != nil }
+    var isShowingCatchUp: Bool { CatchUpToken.isCatchUp(selectedToken) && catchUp != nil }
 
     /// The signed-in user's own picture, name and status — shared by the sidebar's account
     /// row and the Settings page, so the two can never disagree.
     private(set) var profile: ProfileModel?
     private(set) var reminders: ReminderStore?
+    /// Every unread conversation in a few lines, by Apple Intelligence; per account.
+    private(set) var catchUp: CatchUpModel?
+
+    /// How many conversations have something unread — the Catch Up row shows from two on.
+    var unreadConversationCount: Int {
+        (conversationList?.index.allConversations ?? []).count {
+            $0.unreadMessages > 0 && !$0.isArchived && !$0.isBreakoutRoom && $0.notificationLevel != .never
+        }
+    }
     private var notificationPoller: NotificationPoller?
     /// The High Performance Backend connection's state, for Settings to show.
     private(set) var signalingState: SignalingConnection.State = .idle
@@ -104,14 +114,14 @@ final class AppModel {
     /// Window/app activation, which gates read state. See `ReadStatePolicy`.
     var isApplicationActive = true {
         didSet {
-            activationChanged()
+            activationChanged(cameBack: isApplicationActive && !oldValue)
             if oldValue != isApplicationActive {
                 incoming?.applicationActiveChanged(isApplicationActive)
                 sharingActivationChanged()
             }
         }
     }
-    var isWindowKey = true { didSet { activationChanged() } }
+    var isWindowKey = true { didSet { activationChanged(cameBack: false) } }
 
     let dependencies: AppDependencies
     let notifications: NotificationController
@@ -121,6 +131,10 @@ final class AppModel {
     private(set) var previewLoader: PreviewLoader?
     /// Voice messages, one playing at a time; per account, like the previews.
     private(set) var voicePlayer: VoicePlayer?
+    /// Translates messages on this Mac. Needs no account, so it lives as long as the app.
+    let translator: MessageTranslator
+    /// Conversations in Spotlight.
+    @ObservationIgnored let spotlight = SpotlightIndex()
 
     /// A message a search result wants shown, applied once the conversation is live.
     private var pendingReveal: Int?
@@ -134,6 +148,7 @@ final class AppModel {
     init(dependencies: AppDependencies = AppDependencies()) {
         self.dependencies = dependencies
         self.notifications = NotificationController(preferences: dependencies.preferences)
+        self.translator = MessageTranslator(preferences: dependencies.preferences)
         Log.isDeveloperModeEnabled = dependencies.preferences.isDeveloperModeEnabled
 
         notifications.isDoNotDisturb = { [weak self] in self?.profile?.status?.status == .dnd }
@@ -199,6 +214,7 @@ final class AppModel {
         }
         conversationList = list
 
+        catchUp = CatchUpModel(session: session)
         let reminders = ReminderStore(session: session, notifications: notifications)
         reminders.conversation = { [weak list] token in list?[token] }
         self.reminders = reminders
@@ -296,6 +312,8 @@ final class AppModel {
     }
 
     func signOut() async {
+        // Nothing of the account stays searchable once it's gone.
+        spotlight.removeAll()
         // The account comes from whichever place has it. A live session is the usual one,
         // but the app password can stop working before a session ever exists: `start()`
         // catches a failed `activate` and goes straight to `.needsReauthentication`, with
@@ -497,7 +515,11 @@ final class AppModel {
         )
     }
 
-    private func activationChanged() {
+    /// `cameBack`: the app has just come to the front from another one — the moment to catch
+    /// up on what was missed. Not every key-window change: closing an alert or a sheet makes
+    /// the window key again too, and a full refresh then raced the change the alert had just
+    /// made, putting the old state back.
+    private func activationChanged(cameBack: Bool) {
         guard let session else { return }
         let context = currentReadContext(isScrolledToLatest: chat?.isScrolledToLatest ?? false)
         let isActive = isApplicationActive
@@ -512,9 +534,13 @@ final class AppModel {
                 try? await session.conversations.setSessionState(active: isLooking, token: token)
             }
             if isActive {
-                // Coming back to the app is the moment to notice anything we missed.
-                await session.conversationSync.applicationDidBecomeActive()
+                // Looking at the conversation again, if only from another of kvidr's windows:
+                // what's on screen counts as read.
                 await chat?.applicationDidBecomeActive()
+                guard cameBack else { return }
+                // Coming back to the app is the moment to notice anything we missed.
+                self.watchStatuses()
+                await session.conversationSync.applicationDidBecomeActive()
                 await self.reminders?.load()
                 // Back in front after another device took the conversation over: take it back,
                 // now that this is where the user is.
@@ -522,6 +548,8 @@ final class AppModel {
                     await self.joinLive(token)
                 }
             } else {
+                self.statusTask?.cancel()
+                self.statusTask = nil
                 await session.conversationSync.applicationDidResignActive()
             }
         }
@@ -541,6 +569,11 @@ final class AppModel {
                 case .conversations(let result):
                     await list.apply(result)
                     self.notifications.updateBadge(count: list.totalUnreadCount)
+                    self.spotlight.update(list.index.allConversations)
+                    if let link = self.pendingLink, !list.index.isEmpty {
+                        self.pendingLink = nil
+                        self.handle(link)
+                    }
                     self.incoming?.conversationsChanged(list.index.allConversations)
                 case .offline(let isOffline):
                     self.connection = isOffline ? .offline : .online
@@ -719,6 +752,14 @@ final class AppModel {
                     self.activeCall?.sessionsLeft(ids)
                 case .typing(let from, let isTyping):
                     typing.received(fromSession: from, isTyping: isTyping)
+                case .switchTo(let token):
+                    await self.follow(switchTo: token)
+                case .raisedHand(let from, let isRaised):
+                    self.activeCall?.receivedHand(isRaised, from: from)
+                case .callReaction(let from, let emoji):
+                    self.activeCall?.receivedReaction(emoji, from: from)
+                case .forceMute(let target, _):
+                    self.activeCall?.receivedForceMute(target: target)
                 default:
                     break
                 }
@@ -757,6 +798,121 @@ final class AppModel {
         try? await session.conversations.leave(token: token)
     }
 
+    // MARK: - Links, Shortcuts, Siri, Spotlight
+
+    /// Keeps statuses current while kvidr is in front: your own, changed on the phone or in
+    /// the browser, and the people in your one-to-ones — which only a full read of the
+    /// conversation list brings, as a status changing doesn't count as the conversation
+    /// changing. Now, and every two minutes after.
+    @ObservationIgnored private var statusTask: Task<Void, Never>?
+
+    private func watchStatuses() {
+        statusTask?.cancel()
+        statusTask = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self, let session = self.session else { return }
+                await self.profile?.loadStatus()
+                await session.conversationSync.refreshNow(full: true)
+                try? await Task.sleep(for: .seconds(120))
+            }
+        }
+    }
+
+    /// A link that came before there was a conversation list to find its conversation in.
+    @ObservationIgnored private var pendingLink: KvidrLink?
+
+    /// The conversation `nameOrToken` means: its token, its exact name, or the best match —
+    /// as the sidebar's filter would find it.
+    func conversation(matching nameOrToken: String) -> Conversation? {
+        guard let list = conversationList else { return nil }
+        if let exact = list[nameOrToken] { return exact }
+        let all = list.index.allConversations.filter { !$0.isBreakoutRoom }
+        if let named = all.first(where: { $0.displayName.localizedCaseInsensitiveCompare(nameOrToken) == .orderedSame }) {
+            return named
+        }
+        return list.index.filtered(by: nameOrToken).first { !$0.isBreakoutRoom }
+    }
+
+    /// A `kvidr://` link: opens or fills in; never sends. See ``KvidrLink``.
+    func handle(_ link: KvidrLink) {
+        NSApp.activate()
+        guard let list = conversationList, !list.index.isEmpty else {
+            pendingLink = link
+            return
+        }
+        switch link {
+        case .open(let name):
+            if let conversation = conversation(matching: name) { selectedToken = conversation.token }
+        case .compose(let name, let text):
+            guard let conversation = conversation(matching: name) else { return }
+            Task { await compose(text, in: conversation.token) }
+        case .catchUp:
+            selectedToken = CatchUpToken.value
+        case .search(let query):
+            list.filterText = query
+        }
+    }
+
+    /// Opens the conversation and puts `text` in its field — to read over and send.
+    func compose(_ text: String, in token: String) async {
+        selectedToken = token
+        for _ in 0..<30 where chat?.token != token {
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+        guard let chat, chat.token == token else { return }
+        chat.draftText = chat.draftText.isEmpty ? text : chat.draftText + " " + text
+    }
+
+    /// Sends `text` to `token` straight away — for Shortcuts and Siri, which the user runs.
+    func send(_ text: String, to token: String) async throws(TalkError) {
+        guard let session else { throw .notAuthenticated }
+        _ = try await session.chat.send(token: token, message: text)
+        await session.conversationSync.refreshNow(full: false)
+    }
+
+    /// Waits a little for the account to be signed in and its conversations loaded — an
+    /// intent can wake kvidr up and arrive first.
+    func waitUntilReady() async -> Bool {
+        for _ in 0..<60 {
+            if session != nil, conversationList?.index.isEmpty == false { return true }
+            try? await Task.sleep(for: .milliseconds(250))
+        }
+        return session != nil && conversationList != nil
+    }
+
+    /// Opens a conversation this user may only just have been put in — a breakout room — or
+    /// whose lobby has just come down: fresh from the server, so it's in the list to open, and
+    /// opens as it is now.
+    func openFresh(_ token: String) async {
+        guard let session else { return }
+        await session.conversationSync.refreshNow(full: true)
+        selectedToken = token
+    }
+
+    /// The breakout rooms of `token` that this user is in — every one, for a moderator.
+    func breakoutRooms(of token: String) -> [Conversation] {
+        (conversationList?.index.allConversations ?? [])
+            .filter { $0.isBreakoutRoom(of: token) }
+            .sorted { $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending }
+    }
+
+    /// The server moved this session to another conversation: breakout rooms started and this
+    /// is the room this user was given, or they stopped and this is the way back. Talk's apps
+    /// go along, and take the call with them; so does kvidr.
+    private func follow(switchTo token: String) async {
+        guard let session, token != selectedToken else { return }
+        Log.sync.notice("Breakout rooms moved this session to another conversation")
+        let takeCall = activeCall != nil
+        if takeCall { leaveCall() }
+        await openFresh(token)
+        guard takeCall else { return }
+        // The call is joined from the open conversation, which opens as it's selected.
+        for _ in 0..<30 where chat?.token != token {
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+        if chat?.token == token { await joinCall() }
+    }
+
     // MARK: - Calls
 
     /// Joins the open conversation's call, starting it if there is none.
@@ -772,6 +928,7 @@ final class AppModel {
             ownSessionID: ownSessionID ?? "",
             iceServers: settings?.iceServers ?? [],
             nick: session.account.displayName,
+            captions: LiveCaptions(preferences: dependencies.preferences),
             nameForSession: { [weak self] in self?.typing?.displayName(forSession: $0) }
         )
         call = controller
@@ -856,7 +1013,9 @@ final class AppModel {
 
     func leaveCall(theOtherWay: Bool = false) {
         if theOtherWay { call?.hangUpTheOtherWay() } else { call?.hangUp() }
-        call = nil
+        // Captions ran, and the call's notes are being written: the end screen stays for them,
+        // until it's closed.
+        if call?.summary.state == .idle { call = nil }
         isCallMinimized = false
     }
 

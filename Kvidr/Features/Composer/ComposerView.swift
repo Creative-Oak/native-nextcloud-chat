@@ -6,8 +6,19 @@ import UniformTypeIdentifiers
 struct ComposerView: View {
     @Bindable var model: ChatModel
     @Binding var isFocused: Bool
+    /// Translates the draft, or the part of it that's selected, from the + menu.
+    var translator: MessageTranslator?
 
     @Environment(\.preferences) private var preferences
+    /// The draft as written, once a translation has been put in — what Show Original puts
+    /// back. Nil while the draft is still as written.
+    @State private var untranslated: String?
+    /// The language being translated into, or last translated into, while the capsule in the
+    /// field says so.
+    @State private var draftTranslation: DraftTranslation?
+    /// What's selected in the field, in UTF-16 — translated on its own when there is some.
+    @State private var selection = NSRange(location: 0, length: 0)
+    @State private var translationLanguages: [Locale.Language] = []
     @State private var height: CGFloat = ComposerTextView.minimumHeight
     @State private var isShowingNewPoll = false
     /// Made the first time the record button is pressed.
@@ -44,6 +55,17 @@ struct ComposerView: View {
                 )
             }
 
+            if showsSuggestions {
+                SmartReplyChips(replies: model.smartReplies.suggestions) { reply in
+                    model.draftText = reply
+                    model.smartReplies.clear()
+                    isFocused = true
+                }
+                .padding(.horizontal, 12)
+                .padding(.top, 6)
+                .transition(.opacity.combined(with: .move(edge: .bottom)))
+            }
+
             if model.conversation.canPostMessages {
                 if let recorder, recorder.phase != .idle {
                     VoiceRecordingBar(recorder: recorder) {
@@ -63,6 +85,24 @@ struct ComposerView: View {
         .overlay(alignment: .bottomLeading) { mentionSuggestions }
         // Leaving the conversation throws an unsent recording away, file and all.
         .onDisappear { recorder?.discard() }
+        // Emptied — sent, or cleared by hand — and there's no original to go back to.
+        .onChange(of: model.draftText.isEmpty) { _, isEmpty in
+            if isEmpty {
+                untranslated = nil
+                draftTranslation = nil
+            }
+        }
+        .task { translationLanguages = await MessageTranslator.supportedLanguages() }
+        // Something new from someone else, a thread opened or closed, the field emptied: new
+        // replies to suggest — or none.
+        .task(id: SuggestionTrigger(lastRow: model.rows.last?.id, thread: model.openThread?.id, isEmpty: model.draftText.isEmpty, isOn: preferences?.suggestsReplies ?? false)) {
+            guard preferences?.suggestsReplies == true, model.draftText.isEmpty else {
+                model.smartReplies.clear()
+                return
+            }
+            model.suggestReplies(me: model.session.account.displayName)
+        }
+        .animation(.smooth(duration: 0.2), value: showsSuggestions)
         .animation(.smooth(duration: 0.2), value: recorder?.phase)
     }
 
@@ -70,29 +110,7 @@ struct ComposerView: View {
         HStack(alignment: .bottom, spacing: 8) {
             if model.attachments.canAttach {
                 AttachmentMenu(queue: model.attachments, destination: model.conversation.displayName) {
-                    AnyView(
-                        // Not just the capability: Talk refuses a poll in anything that is not
-                        // a group or public conversation, so in a direct message the item
-                        // would be there only to be rejected.
-                        Group {
-                            if model.capabilities.supportsPolls, model.conversation.type.allowsPolls {
-                                Divider()
-                                Button("Poll…", systemImage: "chart.bar.doc.horizontal") { isShowingNewPoll = true }
-                            }
-                            if model.canCreateThread {
-                                Divider()
-                                Button("New Thread", systemImage: "bubble.left.and.bubble.right") {
-                                    model.beginNewThread()
-                                    isThreadTitleFocused = true
-                                }
-                            }
-                            if model.canSchedule, model.editing == nil {
-                                Divider()
-                                // Straight to the capsule in the field; the quick times are in there.
-                                Button("Send Later", systemImage: "clock") { model.beginSendLater() }
-                            }
-                        }
-                    )
+                    attachmentMenuExtras
                 }
             }
 
@@ -114,6 +132,121 @@ struct ComposerView: View {
         }
     }
 
+    private var showsSuggestions: Bool {
+        preferences?.suggestsReplies == true && model.draftText.isEmpty && !model.smartReplies.suggestions.isEmpty
+            && model.conversation.canPostMessages && model.editing == nil
+    }
+
+    private struct SuggestionTrigger: Hashable {
+        var lastRow: ChatRow.ID?
+        var thread: Int?
+        var isEmpty: Bool
+        var isOn: Bool
+    }
+
+    private func submit() {
+        untranslated = nil
+        draftTranslation = nil
+        model.send()
+    }
+
+    /// The + menu's own items, past Photos and Files.
+    private var attachmentMenuExtras: [PopUpMenuItem] {
+        var items: [PopUpMenuItem] = []
+        // Not just the capability: Talk refuses a poll in anything that is not a group or
+        // public conversation, so in a direct message the item would be there only to be
+        // rejected.
+        if model.capabilities.supportsPolls, model.conversation.type.allowsPolls {
+            items.append(.divider)
+            items.append(.action("Poll…", systemImage: "chart.bar.doc.horizontal") { isShowingNewPoll = true })
+        }
+        if model.canCreateThread {
+            items.append(.divider)
+            items.append(.action("New Thread", systemImage: "bubble.left.and.bubble.right") {
+                model.beginNewThread()
+                isThreadTitleFocused = true
+            })
+        }
+        let isEmpty = model.draftText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        if let translator {
+            items.append(.divider)
+            items.append(translateMenu(translator, isEnabled: !isEmpty && draftTranslation?.isWorking != true))
+        }
+        // Proofread or rewrite what's in the field — Apple Intelligence, on this Mac.
+        // Right-clicking the field has it too.
+        items.append(.action("Writing Tools", systemImage: "apple.writing.tools", isEnabled: !isEmpty) {
+            isFocused = true
+            Task { @MainActor in
+                NSApp.sendAction(#selector(NSResponder.showWritingTools(_:)), to: nil, from: nil)
+            }
+        })
+        if model.canSchedule, model.editing == nil {
+            items.append(.divider)
+            // Straight to the capsule in the field; the quick times are in there.
+            items.append(.action("Send Later", systemImage: "clock") { model.beginSendLater() })
+        }
+        return items
+    }
+
+    /// The + menu's Translate: the languages, the one used here last time first.
+    private func translateMenu(_ translator: MessageTranslator, isEnabled: Bool) -> PopUpMenuItem {
+        let recent = translator.outgoingLanguage(for: model.token)
+        var languages: [PopUpMenuItem] = []
+        if let recent {
+            languages.append(.action(MessageTranslator.name(of: recent)) { translateDraft(into: recent, with: translator) })
+            languages.append(.divider)
+        }
+        for language in translationLanguages where language.minimalIdentifier != recent?.minimalIdentifier {
+            languages.append(.action(MessageTranslator.name(of: language)) { translateDraft(into: language, with: translator) })
+        }
+        return .submenu(hasSelection ? "Translate Selection" : "Translate", systemImage: "translate", isEnabled: isEnabled, languages)
+    }
+
+    /// Words selected in the field, inside what's there now.
+    private var hasSelection: Bool {
+        selection.length > 0 && NSMaxRange(selection) <= (model.draftText as NSString).length
+    }
+
+    /// Translates what's selected, or else the whole draft, and puts the translation in its
+    /// place — to read over before sending. Show Original puts back the draft as it was.
+    private func translateDraft(into language: Locale.Language, with translator: MessageTranslator) {
+        let original = model.draftText
+        let range = hasSelection ? selection : NSRange(location: 0, length: (original as NSString).length)
+        let part = (original as NSString).substring(with: range)
+        guard !part.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        translator.setOutgoingLanguage(language, for: model.token)
+        let name = MessageTranslator.name(of: language)
+        draftTranslation = DraftTranslation(language: name, state: .working)
+        Task {
+            let result = await translator.translateOutgoing(part, to: language)
+            // Typed on meanwhile: that wins.
+            guard model.draftText == original else {
+                draftTranslation = nil
+                return
+            }
+            switch result {
+            case .translated(let text):
+                // Kept from the first translation on, so Show Original goes all the way back.
+                if untranslated == nil { untranslated = original }
+                // Whatever spacing was around the selection stays around the translation.
+                let leading = part.prefix { $0.isWhitespace }
+                let trailing = String(part.reversed().prefix { $0.isWhitespace }.reversed())
+                model.draftText = (original as NSString).replacingCharacters(in: range, with: leading + text + trailing)
+                draftTranslation = DraftTranslation(language: name, state: .translated)
+            case .sameLanguage:
+                draftTranslation = DraftTranslation(language: name, state: .problem("This is already in \(name)."))
+            case .failed(let reason):
+                draftTranslation = DraftTranslation(language: name, state: .problem(reason))
+            }
+        }
+    }
+
+    private func showOriginal() {
+        if let untranslated { model.draftText = untranslated }
+        untranslated = nil
+        draftTranslation = nil
+    }
+
     /// Text, character count and send, all inside one glass capsule — the field is a
     /// single control rather than a row of parts spread across the window.
     private var field: some View {
@@ -130,6 +263,18 @@ struct ComposerView: View {
                         isFocused = true
                     }
                 )
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+            if let draftTranslation {
+                DraftTranslationPill(
+                    translation: draftTranslation,
+                    canShowOriginal: untranslated != nil,
+                    onShowOriginal: showOriginal,
+                    onDismiss: { self.draftTranslation = nil }
+                )
+                .padding(.top, 2)
+                .padding(.bottom, 8)
+                .padding(.leading, -5)
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
             // Send Later sits inside the field, above the words it will send — as in Messages.
@@ -155,7 +300,7 @@ struct ComposerView: View {
                 isEnabled: true,
                 sendsOnReturn: preferences?.sendsOnReturn ?? true,
                 isSuggesting: model.isShowingMentionSuggestions,
-                onSubmit: { model.send() },
+                onSubmit: submit,
                 onCancel: { cancelContext() },
                 onEditPrevious: { model.beginEditingLatestOwnMessage() },
                 onMoveSuggestion: { model.moveMentionHighlight(by: $0) },
@@ -169,7 +314,12 @@ struct ComposerView: View {
                     // Held rather than attached: a paste is the one way a file reaches the
                     // composer without anyone having pointed at it.
                     model.attachments.enqueue(pastedFiles: urls)
-                }
+                },
+                onGenmoji: { image, description in
+                    guard model.attachments.canAttach else { return }
+                    model.attachments.enqueuePastedImage(image, named: description.isEmpty ? "Genmoji" : description)
+                },
+                onSelectionChange: { selection = $0 }
             )
             .frame(height: height)
             .overlay(alignment: .topLeading) {
@@ -208,7 +358,7 @@ struct ComposerView: View {
                     .allowsHitTesting(showsRecordButton)
                     .accessibilityHidden(!showsRecordButton)
 
-                    Button(action: { model.send() }) {
+                    Button(action: submit) {
                         Image(systemName: "arrow.up")
                             .font(.system(size: 13, weight: .semibold))
                             .frame(width: 16, height: 16)
@@ -435,3 +585,90 @@ extension EnvironmentValues {
     }
 }
 
+
+/// The draft being translated from the + menu, or translated a moment ago.
+struct DraftTranslation: Equatable {
+    enum State: Equatable {
+        case working
+        case translated
+        case problem(String)
+    }
+
+    let language: String
+    let state: State
+
+    var isWorking: Bool { state == .working }
+}
+
+/// Inside the field once the draft has been translated: into which language, and the way back
+/// to what was written.
+private struct DraftTranslationPill: View {
+    let translation: DraftTranslation
+    let canShowOriginal: Bool
+    var onShowOriginal: () -> Void
+    var onDismiss: () -> Void
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "translate")
+                .foregroundStyle(.tint)
+            switch translation.state {
+            case .working:
+                Text("Translating into \(translation.language)…")
+            case .translated:
+                Text("Translated into \(translation.language)")
+            case .problem(let problem):
+                Text(problem)
+                    .foregroundStyle(.red)
+                    .lineLimit(1)
+            }
+            if canShowOriginal, !translation.isWorking {
+                Button("Show Original", action: onShowOriginal)
+                    .buttonStyle(.link)
+            }
+            Spacer(minLength: 4)
+            if !translation.isWorking {
+                Button(action: onDismiss) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 8, weight: .bold))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .help("Keep the translation, and close this")
+                .accessibilityLabel("Close")
+            }
+        }
+        .font(.system(size: 11))
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(.quaternary.opacity(0.6), in: .capsule)
+    }
+}
+
+/// Suggested replies, as capsules over the field — Apple Intelligence's, marked as such.
+private struct SmartReplyChips: View {
+    let replies: [String]
+    var onPick: (String) -> Void
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "apple.intelligence")
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .accessibilityLabel("Suggested replies")
+            ForEach(replies, id: \.self) { reply in
+                Button { onPick(reply) } label: {
+                    Text(reply)
+                        .font(.system(size: 12))
+                        .lineLimit(1)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .glassEffect(.regular.interactive(), in: .capsule)
+                }
+                .buttonStyle(.plain)
+                .help("Put “\(reply)” in the field")
+            }
+            Spacer(minLength: 0)
+        }
+    }
+}

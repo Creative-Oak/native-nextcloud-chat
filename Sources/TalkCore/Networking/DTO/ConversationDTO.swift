@@ -50,6 +50,9 @@ struct ConversationDTO: Decodable, Sendable {
     let lastMessage: MessageDTO?
     let objectType: String?
     let objectId: String?
+    let breakoutRoomMode: Int?
+    let breakoutRoomStatus: Int?
+    let tagIds: [String]?
     let avatarVersion: String?
     let isCustomAvatar: Bool?
     let mentionPermissions: Int?
@@ -66,6 +69,7 @@ struct ConversationDTO: Decodable, Sendable {
         case isFavorite, isArchived, isImportant, isSensitive, lastPinnedId, hiddenPinnedId, notificationLevel, notificationCalls, lobbyState, lobbyTimer
         case unreadMessages, unreadMention, unreadMentionDirect, lastReadMessage, lastCommonReadMessage
         case lastMessage, objectType, objectId, avatarVersion, isCustomAvatar, mentionPermissions
+        case breakoutRoomMode, breakoutRoomStatus, tagIds
         case status, statusIcon, statusMessage, statusClearAt
     }
 
@@ -112,6 +116,11 @@ struct ConversationDTO: Decodable, Sendable {
         lastCommonReadMessage = Lenient.int(container, .lastCommonReadMessage)
         objectType = try? container.decodeIfPresent(String.self, forKey: .objectType)
         objectId = Lenient.string(container, .objectId)
+        breakoutRoomMode = Lenient.int(container, .breakoutRoomMode)
+        breakoutRoomStatus = Lenient.int(container, .breakoutRoomStatus)
+        // Snowflake ids, as strings; numbers from a server that sends them so.
+        tagIds = (try? container.decodeIfPresent([String].self, forKey: .tagIds))
+            ?? (try? container.decodeIfPresent([Int].self, forKey: .tagIds))?.map(String.init)
         avatarVersion = try? container.decodeIfPresent(String.self, forKey: .avatarVersion)
         isCustomAvatar = Lenient.bool(container, .isCustomAvatar)
         mentionPermissions = Lenient.int(container, .mentionPermissions)
@@ -139,7 +148,7 @@ struct ConversationDTO: Decodable, Sendable {
         // attendee-specific value when an older server omits it.
         let effectivePermissions = permissions ?? attendeePermissions ?? 0
 
-        return Conversation(
+        var conversation = Conversation(
             token: token,
             numericID: id,
             type: ConversationType(rawValue: type),
@@ -186,5 +195,9 @@ struct ConversationDTO: Decodable, Sendable {
             mentionPermissions: mentionPermissions ?? 0,
             userStatus: userStatus
         )
+        conversation.breakoutRoomMode = BreakoutRoomMode(rawValue: breakoutRoomMode ?? 0) ?? .notConfigured
+        conversation.breakoutRoomStatus = BreakoutRoomStatus(rawValue: breakoutRoomStatus ?? 0) ?? .stopped
+        conversation.tagIDs = tagIds ?? []
+        return conversation
     }
 }

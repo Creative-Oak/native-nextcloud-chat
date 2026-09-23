@@ -32,9 +32,12 @@ final class SharingMiniCall {
     /// Floats the mini call, if it isn't already. kvidr in front hides it — see ``hide()``.
     func show(call: CallController, me: MessageActor, avatarLoader: AvatarLoader?, onReturn: @escaping () -> Void, onLeave: @escaping () -> Void) {
         guard panel == nil else { return }
-        let content = MiniCallView(call: call, me: me, onReturn: onReturn, onLeave: onLeave)
+        let content = MiniCallView(call: call, me: me, onReturn: onReturn, onLeave: onLeave, onResize: { [weak self] size in self?.fit(size) })
             .environment(\.avatarLoader, avatarLoader)
         let hosting = FirstClickHostingView(rootView: AnyView(content))
+        // The panel's size is set here and in ``fit(_:)`` alone: left to itself the hosting view
+        // would resize it too, keeping the bottom edge where it was rather than the top.
+        hosting.sizingOptions = []
         // As big as what's in it, so the glass hugs it evenly on every side.
         let size = hosting.fittingSize
         hosting.frame = NSRect(origin: .zero, size: size)
@@ -62,6 +65,14 @@ final class SharingMiniCall {
         self.panel = panel
     }
 
+    /// What's in it changed size — captions turned on or off: the window follows, its top edge
+    /// staying where it is so it grows and shrinks downwards.
+    private func fit(_ size: CGSize) {
+        guard let panel, size.width > 0, size.height > 0, panel.frame.size != size else { return }
+        let frame = panel.frame
+        panel.setFrame(NSRect(x: frame.minX, y: frame.maxY - size.height, width: size.width, height: size.height), display: true)
+    }
+
     /// kvidr came to the front while sharing: the call is in its window, so the mini call goes.
     func hide() {
         panel?.orderOut(nil)
@@ -83,13 +94,15 @@ final class SharingMiniCall {
     }
 }
 
-/// The mini call: the other side on top, you under, and the call's controls — on the system's
-/// own glass, which follows the Mac's appearance settings for it.
+/// The mini call: the other side on top, you under, Live Captions when they're on, and the
+/// call's controls — on the system's own glass, which follows the Mac's appearance settings
+/// for it.
 private struct MiniCallView: View {
     let call: CallController
     let me: MessageActor
     var onReturn: () -> Void
     var onLeave: () -> Void
+    var onResize: (CGSize) -> Void
 
     private static let inset: CGFloat = 10
     private static let cornerRadius: CGFloat = 26
@@ -98,6 +111,9 @@ private struct MiniCallView: View {
         VStack(spacing: 8) {
             other
             own
+            if call.captions.isOn {
+                CompactCaptionsView(captions: call.captions, width: Tile<EmptyView>.width, cornerRadius: Self.cornerRadius - Self.inset)
+            }
             GlassEffectContainer(spacing: 8) {
                 controls
             }
@@ -105,13 +121,21 @@ private struct MiniCallView: View {
         }
         .padding(Self.inset)
         .glassEffect(.regular, in: .rect(cornerRadius: Self.cornerRadius))
+        // Moved by dragging anywhere but a button — the pictures included. A borderless
+        // panel's "movable by its background" doesn't reach through SwiftUI's content.
+        .gesture(WindowDragGesture())
         .fixedSize()
+        .onGeometryChange(for: CGSize.self, of: { $0.size }, action: onResize)
     }
 
-    /// The person on the other end — or, in a group, the first.
+    /// The person on the other end — or, in a group, whoever spoke last.
+    private var shown: CallController.Participant? {
+        call.participants.first { $0.id == call.recentSpeakerID } ?? call.participants.first
+    }
+
     private var other: some View {
-        Tile(cornerRadius: Self.cornerRadius - Self.inset) {
-            if let person = call.participants.first {
+        Tile(cornerRadius: Self.cornerRadius - Self.inset, isSpeaking: shown?.isSpeaking ?? false) {
+            if let person = shown {
                 if person.isVideoOn, let video = person.video {
                     VideoView(video: video)
                 } else {
@@ -121,14 +145,15 @@ private struct MiniCallView: View {
                 AvatarView(conversation: call.conversation, size: 64)
             }
         } caption: {
-            call.participants.count > 1
-                ? "\(call.participants[0].name) +\(call.participants.count - 1)"
-                : call.participants.first?.name ?? call.conversation.displayName
+            (call.participants.contains(where: \.isHandRaised) ? "✋ " : "")
+                + (call.participants.count > 1
+                    ? "\(shown?.name ?? call.participants[0].name) +\(call.participants.count - 1)"
+                    : call.participants.first?.name ?? call.conversation.displayName)
         }
     }
 
     private var own: some View {
-        Tile(cornerRadius: Self.cornerRadius - Self.inset) {
+        Tile(cornerRadius: Self.cornerRadius - Self.inset, isSpeaking: call.isSpeaking) {
             if call.isCameraOn, let video = call.localVideo {
                 VideoView(video: video, isMirrored: true)
             } else {
@@ -151,7 +176,10 @@ private struct MiniCallView: View {
 }
 
 private struct Tile<Content: View>: View {
+    static var width: CGFloat { 232 }
+
     let cornerRadius: CGFloat
+    var isSpeaking = false
     @ViewBuilder var content: Content
     var caption: () -> String
 
@@ -168,7 +196,8 @@ private struct Tile<Content: View>: View {
                 .shadow(color: .black.opacity(0.6), radius: 3)
                 .padding(8)
         }
-        .frame(width: 232, height: 130)
+        .frame(width: Self.width, height: 130)
+        .speakingRing(isSpeaking, cornerRadius: cornerRadius, lineWidth: 2.5)
     }
 }
 

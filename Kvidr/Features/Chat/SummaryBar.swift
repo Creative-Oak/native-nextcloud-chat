@@ -80,7 +80,9 @@ struct SummaryBar: View {
         case .writing:
             "Summarizing…"
         case .written, .failed:
-            if summary.isRecent {
+            if let subject = summary.subject {
+                "Summary of \(subject)"
+            } else if summary.isRecent {
                 "Summary of the latest \(summary.coveredCount) messages"
             } else if summary.coveredCount > 0 && summary.coveredCount < summary.unreadCount {
                 "Summary of the latest \(summary.coveredCount) of \(summary.unreadCount) messages"

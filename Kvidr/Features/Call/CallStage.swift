@@ -14,13 +14,17 @@ struct CallStage: View {
     var onDismiss: () -> Void
     /// Shrinks the call to a pill, back to the messages.
     var onMinimize: () -> Void
+    /// The call's notes, into the conversation's field to read over and send.
+    var onUseInChat: (String) -> Void = { _ in }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Everyone in the call, in a panel beside the stage.
+    @State private var showsPeople = false
+    /// The notes so far, in a panel over the stage.
+    @State private var showsNotes = false
 
     var body: some View {
         ZStack {
-            backdrop
-
             switch call.phase {
             case .ended(let reason):
                 ended(reason: reason)
@@ -28,6 +32,11 @@ struct CallStage: View {
                 stage
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // A background, not a layer of the stack: the wash is a 900-point picture, and as a
+        // layer it made the stage 900 points tall in a shorter window — centred, with the
+        // header and the controls cut off above and below.
+        .background { backdrop }
         .environment(\.colorScheme, .dark)
         .clipped()
     }
@@ -138,35 +147,12 @@ struct CallStage: View {
                     Color.clear
                 } else if let only = soloParticipant {
                     // No video: their picture, large, as the iPhone shows whoever you're talking
-                    // to — still ringing until their audio arrives, then still, with a note
-                    // that it's their camera that's off, not the call that hasn't started.
-                    VStack(spacing: 18) {
-                        ZStack(alignment: .bottomTrailing) {
-                            ActorAvatarView(actor: only.actor, size: 200)
-                                .shadow(color: .black.opacity(0.25), radius: 24, y: 10)
-                                .opacity(only.isConnected ? 1 : 0.7)
-                                .background {
-                                    if !only.isConnected { RingingRings(diameter: 200) }
-                                }
-                            if !only.isAudioOn {
-                                Image(systemName: "mic.slash.fill")
-                                    .font(.system(size: 15, weight: .semibold))
-                                    .foregroundStyle(.white)
-                                    .frame(width: 40, height: 40)
-                                    .glassEffect(.regular, in: .circle)
-                            }
-                        }
-                        if only.isConnected {
-                            Label("Camera off", systemImage: "video.slash.fill")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(.white.opacity(0.85))
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 6)
-                                .glassEffect(.regular, in: .capsule)
-                                .transition(.opacity)
-                        }
+                    // to — smaller in a short window, so the controls never go off the bottom.
+                    ViewThatFits(in: .vertical) {
+                        soloPicture(only, size: 200)
+                        soloPicture(only, size: 120)
+                        soloPicture(only, size: 64)
                     }
-                    .animation(.smooth(duration: 0.3), value: only.isConnected)
                 } else {
                     tiles
                 }
@@ -174,6 +160,29 @@ struct CallStage: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(.horizontal, 24)
             .padding(.vertical, 16)
+            .overlay(alignment: .top) {
+                if let notice = call.notice {
+                    Label(notice.text, systemImage: notice.symbol)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .glassEffect(.regular, in: .capsule)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                        .id(notice.id)
+                }
+            }
+            .animation(reduceMotion ? nil : .smooth(duration: 0.3), value: call.notice)
+            .overlay {
+                ReactionsOverlay(reactions: call.reactions)
+                    .padding(.leading, 40)
+                    .padding(.bottom, 24)
+            }
+            .overlay(alignment: .bottom) {
+                CaptionsView(captions: call.captions)
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 4)
+            }
 
             controls
                 .padding(.bottom, 22)
@@ -192,17 +201,137 @@ struct CallStage: View {
             .padding(.leading, 20)
             .padding(.top, 50)
         }
-        .overlay {
-            MovableSelfTile(me: me, isMuted: call.isMuted, video: call.isCameraOn ? call.localVideo : nil)
+        // Everyone in the call, opposite the minimize button — a hand that's up shows here too.
+        .overlay(alignment: .topTrailing) {
+            Button { showsPeople.toggle() } label: {
+                Image(systemName: showsPeople ? "person.2.fill" : "person.2")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(showsPeople ? .black : .white)
+                    .frame(width: 36, height: 36)
+                    .background {
+                        if showsPeople { Circle().fill(.white) }
+                    }
+                    .glassEffect(showsPeople ? .identity : .regular.interactive(), in: .circle)
+                    .overlay(alignment: .topTrailing) {
+                        if call.participants.contains(where: \.isHandRaised) {
+                            Image(systemName: "hand.raised.fill")
+                                .font(.system(size: 8, weight: .bold))
+                                .foregroundStyle(.black)
+                                .frame(width: 16, height: 16)
+                                .background(.yellow, in: .circle)
+                                .offset(x: 4, y: -4)
+                                .accessibilityHidden(true)
+                        }
+                    }
+                    .contentShape(.circle)
+            }
+            .buttonStyle(.plain)
+            .keyboardShortcut("p", modifiers: [.command, .shift])
+            .help(showsPeople ? "Hide who's in the call (⇧⌘P)" : "Who's in the call (⇧⌘P)")
+            .accessibilityLabel("People in the Call")
+            .accessibilityValue(showsPeople ? "Shown" : "Hidden")
+            .padding(.trailing, 20)
+            .padding(.top, 50)
         }
+        .overlay {
+            MovableSelfTile(me: me, isMuted: call.isMuted, isSpeaking: call.isSpeaking, isHandRaised: call.isHandRaised, video: call.isCameraOn ? call.localVideo : nil)
+        }
+        .overlay(alignment: .topTrailing) {
+            if showsPeople {
+                CallPeoplePanel(call: call, me: me) { showsPeople = false }
+                    .padding(.trailing, 16)
+                    .padding(.top, 96)
+                    .padding(.bottom, 110)
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
+            }
+        }
+        .animation(reduceMotion ? nil : .smooth(duration: 0.3), value: showsPeople)
+        .overlay(alignment: .top) {
+            if showsNotes, call.summary.state != .idle {
+                CallNotesView(summary: call.summary, title: notesTitle, onUseInChat: onUseInChat)
+                    .overlay(alignment: .topTrailing) {
+                        Button { showsNotes = false } label: {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundStyle(.white)
+                                .frame(width: 22, height: 22)
+                                .glassEffect(.regular.interactive(), in: .circle)
+                        }
+                        .buttonStyle(.plain)
+                        .padding(10)
+                        .accessibilityLabel("Close the notes")
+                    }
+                    .padding(.top, 150)
+                    .transition(.opacity.combined(with: .scale(scale: 0.96)))
+            }
+        }
+        .animation(reduceMotion ? nil : .smooth(duration: 0.25), value: showsNotes)
+        // Your own hand, said where you'll see it, with the way to put it down.
+        .overlay(alignment: .bottom) {
+            if call.isHandRaised {
+                Button(action: call.toggleHand) {
+                    Label("Your hand is raised · Lower", systemImage: "hand.raised.fill")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.black)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 7)
+                        .background(.yellow, in: .capsule)
+                }
+                .buttonStyle(.plain)
+                .padding(.bottom, 118)
+                .transition(.opacity.combined(with: .scale(scale: 0.9)))
+            }
+        }
+        .animation(reduceMotion ? nil : .smooth(duration: 0.25), value: call.isHandRaised)
     }
 
     /// The iPhone's order: how long, small, over who — large.
+    /// Their picture, still ringing until their audio arrives, then still, with a note that
+    /// it's their camera that's off, not the call that hasn't started.
+    private func soloPicture(_ only: CallController.Participant, size: CGFloat) -> some View {
+        VStack(spacing: size >= 120 ? 18 : 10) {
+            ZStack(alignment: .bottomTrailing) {
+                ActorAvatarView(actor: only.actor, size: size)
+                    .shadow(color: .black.opacity(0.25), radius: size / 8, y: size / 20)
+                    .opacity(only.isConnected ? 1 : 0.7)
+                    .speakingRing(only.isSpeaking, lineWidth: size >= 120 ? 4 : 3)
+                    .overlay(alignment: .topLeading) {
+                        if only.isHandRaised { HandBadge(size: size >= 120 ? 20 : 13) }
+                    }
+                    .background {
+                        if !only.isConnected { RingingRings(diameter: size) }
+                    }
+                if !only.isAudioOn {
+                    Image(systemName: "mic.slash.fill")
+                        .font(.system(size: size >= 120 ? 15 : 11, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: size / 5, height: size / 5)
+                        .glassEffect(.regular, in: .circle)
+                }
+            }
+            if only.isConnected {
+                Label("Camera off", systemImage: "video.slash.fill")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.85))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .glassEffect(.regular, in: .capsule)
+                    .transition(.opacity)
+            }
+        }
+        .animation(.smooth(duration: 0.3), value: only.isConnected)
+    }
+
     private var header: some View {
         VStack(spacing: 4) {
             Group {
                 if let since = call.answeredAt, !call.participants.isEmpty {
-                    Text(since, style: .timer).monospacedDigit()
+                    if let people = peopleInGroup {
+                        // A group's name alone doesn't say who's there; how many does, a little.
+                        Text("\(Text(since, style: .timer).monospacedDigit()) · \(people) people")
+                    } else {
+                        Text(since, style: .timer).monospacedDigit()
+                    }
                 } else if call.phase == .joining || !call.participants.isEmpty {
                     // Joining ourselves, or they've picked up and their audio is on its way.
                     Text("Connecting…")
@@ -213,10 +342,13 @@ struct CallStage: View {
             .font(.system(size: 15, weight: .medium))
             .foregroundStyle(.white.opacity(0.8))
             HStack(spacing: 10) {
-                Text(soloParticipant?.name ?? call.conversation.displayName)
+                Text(title)
                     .font(.system(size: 40, weight: .semibold))
                     .lineLimit(1)
                     .minimumScaleFactor(0.6)
+                if soloVideo != nil, soloParticipant?.isHandRaised == true {
+                    HandBadge(size: 14)
+                }
                 // Muted, said where their name is — the tile that would say it isn't there.
                 if soloVideo != nil, soloParticipant?.isAudioOn == false {
                     Image(systemName: "mic.slash.fill")
@@ -228,25 +360,40 @@ struct CallStage: View {
         .shadow(color: .black.opacity(soloVideo == nil ? 0 : 0.5), radius: 6)
     }
 
-    /// Nobody has picked up: their picture, with rings going out from it like a phone ringing.
-    private var waiting: some View {
-        AvatarView(conversation: call.conversation, size: 200)
-            .shadow(color: .black.opacity(0.25), radius: 24, y: 10)
-            .background { RingingRings(diameter: 200) }
+    /// Who the call is with: the other person in a one-to-one; a group's own name, however
+    /// many of it have joined.
+    private var title: String {
+        if call.conversation.isOneToOne, let solo = soloParticipant { return solo.name }
+        return call.conversation.displayName
     }
 
-    private var tiles: some View {
-        let columns = [GridItem(.adaptive(minimum: call.participants.count == 1 ? 320 : 220), spacing: 14)]
-        return ScrollView {
-            LazyVGrid(columns: columns, spacing: 14) {
-                ForEach(call.participants) { participant in
-                    ParticipantTile(participant: participant, isLarge: call.participants.count == 1)
-                }
+    /// Everyone in a group call, you included; nil in a one-to-one.
+    private var peopleInGroup: Int? {
+        call.conversation.isOneToOne ? nil : call.participants.count + 1
+    }
+
+    /// Nobody has picked up: their picture, with rings going out from it like a phone ringing.
+    /// Smaller in a short window, as the one-to-one picture is.
+    private var waiting: some View {
+        ViewThatFits(in: .vertical) {
+            ForEach([200, 120, 64] as [CGFloat], id: \.self) { size in
+                AvatarView(conversation: call.conversation, size: size)
+                    .shadow(color: .black.opacity(0.25), radius: size / 8, y: size / 20)
+                    .background { RingingRings(diameter: size) }
             }
-            .frame(maxWidth: .infinity)
         }
-        .scrollIndicators(.hidden)
-        .defaultScrollAnchor(.center)
+    }
+
+    /// Everyone, in tiles that fill the stage — larger the fewer there are. Someone joining
+    /// or leaving makes the others slide to their new places.
+    private var tiles: some View {
+        FittedTileLayout(spacing: 14) {
+            ForEach(call.participants) { participant in
+                ParticipantTile(participant: participant)
+                    .transition(.scale(scale: 0.9).combined(with: .opacity))
+            }
+        }
+        .animation(reduceMotion ? nil : .smooth(duration: 0.35), value: call.participants.map(\.id))
     }
 
     /// Round glass buttons with their names under them, as on the iPhone; white while what
@@ -279,7 +426,14 @@ struct CallStage: View {
                 action: { call.isSharingScreen ? call.stopSharingScreen() : call.shareScreen() }
             )
 
+            ReactButton(call: call)
+
             AudioDeviceMenu(
+                onSummarize: call.captions.isOn ? {
+                    call.summarizeSoFar()
+                    showsNotes = true
+                } : nil,
+                captions: call.captions,
                 devices: call.audioDevices,
                 cameras: call.cameras.map { ($0.uniqueID, $0.localizedName) },
                 cameraID: call.cameraID,
@@ -310,6 +464,11 @@ struct CallStage: View {
         }
     }
 
+    /// What the notes are headed with, in the chat and on the clipboard.
+    private var notesTitle: String {
+        "Call notes · \(call.conversation.displayName) · \(Date().formatted(date: .abbreviated, time: .shortened))"
+    }
+
     private func ended(reason: String?) -> some View {
         VStack(spacing: 14) {
             Image(systemName: "phone.down.circle.fill")
@@ -322,15 +481,19 @@ struct CallStage: View {
                 .frame(maxWidth: 360)
             Button("Close", action: onDismiss)
                 .keyboardShortcut(.defaultAction)
+            // Captions ran: the notes are written while this shows.
+            if call.summary.state != .idle {
+                CallNotesView(summary: call.summary, title: notesTitle, onUseInChat: onUseInChat)
+                    .padding(.top, 10)
+            }
         }
     }
 }
 
-/// Someone else in the call: their picture large on a dark card, their name in the corner,
-/// FaceTime's tile without the camera.
+/// Someone else in the call: their video, or their picture on a dark card sized to the tile,
+/// their name in the corner — FaceTime's tile.
 private struct ParticipantTile: View {
     let participant: CallController.Participant
-    let isLarge: Bool
 
     var body: some View {
         ZStack(alignment: .bottomLeading) {
@@ -340,9 +503,14 @@ private struct ParticipantTile: View {
                 VideoView(video: video)
                     .clipShape(.rect(cornerRadius: 22, style: .continuous))
             } else {
-                ActorAvatarView(actor: actor, size: isLarge ? 150 : 96)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .opacity(participant.isConnected ? 1 : 0.55)
+                GeometryReader { proxy in
+                    // Their picture in proportion to the tile: small tiles in a big group, large
+                    // ones with two or three people.
+                    let side = min(max(min(proxy.size.width, proxy.size.height) * 0.42, 44), 150)
+                    ActorAvatarView(actor: actor, size: side)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+                .opacity(participant.isConnected ? 1 : 0.55)
             }
             HStack(spacing: 6) {
                 if !participant.isAudioOn {
@@ -360,13 +528,46 @@ private struct ParticipantTile: View {
             .shadow(color: .black.opacity(0.5), radius: 3)
             .padding(12)
         }
-        .aspectRatio(isLarge ? 4 / 3 : 1, contentMode: .fit)
+        .overlay(alignment: .topLeading) {
+            if participant.isHandRaised { HandBadge().padding(10) }
+        }
+        .speakingRing(participant.isSpeaking, cornerRadius: 22)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(participant.isConnected ? participant.name : "\(participant.name), connecting")
+        .accessibilityLabel(label)
     }
 
     private var actor: MessageActor {
         MessageActor(type: participant.actorType ?? "users", id: participant.actorID ?? participant.userID ?? "", displayName: participant.name)
+    }
+
+    private var label: String {
+        if !participant.isConnected { return "\(participant.name), connecting" }
+        var label = participant.name
+        if participant.isHandRaised { label += ", hand raised" }
+        if participant.isSpeaking { label += ", speaking" }
+        return label
+    }
+}
+
+/// A call's tiles, placed by ``TileGrid``: all the same size, as large as the stage allows,
+/// rows centred. Takes all the space it is offered.
+private struct FittedTileLayout: Layout {
+    var spacing: CGFloat = 14
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        proposal.replacingUnspecifiedDimensions(by: CGSize(width: 640, height: 480))
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let grid = TileGrid(count: subviews.count, in: bounds.size, spacing: spacing)
+        for (index, subview) in subviews.enumerated() {
+            let center = grid.center(of: index)
+            subview.place(
+                at: CGPoint(x: bounds.minX + center.x, y: bounds.minY + center.y),
+                anchor: .center,
+                proposal: ProposedViewSize(grid.tileSize)
+            )
+        }
     }
 }
 
@@ -374,6 +575,8 @@ private struct ParticipantTile: View {
 private struct SelfTile: View {
     let me: MessageActor
     let isMuted: Bool
+    var isSpeaking = false
+    var isHandRaised = false
     let video: VideoTrack?
 
     var body: some View {
@@ -399,6 +602,10 @@ private struct SelfTile: View {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .strokeBorder(.white.opacity(0.15), lineWidth: 1)
         }
+        .overlay(alignment: .topLeading) {
+            if isHandRaised { HandBadge(size: 10).padding(6) }
+        }
+        .speakingRing(isSpeaking, cornerRadius: 14)
         .accessibilityLabel(isMuted ? "You, muted" : "You")
     }
 }
@@ -495,9 +702,12 @@ struct ReturnToCallPill: View {
     }
 }
 
-/// The call's "more" button: which camera, microphone and speaker it uses — AirPods, a
-/// headset, the Mac's own — and, later, what else a call can do.
+/// The call's "more" button: Live Captions, and which camera, microphone and speaker the call
+/// uses — AirPods, a headset, the Mac's own.
 private struct AudioDeviceMenu: View {
+    /// Notes on the call so far; nil without captions to write them from.
+    var onSummarize: (() -> Void)?
+    let captions: LiveCaptions
     let devices: AudioDevices
     let cameras: [(id: String, name: String)]
     let cameraID: String?
@@ -512,50 +722,86 @@ private struct AudioDeviceMenu: View {
         }
     }
 
+    /// Built by AppKit when clicked: the stage redraws every second (the timer, who's
+    /// talking), and a SwiftUI menu here was rebuilt each time, blinking its submenus.
     private var menu: some View {
-        Menu {
-            if cameras.count > 1 {
-                Section("Camera") {
-                    ForEach(cameras, id: \.id) { camera in
-                        Toggle(camera.name, isOn: Binding(
-                            get: { camera.id == (cameraID ?? cameras.first?.id) },
-                            set: { _ in onCamera(camera.id) }
-                        ))
-                    }
-                }
-            }
-            Section("Microphone") {
-                if devices.inputs.isEmpty {
-                    Text("None connected")
-                }
-                ForEach(devices.inputs) { device in
-                    Toggle(device.name, isOn: Binding(
-                        get: { device.id == devices.defaultInput },
-                        set: { _ in onMicrophone(device.id) }
-                    ))
-                }
-            }
-            Section("Speaker") {
-                ForEach(devices.outputs) { device in
-                    Toggle(device.name, isOn: Binding(
-                        get: { device.id == devices.defaultOutput },
-                        set: { _ in onSpeaker(device.id) }
-                    ))
-                }
-            }
+        PopUpMenuButton {
+            items
         } label: {
             Image(systemName: "ellipsis")
                 .font(.system(size: 21, weight: .semibold))
                 .foregroundStyle(.white)
                 .frame(width: 62, height: 62)
                 .glassEffect(.regular.interactive(), in: .circle)
+                .contentShape(.circle)
         }
-        .menuStyle(.button)
         .buttonStyle(.plain)
-        .menuIndicator(.hidden)
         .fixedSize()
-        .help("More — camera, microphone and speaker")
+        .help("More — Live Captions, camera, microphone and speaker")
         .accessibilityLabel("More")
+    }
+
+    private var items: [PopUpMenuItem] {
+        var items: [PopUpMenuItem] = []
+        if let onSummarize {
+            items.append(.action("Summarize Call So Far", systemImage: "apple.intelligence", perform: onSummarize))
+        }
+        items += captions.menuItems
+        if cameras.count > 1 {
+            items.append(.header("Camera"))
+            let current = cameraID ?? cameras.first?.id
+            for camera in cameras {
+                items.append(.action(camera.name, isChecked: camera.id == current) { onCamera(camera.id) })
+            }
+        }
+        items.append(.header("Microphone"))
+        if devices.inputs.isEmpty {
+            items.append(.action("None connected", isEnabled: false) {})
+        }
+        for device in devices.inputs {
+            items.append(.action(device.name, isChecked: device.id == devices.defaultInput) { onMicrophone(device.id) })
+        }
+        items.append(.header("Speaker"))
+        for device in devices.outputs {
+            items.append(.action(device.name, isChecked: device.id == devices.defaultOutput) { onSpeaker(device.id) })
+        }
+        return items
+    }
+}
+
+/// The ring around whoever is talking: it comes on with the first word and fades once they
+/// stop, the way FaceTime lights up the tile of whoever has the floor. Reduce Motion keeps
+/// the ring and leaves out the breath of scale.
+struct SpeakingRing: ViewModifier {
+    let isSpeaking: Bool
+    /// The corner of the thing it goes around; nil for a round picture.
+    var cornerRadius: CGFloat?
+    var lineWidth: CGFloat = 3
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        content
+            .overlay { ring.opacity(isSpeaking ? 1 : 0) }
+            .shadow(color: .white.opacity(isSpeaking ? 0.3 : 0), radius: 12)
+            .scaleEffect(isSpeaking && !reduceMotion ? 1.015 : 1)
+            .animation(.smooth(duration: 0.22), value: isSpeaking)
+    }
+
+    @ViewBuilder private var ring: some View {
+        if let cornerRadius {
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .strokeBorder(.white, lineWidth: lineWidth)
+        } else {
+            Circle().strokeBorder(.white, lineWidth: lineWidth)
+        }
+    }
+}
+
+extension View {
+    /// Rings this while they are talking. See ``SpeakingRing``.
+    func speakingRing(_ isSpeaking: Bool, cornerRadius: CGFloat? = nil, lineWidth: CGFloat = 3) -> some View {
+        modifier(SpeakingRing(isSpeaking: isSpeaking, cornerRadius: cornerRadius, lineWidth: lineWidth))
     }
 }
 
@@ -595,6 +841,8 @@ private struct RingingRings: View {
 private struct MovableSelfTile: View {
     let me: MessageActor
     let isMuted: Bool
+    var isSpeaking = false
+    var isHandRaised = false
     let video: VideoTrack?
 
     enum Spot: String, CaseIterable {
@@ -620,7 +868,7 @@ private struct MovableSelfTile: View {
     var body: some View {
         GeometryReader { proxy in
             let here = center(of: spot, in: proxy.size)
-            SelfTile(me: me, isMuted: isMuted, video: video)
+            SelfTile(me: me, isMuted: isMuted, isSpeaking: isSpeaking, isHandRaised: isHandRaised, video: video)
                 .scaleEffect(isDragging ? 1.05 : 1)
                 .shadow(color: .black.opacity(isDragging ? 0.35 : 0.2), radius: isDragging ? 20 : 10, y: isDragging ? 10 : 4)
                 .position(x: here.x + drag.width, y: here.y + drag.height)

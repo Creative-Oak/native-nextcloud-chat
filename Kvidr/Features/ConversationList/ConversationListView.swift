@@ -16,8 +16,13 @@ struct ConversationListView: View {
     var onDiscardDraft: () -> Void
     /// Upcoming reminders; the Reminders row shows while there are any.
     var reminderCount = 0
+    /// Conversations with something unread; the Catch Up row shows from two on.
+    var catchUpCount = 0
 
     @FocusState private var isSearchFocused: Bool
+    @State private var deletingTag: ConversationTag?
+    /// The row whose menu is open, for its outline.
+    @State private var menuToken: String?
 
     init(
         model: ConversationListModel,
@@ -27,7 +32,8 @@ struct ConversationListView: View {
         onSearchFocusHandled: @escaping () -> Void,
         draft: ConversationDraft? = nil,
         onDiscardDraft: @escaping () -> Void = {},
-        reminderCount: Int = 0
+        reminderCount: Int = 0,
+        catchUpCount: Int = 0
     ) {
         self.model = model
         _selection = selection
@@ -37,12 +43,18 @@ struct ConversationListView: View {
         self.draft = draft
         self.onDiscardDraft = onDiscardDraft
         self.reminderCount = reminderCount
+        self.catchUpCount = catchUpCount
     }
 
     var body: some View {
         List(selection: $selection) {
+            if catchUpCount >= 2, !model.isFiltering {
+                CatchUpSidebarRow(count: catchUpCount)
+                    .tag(CatchUpToken.value)
+                    .listRowSeparator(.hidden)
+            }
             if reminderCount > 0, !model.isFiltering {
-                RemindersSidebarRow(count: reminderCount, isSelected: RemindersToken.isReminders(selection))
+                RemindersSidebarRow(count: reminderCount)
                     .tag(RemindersToken.value)
                     .listRowSeparator(.hidden)
             }
@@ -81,12 +93,61 @@ struct ConversationListView: View {
                             .padding(.leading, -3)
                     }
 
+                // The user's own groups — Talk's tags — each under its name, and folding.
+                case .tagged where !model.isFiltering:
+                    if let tag = group.tag {
+                        Section {
+                            rows(shown(group))
+                        } header: {
+                            TagSectionHeader(title: group.title, isCollapsed: tag.isCollapsed, hidden: group.items.count - shown(group).count) {
+                                model.setCollapsed(tag, !tag.isCollapsed)
+                            }
+                            .contextMenu { tagMenu(tag) }
+                        }
+                    }
+
+                // Everything untagged, under Talk's name for it — a heading only once there are
+                // tags above it to be told apart from.
+                case .conversations where !model.isFiltering && hasTagSections:
+                    Section {
+                        rows(shown(group))
+                    } header: {
+                        if let tag = group.tag {
+                            TagSectionHeader(title: group.title, isCollapsed: tag.isCollapsed, hidden: group.items.count - shown(group).count) {
+                                model.setCollapsed(tag, !tag.isCollapsed)
+                            }
+                        } else {
+                            TagSectionHeader(title: group.title, isCollapsed: false, hidden: 0, onToggle: nil)
+                        }
+                    }
+
                 default:
                     rows(group.items)
                 }
             }
         }
         .listStyle(.sidebar)
+        .alert(model.namingTag?.title ?? "", isPresented: Binding(get: { model.namingTag != nil }, set: { isShown in
+            // Later, not now: the alert closes before its button's action runs, and Create
+            // still needs the name.
+            if !isShown { Task { @MainActor in model.namingTag = nil } }
+        })) {
+            TextField("Name", text: Binding(get: { model.namingTag?.name ?? "" }, set: { model.namingTag?.name = $0 }))
+            Button(model.namingTag.map { if case .rename = $0.purpose { "Rename" } else { "Create" } } ?? "OK") { model.finishNaming() }
+            Button("Cancel", role: .cancel) { model.namingTag = nil }
+        }
+        .confirmationDialog("Delete the tag “\(deletingTag?.name ?? "")”?", isPresented: Binding(get: { deletingTag != nil }, set: { isShown in
+            // Later, for the same reason: Delete Tag still needs to know which.
+            if !isShown { Task { @MainActor in deletingTag = nil } }
+        })) {
+            Button("Delete Tag", role: .destructive) {
+                if let deletingTag { model.deleteTag(deletingTag) }
+                deletingTag = nil
+            }
+            Button("Cancel", role: .cancel) { deletingTag = nil }
+        } message: {
+            Text("Its conversations stay, and go back among the rest.")
+        }
         // The search field as Messages draws it: a rounded pane at the top of the
         // sidebar. `.searchable` on this list gives the toolbar's small field, which
         // cannot be restyled.
@@ -112,6 +173,31 @@ struct ConversationListView: View {
             composerFocused = true
             return .handled
         }
+    }
+
+    private var hasTagSections: Bool {
+        model.sections.contains { $0.section == .tagged }
+    }
+
+    /// A folded section still shows what needs you: the unread, the ones with a call on, and
+    /// the one that's open — as Talk's web app folds them.
+    private func shown(_ group: ConversationIndex.SectionGroup) -> [Conversation] {
+        guard group.tag?.isCollapsed == true else { return group.items }
+        return group.items.filter { $0.token == selection || $0.unreadMessages > 0 || $0.hasCall }
+    }
+
+    @ViewBuilder
+    private func tagMenu(_ tag: ConversationTag) -> some View {
+        let custom = model.customTags
+        Button("Rename…") { model.beginRenaming(tag) }
+        Button("Move Up") { model.moveTag(tag, by: -1) }
+            .disabled(custom.first == tag)
+        Button("Move Down") { model.moveTag(tag, by: 1) }
+            .disabled(custom.last == tag)
+        Divider()
+        Button("New Tag…") { model.beginNewTag(for: nil) }
+        Divider()
+        Button("Delete Tag…", role: .destructive) { deletingTag = tag }
     }
 
     /// Whether the grid of faces is on screen for the draft to sit beneath.
@@ -151,7 +237,7 @@ struct ConversationListView: View {
                 precedesSelection: precedesSelection
             )
                 .tag(conversation.token)
-                .contextMenu { ConversationContextMenu(model: model, conversation: conversation) }
+                .modifier(ConversationRowMenu(model: model, token: conversation.token, menuToken: $menuToken))
         }
     }
 
@@ -665,5 +751,41 @@ private struct CarriedFace: ViewModifier {
         let from = grid.origin(ofSlot: base)
         let to = grid.origin(ofSlot: now)
         return CGSize(width: to.x - from.x, height: to.y - from.y)
+    }
+}
+
+/// A tag's heading in the sidebar: its name, a chevron to fold it by, and — folded — how many
+/// conversations are tucked away.
+private struct TagSectionHeader: View {
+    let title: String
+    let isCollapsed: Bool
+    /// Conversations folded out of sight.
+    let hidden: Int
+    /// Nil where the section doesn't fold.
+    var onToggle: (() -> Void)?
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Text(isCollapsed && hidden > 0 ? "\(title) (\(hidden))" : title)
+                // As the Archived heading: a row's timestamp size, at the selection's edge.
+                .font(.system(size: 12))
+                .lineLimit(1)
+            Spacer(minLength: 4)
+            if onToggle != nil {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 9, weight: .semibold))
+                    .rotationEffect(.degrees(isCollapsed ? 0 : 90))
+                    .animation(reduceMotion ? nil : .smooth(duration: 0.2), value: isCollapsed)
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        .padding(.leading, -3)
+        .contentShape(.rect)
+        .onTapGesture { onToggle?() }
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(onToggle == nil ? [.isHeader] : [.isHeader, .isButton])
+        .accessibilityHint(onToggle == nil ? "" : (isCollapsed ? "Unfold" : "Fold"))
     }
 }

@@ -6,12 +6,15 @@ import SwiftUI
 ///
 /// Shared, because a draft has a composer too — and a draft's files go up before there is a
 /// conversation to put them in, which the queue handles by taking its token late.
+///
+/// An AppKit menu, made when the + is clicked: a SwiftUI one is rebuilt with every redraw of
+/// the composer, and its Translate submenu blinked while open.
 struct AttachmentMenu: View {
     @Bindable var queue: AttachmentQueue
     /// Named in the open panel's message, so it is clear where the files are going.
     var destination: String
     /// Extra items, for the things only a real conversation can do.
-    @ViewBuilder var extraItems: () -> AnyView
+    var extraItems: () -> [PopUpMenuItem]
 
     @State private var isShowingPhotos = false
     @State private var pickedPhotos: [PhotosPickerItem] = []
@@ -19,7 +22,7 @@ struct AttachmentMenu: View {
     init(
         queue: AttachmentQueue,
         destination: String,
-        @ViewBuilder extraItems: @escaping () -> AnyView = { AnyView(EmptyView()) }
+        extraItems: @escaping () -> [PopUpMenuItem] = { [] }
     ) {
         self.queue = queue
         self.destination = destination
@@ -27,26 +30,30 @@ struct AttachmentMenu: View {
     }
 
     var body: some View {
-        Menu {
-            Button("Photos…", systemImage: "photo") { isShowingPhotos = true }
-            Button("Files…", systemImage: "folder") { chooseFiles() }
-                .keyboardShortcut("a", modifiers: [.command, .shift])
-            extraItems()
+        PopUpMenuButton {
+            [
+                .action("Photos…", systemImage: "photo") { isShowingPhotos = true },
+                .action("Files…", systemImage: "folder", keys: Self.filesShortcut) { chooseFiles() },
+            ] + extraItems()
         } label: {
             Image(systemName: "plus")
                 .font(.system(size: 17, weight: .medium))
                 .frame(width: GlassMetrics.control, height: GlassMetrics.control)
                 .contentShape(.circle)
         }
-        .menuStyle(.button)
-        // The glass drawn by hand, as the other round controls draw theirs. `.buttonStyle(.glass)`
-        // on a menu never painted the circle at all, so the plus sat there as a bare glyph
-        // beside a fielded text box.
+        // The glass drawn by hand, as the other round controls draw theirs.
         .buttonStyle(.plain)
-        .menuIndicator(.hidden)
         .glassCircle()
         .help("Add an attachment")
         .accessibilityLabel("Add an Attachment")
+        // ⇧⌘A without opening the menu, as it worked when the menu was SwiftUI's.
+        .background {
+            Button("", action: chooseFiles)
+                .keyboardShortcut(Self.filesShortcut)
+                .opacity(0)
+                .frame(width: 0, height: 0)
+                .accessibilityHidden(true)
+        }
         // Apple's own picker, out of process: the user chooses inside it and only the chosen
         // items cross over, so a sandboxed app needs no library permission, no usage string
         // and no entitlement to send one photo.
@@ -62,6 +69,8 @@ struct AttachmentMenu: View {
             Task { await stage(picked) }
         }
     }
+
+    private static let filesShortcut = KeyboardShortcut("a", modifiers: [.command, .shift])
 
     /// Copies what Photos handed over into the queue. Originals, unconverted — HEIC included.
     private func stage(_ items: [PhotosPickerItem]) async {

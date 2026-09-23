@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		AA0000000000000000000081 /* WebRTC in Frameworks */ = {isa = PBXBuildFile; productRef = AA0000000000000000000080 /* WebRTC */; };
+		AA0000000000000000000081 /* LiveKitWebRTC in Frameworks */ = {isa = PBXBuildFile; productRef = AA0000000000000000000080 /* LiveKitWebRTC */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -34,7 +34,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				AA0000000000000000000081 /* WebRTC in Frameworks */,
+				AA0000000000000000000081 /* LiveKitWebRTC in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -80,7 +80,7 @@
 			);
 			name = Kvidr;
 			packageProductDependencies = (
-				AA0000000000000000000080 /* WebRTC */,
+				AA0000000000000000000080 /* LiveKitWebRTC */,
 			);
 			productName = Kvidr;
 			productReference = AA0000000000000000000010 /* kvidr.app */;
@@ -107,11 +107,12 @@
 			knownRegions = (
 				en,
 				Base,
+				da,
 			);
 			mainGroup = AA0000000000000000000040;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				AA0000000000000000000082 /* XCRemoteSwiftPackageReference "WebRTC" */,
+				AA0000000000000000000082 /* XCRemoteSwiftPackageReference "webrtc-xcframework" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = AA0000000000000000000041 /* Products */;
@@ -264,9 +265,11 @@
 				INFOPLIST_FILE = "Kvidr-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = kvidr;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
+				INFOPLIST_KEY_NSCalendarsWriteOnlyAccessUsageDescription = "kvidr adds a meeting from a message to your calendar when you ask it to.";
 				INFOPLIST_KEY_NSCameraUsageDescription = "kvidr shows your camera to the people in a video call, when you turn it on.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "kvidr uses the microphone for calls, and to record a voice message when you press the record button.";
+				INFOPLIST_KEY_NSRemindersFullAccessUsageDescription = "kvidr adds a to-do from a message to Reminders when you ask it to.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "kvidr writes out voice messages on this Mac, so you can read them as well as listen.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -293,9 +296,11 @@
 				INFOPLIST_FILE = "Kvidr-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = kvidr;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
+				INFOPLIST_KEY_NSCalendarsWriteOnlyAccessUsageDescription = "kvidr adds a meeting from a message to your calendar when you ask it to.";
 				INFOPLIST_KEY_NSCameraUsageDescription = "kvidr shows your camera to the people in a video call, when you turn it on.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "kvidr uses the microphone for calls, and to record a voice message when you press the record button.";
+				INFOPLIST_KEY_NSRemindersFullAccessUsageDescription = "kvidr adds a to-do from a message to Reminders when you ask it to.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "kvidr writes out voice messages on this Mac, so you can read them as well as listen.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -332,21 +337,21 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		AA0000000000000000000082 /* XCRemoteSwiftPackageReference "WebRTC" */ = {
+		AA0000000000000000000082 /* XCRemoteSwiftPackageReference "webrtc-xcframework" */ = {
 			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/stasel/WebRTC.git";
+			repositoryURL = "https://github.com/livekit/webrtc-xcframework.git";
 			requirement = {
 				kind = exactVersion;
-				version = 153.0.0;
+				version = 150.7871.02;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		AA0000000000000000000080 /* WebRTC */ = {
+		AA0000000000000000000080 /* LiveKitWebRTC */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = AA0000000000000000000082 /* XCRemoteSwiftPackageReference "WebRTC" */;
-			productName = WebRTC;
+			package = AA0000000000000000000082 /* XCRemoteSwiftPackageReference "webrtc-xcframework" */;
+			productName = LiveKitWebRTC;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

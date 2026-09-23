@@ -63,8 +63,8 @@ final class PollStore {
         }
     }
 
-    /// Re-reads a poll. Someone else voting says nothing on the wire — this project has no
-    /// signaling — so this is what the card falls back on rather than a timer per poll.
+    /// Re-reads a poll — when Talk's hidden "voted" or "closed" line for it comes in the chat,
+    /// which is how others' votes show up live.
     func refresh(_ id: Int) async {
         await fetch(id)
     }

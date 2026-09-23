@@ -124,8 +124,15 @@ struct TalkConfig: Sendable, Hashable, Codable {
     var conversationsCanCreate: Bool?
     var previewsMaxGIFSize: Int?
     var callEnabled: Bool?
+    /// The emoji a call's reactions offer, in the server's order. `config.call.supported-reactions`.
+    var callReactions: [String]? = nil
 
     /// Talk's own default when the server doesn't say.
+    var effectiveCallReactions: [String] {
+        let reactions = callReactions ?? []
+        return reactions.isEmpty ? ["❤️", "🎉", "👏", "👋", "👍", "👎", "🔥", "😂", "🤩", "🤔", "😲", "😥"] : reactions
+    }
+
     var effectiveMaxMessageLength: Int { chatMaxLength ?? 32_000 }
     var readReceiptsAreMeaningful: Bool { (chatReadPrivacy ?? 1) == 0 }
 }

@@ -16,11 +16,15 @@ struct SidebarColumn: View {
     var onDiscardDraft: () -> Void
     var profile: ProfileModel?
     var reminderCount = 0
+    /// Conversations with something unread, for the Catch Up row.
+    var catchUpCount = 0
     var onOpenSettings: () -> Void = {}
 
     var body: some View {
         lists
-            .safeAreaInset(edge: .bottom, spacing: 0) {
+            // A bar rather than an inset, as the chat's header is: the list scrolls under it
+            // behind the system's edge effect, hard so no row shows through the name.
+            .safeAreaBar(edge: .bottom, spacing: 0) {
                 if let profile {
                     SidebarAccountRow(
                         profile: profile,
@@ -30,6 +34,7 @@ struct SidebarColumn: View {
                     )
                 }
             }
+            .scrollEdgeEffectStyle(.hard, for: .bottom)
     }
 
     @ViewBuilder
@@ -39,7 +44,8 @@ struct SidebarColumn: View {
                 CompactConversationListView(
                     model: list,
                     selection: $selection,
-                    composerFocused: $composerFocused
+                    composerFocused: $composerFocused,
+                    reminderCount: reminderCount
                 )
             } else {
                 ConversationListView(
@@ -50,7 +56,8 @@ struct SidebarColumn: View {
                     onSearchFocusHandled: onSearchFocusHandled,
                     draft: draft,
                     onDiscardDraft: onDiscardDraft,
-                    reminderCount: reminderCount
+                    reminderCount: reminderCount,
+                    catchUpCount: catchUpCount
                 )
             }
         } else {

@@ -47,13 +47,20 @@ final class UnreadSummary {
     /// How many messages the summary covers — the newest, when they didn't all fit.
     private(set) var coveredCount = 0
 
+    /// What it's a summary of, when it isn't the unread or the latest messages — "the thread
+    /// “Launch”", "the last week".
+    let subject: String?
+
     private let conversationName: String
     private let lines: () -> [SummaryInput.Line]
     private var task: Task<Void, Never>?
 
-    init(unreadCount: Int, isRecent: Bool = false, conversationName: String, lines: @escaping () -> [SummaryInput.Line]) {
+    /// `subject` set: everything `lines` gives is summarized, in chunks when it doesn't fit the
+    /// model at once. Without it, the newest that fit.
+    init(unreadCount: Int, isRecent: Bool = false, subject: String? = nil, conversationName: String, lines: @escaping () -> [SummaryInput.Line]) {
         self.unreadCount = unreadCount
         self.isRecent = isRecent
+        self.subject = subject
         self.conversationName = conversationName
         self.lines = lines
     }
@@ -65,9 +72,20 @@ final class UnreadSummary {
         matters. Use only what the messages say. No heading, no introduction, no closing remark.
         """
 
+    /// Notes on one part of a long stretch, to be summarized with the others.
+    private static let noteInstructions = """
+        You take notes on one part of a longer group chat. List what was said, asked and \
+        decided, and by whom, in at most six short lines. Write in the language most of the \
+        messages are written in. Use only what the messages say. No heading, no introduction.
+        """
+
     func write() {
         if case .notYet(let reason) = Self.availability {
             state = .failed(reason)
+            return
+        }
+        if subject != nil {
+            writeInParts()
             return
         }
         let (transcript, included) = SummaryInput.transcript(lines())
@@ -84,6 +102,52 @@ final class UnreadSummary {
             do {
                 var latest = ""
                 for try await snapshot in session.streamResponse(to: prompt) {
+                    latest = snapshot.content
+                    self?.state = .writing(latest)
+                }
+                self?.state = .written(latest.trimmingCharacters(in: .whitespacesAndNewlines))
+            } catch is CancellationError {
+                return
+            } catch let error as LanguageModelSession.GenerationError {
+                self?.state = .failed(Self.message(for: error))
+            } catch {
+                self?.state = .failed("The summary couldn’t be written: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    /// A thread, a day, a week: more than the model takes in at once. Each part is noted
+    /// down, then the notes summarized — the summary streams in as before.
+    private func writeInParts() {
+        let all = lines()
+        let chunks = SummaryInput.chunks(all)
+        guard !chunks.isEmpty else {
+            state = .failed("There’s nothing here to summarize.")
+            return
+        }
+        coveredCount = all.count
+        state = .writing("")
+        let name = conversationName
+        task?.cancel()
+        task = Task { [weak self] in
+            do {
+                var notes: [String] = []
+                if chunks.count == 1 {
+                    notes = chunks
+                } else {
+                    for (index, chunk) in chunks.enumerated() {
+                        self?.state = .writing("Reading part \(index + 1) of \(chunks.count)…")
+                        let session = LanguageModelSession(instructions: Self.noteInstructions)
+                        let response = try await session.respond(to: "Part \(index + 1) of the messages in “\(name)”:\n\n\(chunk)")
+                        notes.append(response.content)
+                    }
+                }
+                let material = chunks.count == 1
+                    ? "Messages in “\(name)”, oldest first:\n\n\(notes[0])"
+                    : "Notes on the messages in “\(name)”, part by part, oldest first:\n\n\(notes.joined(separator: "\n\n"))"
+                let session = LanguageModelSession(instructions: Self.instructions)
+                var latest = ""
+                for try await snapshot in session.streamResponse(to: material) {
                     latest = snapshot.content
                     self?.state = .writing(latest)
                 }

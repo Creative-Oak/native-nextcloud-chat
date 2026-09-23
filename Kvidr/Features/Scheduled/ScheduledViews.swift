@@ -39,18 +39,21 @@ struct ScheduledMessageRow: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 3)
         .contentShape(.rect)
-        .contextMenu {
-            Button("Send Now") { model.sendNow(message) }
-            Menu("Change Time") {
-                ForEach(ReminderPreset.presets()) { preset in
-                    Button("\(preset.title) — \(ReminderTime.text(preset.date))") { model.reschedule(message, to: preset.date) }
-                }
-                Divider()
-                Button("Other Time…") { model.editScheduled(message) }
+        // AppKit's, made at the click: the row redraws every few seconds for its caption,
+        // and a SwiftUI menu redrawn with it blinked its Change Time submenu.
+        .popUpContextMenu {
+            var times: [PopUpMenuItem] = ReminderPreset.presets().map { preset in
+                .action("\(preset.title) — \(ReminderTime.text(preset.date))") { model.reschedule(message, to: preset.date) }
             }
-            Button("Edit…") { model.editScheduled(message) }
-            Divider()
-            Button("Delete", role: .destructive) { model.deleteScheduled(message) }
+            times.append(.divider)
+            times.append(.action("Other Time…") { model.editScheduled(message) })
+            return [
+                .action("Send Now") { model.sendNow(message) },
+                .submenu("Change Time", times),
+                .action("Edit…") { model.editScheduled(message) },
+                .divider,
+                .action("Delete") { model.deleteScheduled(message) },
+            ]
         }
         .accessibilityElement(children: .combine)
     }

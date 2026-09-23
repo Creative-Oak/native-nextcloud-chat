@@ -130,13 +130,16 @@ final class AttachmentQueue {
     /// An image pasted from the clipboard — written to a temporary file first, because the
     /// upload path takes a file, and named after the moment it was pasted so it doesn't
     /// arrive as "image.png" for the fiftieth time.
-    func enqueuePastedImage(_ image: NSImage) {
+    /// `named`: what the file is called — a Genmoji's description, say. Without it, "Pasted
+    /// image" and when.
+    func enqueuePastedImage(_ image: NSImage, named: String? = nil) {
         guard let tiff = image.tiffRepresentation,
               let bitmap = NSBitmapImageRep(data: tiff),
               let png = bitmap.representation(using: .png, properties: [:])
         else { return }
 
-        let name = "Pasted image \(Self.timestampFormatter.string(from: .now)).png"
+        let base = named.map(Self.fileSafe).flatMap { $0.isEmpty ? nil : $0 } ?? "Pasted image \(Self.timestampFormatter.string(from: .now))"
+        let name = "\(base).png"
         do {
             // Its own scratch directory, like a picked photo: the name carries a timestamp
             // only to the second, so two quick pastes would otherwise collide, and a
@@ -148,6 +151,15 @@ final class AttachmentQueue {
         } catch {
             Log.chat.warning("Couldn’t stage a pasted image for upload")
         }
+    }
+
+    /// A name that can be a file's: no path separators, no leading dot, not too long.
+    private static func fileSafe(_ name: String) -> String {
+        var cleaned = name
+        for separator in ["/", ":", "\\"] { cleaned = cleaned.replacingOccurrences(of: separator, with: "-") }
+        cleaned = cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
+        while cleaned.hasPrefix(".") { cleaned.removeFirst() }
+        return String(cleaned.prefix(80))
     }
 
     /// - Parameter temporaryItem: what the app made for this URL and must clear away again,

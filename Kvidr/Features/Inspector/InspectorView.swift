@@ -13,6 +13,13 @@ struct InspectorView: View {
     var onOpenMessage: (Int) -> Void
     /// Opens the in-conversation search — the transcript's, not the app-wide sheet.
     var onSearch: () -> Void
+    /// Breakout rooms: the open conversation's, when it can have them, and the way to one.
+    var breakout: BreakoutRoomsModel?
+    var breakoutRooms: [Conversation] = []
+    /// The conversation as the sidebar last synced it — rooms set up or started since the
+    /// inspector opened show there, not in its snapshot.
+    var liveConversation: Conversation?
+    var onOpenConversation: (String) -> Void = { _ in }
 
     @Environment(\.talkSession) private var session
     @Environment(\.colorScheme) private var colorScheme
@@ -26,7 +33,20 @@ struct InspectorView: View {
 
                 VStack(spacing: 14) {
                     switch model.tab {
-                    case .details: DetailsTab(model: model)
+                    case .details:
+                        DetailsTab(model: model)
+                        if let session, model.conversation.isModerator, !model.conversation.isFormerOneToOne,
+                           model.capabilities.has("bots-v1") {
+                            BotsCard(session: session, token: model.conversation.token)
+                        }
+                        if let breakout, showsBreakoutRooms {
+                            BreakoutRoomsCard(
+                                conversation: liveConversation ?? model.conversation,
+                                rooms: breakoutRooms,
+                                model: breakout,
+                                onOpen: onOpenConversation
+                            )
+                        }
                     case .people: PeopleTab(model: model)
                     case .files: FilesTab(model: model, onOpenMessage: onOpenMessage)
                     }
@@ -106,6 +126,13 @@ struct InspectorView: View {
                 NSWorkspace.shared.open(url)
             }
         }
+    }
+
+    /// Moderators of a group or public conversation, on a server that has breakout rooms.
+    private var showsBreakoutRooms: Bool {
+        model.conversation.isModerator && model.conversation.canHostBreakoutRooms
+            && model.capabilities.has("breakout-rooms-v1")
+            && breakout?.token == model.conversation.token
     }
 
     private var webURL: URL? {

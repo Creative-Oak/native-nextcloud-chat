@@ -60,12 +60,32 @@ struct VoiceMessageView: View {
                     .font(.caption)
                     .foregroundStyle(secondary)
             } else if case .done(let text) = player.transcriber.state(for: object.id) {
+                // A long one can be put in a sentence or two, above the words themselves.
+                if let summary = player.transcriber.summaries[object.id] {
+                    Label {
+                        Text(summary ?? "Summarizing…")
+                            .fixedSize(horizontal: false, vertical: true)
+                    } icon: {
+                        Image(systemName: "apple.intelligence")
+                    }
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(isFromMe ? Color.white : Color.primary)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: 260, alignment: .leading)
+                }
                 Text(text)
                     .font(.system(size: 13))
                     .foregroundStyle(secondary)
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: 260, alignment: .leading)
+                if text.count > VoiceTranscriber.summarizableLength, player.transcriber.summaries[object.id] == nil,
+                   UnreadSummary.availability != .unsupported {
+                    Button("Summarize") { player.transcriber.summarize(id: object.id) }
+                        .buttonStyle(.link)
+                        .font(.system(size: 12))
+                        .tint(isFromMe ? .white : .accentColor)
+                }
             }
         }
         .padding(.vertical, 2)

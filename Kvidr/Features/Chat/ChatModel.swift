@@ -119,10 +119,31 @@ final class ChatModel {
     private(set) var firstUnreadMessageID: Int?
 
     let session: Session
+    /// Its breakout rooms, if it has any, or the one it is.
+    let breakoutRooms: BreakoutRoomsModel
+    /// Replies to the newest message, suggested over the field.
+    let smartReplies = SmartReplies()
+    /// Questions about the conversation, answered from it.
+    let asker = ConversationAsker()
+    /// The question field is over the conversation.
+    var isAsking = false
+    /// Polls someone voted on or closed since they were last read — see ``takeChangedPolls()``.
+    private(set) var pollChangeCount = 0
+    @ObservationIgnored private var changedPolls: Set<Int> = []
+
+    /// The polls to read again, once each.
+    func takeChangedPolls() -> Set<Int> {
+        defer { changedPolls = [] }
+        return changedPolls
+    }
     private let readContext: @MainActor () -> ReadStateContext
     private let onReadMarker: @MainActor (String, Int) -> Void
 
     private var syncTask: Task<Void, Never>?
+    /// While held in the lobby: looks at the room until it opens. See ``waitInLobby()``.
+    private var lobbyTask: Task<Void, Never>?
+    /// Between ``activate()`` and ``deactivate()``.
+    private var isActive = false
     private var pendingReadMarker: Int = 0
     private var isSendingReadMarker = false
 
@@ -167,7 +188,16 @@ final class ChatModel {
             merged.lastReadMessageID = conversation.lastReadMessageID
             merged.unreadMessages = conversation.unreadMessages
         }
+        let wasHeld = conversation.isLobbyBlocking
         conversation = merged
+        // The lobby opened, or a moderator put one up while this was open.
+        guard isActive, wasHeld != merged.isLobbyBlocking else { return }
+        if merged.isLobbyBlocking {
+            waitInLobby()
+        } else {
+            Log.ui.notice("The lobby opened")
+            startSync()
+        }
     }
 
     func rebuildRows() {
@@ -285,6 +315,7 @@ final class ChatModel {
         self.attachments = attachments ?? AttachmentQueue(session: session, token: conversation.token)
         self.readContext = readContext
         self.onReadMarker = onReadMarker
+        self.breakoutRooms = BreakoutRoomsModel(session: session, token: conversation.token)
         self.hiddenPinnedID = conversation.hiddenPinnedID
         self.latestPinID = conversation.lastPinnedID
     }
@@ -304,6 +335,18 @@ final class ChatModel {
         await restoreDraft()
         pushReadContext()
 
+        isActive = true
+        if conversation.isLobbyBlocking {
+            waitInLobby()
+        } else {
+            startSync()
+        }
+    }
+
+    /// The chat, live: the long poll, and what hangs off the conversation.
+    private func startSync() {
+        lobbyTask?.cancel()
+        lobbyTask = nil
         syncTask?.cancel()
         let token = self.token
         let lastKnown = timeline.lastServerMessageID
@@ -320,11 +363,56 @@ final class ChatModel {
         Task { await loadAbsence() }
     }
 
+    /// A moderator lets everyone in: the lobby off, straight away.
+    func openLobby() {
+        let token = self.token
+        let conversations = session.conversations
+        Task { [weak self] in
+            do throws(TalkError) {
+                try await conversations.setLobby(false, token: token)
+                if let fresh = try? await conversations.conversation(token: token) { self?.conversationChanged(fresh) }
+            } catch {
+                Log.ui.warning("Couldn’t open the lobby: \(error.userMessage)")
+            }
+        }
+    }
+
+    /// Held in the lobby, nothing of the chat can be read — asking anyway gets a 412, the
+    /// same answer as a lost session, and a loop of rejoining. So the chat isn't asked: the
+    /// room is, every half minute and just after the time the lobby is due to open, and the
+    /// chat starts the moment it has. A moderator opening it early arrives sooner still,
+    /// through the sidebar's live updates.
+    private func waitInLobby() {
+        if syncTask != nil {
+            syncTask?.cancel()
+            syncTask = nil
+            let sync = session.chatSync
+            Task { await sync.stop() }
+        }
+        guard lobbyTask == nil else { return }
+        Log.ui.notice("Waiting in the lobby")
+        let token = self.token
+        let conversations = session.conversations
+        lobbyTask = Task { [weak self] in
+            while !Task.isCancelled {
+                let untilOpening = self?.conversation.lobbyTimer.map { $0.timeIntervalSinceNow + 2 } ?? .infinity
+                try? await Task.sleep(for: .seconds(min(30, max(untilOpening, 2))))
+                guard !Task.isCancelled else { return }
+                if let fresh = try? await conversations.conversation(token: token) {
+                    self?.conversationChanged(fresh)
+                }
+            }
+        }
+    }
+
     /// Async on purpose. The long-poll engine is shared between conversations, so the
     /// previous conversation's stop has to *complete* before the next one starts — otherwise
     /// a stop scheduled from the old model can land after the new model's activate and kill
     /// the subscription that just opened.
     func deactivate() async {
+        isActive = false
+        lobbyTask?.cancel()
+        lobbyTask = nil
         syncTask?.cancel()
         syncTask = nil
         saveDraftNow()
@@ -370,6 +458,17 @@ final class ChatModel {
         // A message of mine arriving may be a scheduled one going out.
         if !scheduled.isEmpty, batch.messages.contains(where: { session.account.isMe($0.actor) }) {
             Task { await loadScheduled() }
+        }
+
+        // Someone voted on a poll or closed it: Talk says so with a hidden line in the chat,
+        // which names the poll. The card reads it again — live results, as Talk's apps have.
+        let polls = batch.messages.compactMap { message -> Int? in
+            guard message.systemMessage == "poll_voted" || message.systemMessage == "poll_closed" else { return nil }
+            return message.parameters["poll"].flatMap { Int($0.id) }
+        }
+        if !polls.isEmpty {
+            changedPolls.formUnion(polls)
+            pollChangeCount += 1
         }
 
         // Someone pinned or unpinned something: the list is the truth, so read it again.
@@ -599,6 +698,96 @@ final class ChatModel {
             return SummaryInput.lines(from: messages, startingAt: first) { self.content(for: $0).preview }
         }
         closeThread()
+        unreadSummary?.cancel()
+        unreadSummary = summary
+        summary.write()
+    }
+
+    /// Suggests replies when someone else has the last word — in the thread when one's open —
+    /// and nothing is being written yet.
+    func suggestReplies(me: String) {
+        let messages = openThread.map { messages(inThread: $0.id) } ?? timeline.messages.filter { $0.thread == nil || $0.isThreadRoot }
+        guard let last = messages.last(where: { !$0.isSystem && !$0.isDeleted }),
+              !isFromMe(last), draftText.isEmpty, editing == nil,
+              // A reply suggested to something days old helps nobody.
+              Date().timeIntervalSince(last.timestamp) < 86_400
+        else {
+            smartReplies.clear()
+            return
+        }
+        let lines = SummaryInput.lines(from: messages, startingAt: 0) { self.content(for: $0).preview }
+        smartReplies.suggest(for: last.messageID, lines: lines, me: me)
+    }
+
+    /// Answers the question in ``asker`` from this conversation: what's loaded, and the
+    /// server's search of all of it.
+    func ask() {
+        let snippets = timeline.messages
+            .filter { !$0.isSystem && !$0.isDeleted && $0.kind != .commentDeleted }
+            .map { message in
+                ConversationAsker.Snippet(
+                    id: message.messageID,
+                    author: message.actor.resolvedDisplayName,
+                    date: message.timestamp,
+                    text: String(content(for: message).preview.prefix(300))
+                )
+            }
+        let names = Dictionary(timeline.messages.map { ($0.actor.id, $0.actor.resolvedDisplayName) }, uniquingKeysWith: { first, _ in first })
+        let search = session.messageSearch
+        let token = self.token
+        asker.ask(conversationName: conversation.displayName, recent: snippets) { query in
+            let words = query.split(separator: " ").map(String.init).filter { !$0.isEmpty }
+            let local = snippets.filter { snippet in words.allSatisfy { snippet.text.localizedStandardContains($0) } }.suffix(8)
+            let remote = (try? await search.searchMessages(term: query, in: token, limit: 10))?.hits.map { hit in
+                ConversationAsker.Snippet(id: hit.messageID, author: names[hit.actorID] ?? hit.actorID, date: hit.timestamp, text: hit.snippet)
+            } ?? []
+            var seen = Set<Int>()
+            return (Array(local) + remote).filter { seen.insert($0.id).inserted }.prefix(12).sorted { $0.date < $1.date }
+        }
+    }
+
+    /// The open thread, start to finish — however long it is.
+    func summarizeThread() {
+        guard UnreadSummary.availability != .unsupported, let thread = openThread else { return }
+        let title = thread.title.isEmpty ? "this thread" : "the thread “\(thread.title)”"
+        let summary = UnreadSummary(unreadCount: 0, subject: title, conversationName: conversation.displayName) { [weak self] in
+            guard let self else { return [] }
+            return SummaryInput.lines(from: self.messages(inThread: thread.id), startingAt: 0) { self.content(for: $0).preview }
+        }
+        start(summary)
+    }
+
+    /// A stretch of time back from now.
+    enum SummaryPeriod {
+        case day, week
+
+        var subject: String {
+            switch self {
+            case .day: "the last 24 hours"
+            case .week: "the last week"
+            }
+        }
+
+        var cutoff: Date {
+            Date().addingTimeInterval(self == .day ? -86_400 : -7 * 86_400)
+        }
+    }
+
+    /// Everything said in the last day or week that's been loaded — in parts, when it's a lot.
+    func summarize(_ period: SummaryPeriod) {
+        guard UnreadSummary.availability != .unsupported else { return }
+        let cutoff = period.cutoff
+        let summary = UnreadSummary(unreadCount: 0, subject: period.subject, conversationName: conversation.displayName) { [weak self] in
+            guard let self else { return [] }
+            let messages = self.timeline.messages
+            guard let first = messages.first(where: { $0.timestamp >= cutoff }) else { return [] }
+            return SummaryInput.lines(from: messages, startingAt: first.messageID) { self.content(for: $0).preview }
+        }
+        closeThread()
+        start(summary)
+    }
+
+    private func start(_ summary: UnreadSummary) {
         unreadSummary?.cancel()
         unreadSummary = summary
         summary.write()

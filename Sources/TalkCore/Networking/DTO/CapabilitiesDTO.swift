@@ -131,12 +131,17 @@ struct CapabilitiesDTO: Decodable, Sendable {
 
     struct CallConfigDTO: Decodable, Sendable {
         let enabled: Bool?
+        let supportedReactions: [String]?
 
-        private enum CodingKeys: String, CodingKey { case enabled }
+        private enum CodingKeys: String, CodingKey {
+            case enabled
+            case supportedReactions = "supported-reactions"
+        }
 
         init(from decoder: any Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             enabled = Lenient.bool(container, .enabled)
+            supportedReactions = try? container.decodeIfPresent([String].self, forKey: .supportedReactions)
         }
     }
 
@@ -157,7 +162,8 @@ struct CapabilitiesDTO: Decodable, Sendable {
             attachmentsFolder: spreed.config?.attachments?.folder,
             conversationsCanCreate: spreed.config?.conversations?.canCreate,
             previewsMaxGIFSize: spreed.config?.previews?.maxGIFSize,
-            callEnabled: spreed.config?.call?.enabled
+            callEnabled: spreed.config?.call?.enabled,
+            callReactions: spreed.config?.call?.supportedReactions
         )
 
         return TalkCapabilities(

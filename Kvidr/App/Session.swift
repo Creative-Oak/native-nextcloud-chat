@@ -24,6 +24,9 @@ struct Session: Sendable {
     let pins: PinService
     let threads: ThreadService
     let calls: CallService
+    let breakoutRooms: BreakoutRoomService
+    let bots: BotService
+    let tags: ConversationTagService
     let serverNotifications: NotificationsService
     let scheduledMessages: ScheduledMessageService
     let absences: AbsenceService
@@ -58,6 +61,9 @@ struct Session: Sendable {
         pins = PinService(client: client)
         threads = ThreadService(client: client)
         calls = CallService(client: client)
+        breakoutRooms = BreakoutRoomService(client: client)
+        bots = BotService(client: client)
+        tags = ConversationTagService(client: client)
         serverNotifications = NotificationsService(client: client)
         scheduledMessages = ScheduledMessageService(client: client)
         absences = AbsenceService(client: client)

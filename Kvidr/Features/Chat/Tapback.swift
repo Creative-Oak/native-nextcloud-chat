@@ -147,6 +147,8 @@ struct MessageMenuActions {
     var reminder: Date?
     /// Nil where reminders can't be set.
     var onRemind: ((Date) -> Void)?
+    /// Asks for a date and time of the user's own.
+    var onCustomReminder: (() -> Void)?
     var onRemoveReminder: (() -> Void)?
     var isPinned = false
     /// Nil where this user can't pin — only moderators can.
@@ -155,6 +157,17 @@ struct MessageMenuActions {
     var onEdit: () -> Void
     var onDelete: () -> Void
     var onCopy: () -> Void
+    /// Nil where there are no words to translate — a picture, a poll.
+    var onTranslate: (() -> Void)?
+    /// Its translation is showing, so the menu offers the original back.
+    var isTranslated = false
+    var onShowOriginal: () -> Void = {}
+    /// Offered when the message mentions a day or a time — looked for as the menu opens, not
+    /// every time the row is drawn.
+    var onAddToCalendar: (() -> Void)?
+    var calendarText: String?
+    /// Nil where there are no words to make a to-do of.
+    var onAddToReminders: (() -> Void)?
     var onReact: (String) -> Void
     var onShowReactions: () -> Void
     var onMoreReactions: () -> Void
@@ -243,6 +256,10 @@ enum MessageMenu {
             item.subtitle = ReminderTime.text(preset.date)
             submenu.addItem(item)
         }
+        if let custom = actions.onCustomReminder {
+            submenu.addItem(.separator())
+            submenu.addItem(ClosureMenuItem("Custom…", action: custom))
+        }
         let item = NSMenuItem(title: actions.reminder == nil ? "Remind Me" : "Change Reminder", action: nil, keyEquivalent: "")
         item.image = NSImage(systemSymbolName: "alarm", accessibilityDescription: nil)
         item.submenu = submenu
@@ -314,6 +331,21 @@ enum MessageMenu {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(link.absoluteString, forType: .string)
             })
+        }
+        if actions.onAddToCalendar != nil || actions.onAddToReminders != nil {
+            menu.addItem(.separator())
+            if let add = actions.onAddToCalendar, let text = actions.calendarText, DateMention.first(in: text) != nil {
+                menu.addItem(ClosureMenuItem("Add to Calendar…", symbol: "calendar.badge.plus", action: add))
+            }
+            if let add = actions.onAddToReminders {
+                menu.addItem(ClosureMenuItem("Add to Reminders…", symbol: "checklist", action: add))
+            }
+            menu.addItem(.separator())
+        }
+        if let onTranslate = actions.onTranslate {
+            menu.addItem(actions.isTranslated
+                ? ClosureMenuItem("Show Original", symbol: "translate", action: actions.onShowOriginal)
+                : ClosureMenuItem("Translate", symbol: "translate", action: onTranslate))
         }
         if actions.canEdit {
             menu.addItem(ClosureMenuItem("Edit…", symbol: "pencil", action: actions.onEdit))

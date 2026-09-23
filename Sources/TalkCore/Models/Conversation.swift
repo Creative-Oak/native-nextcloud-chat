@@ -74,6 +74,25 @@ enum NotificationLevel: Int, Sendable, Codable, CaseIterable, Identifiable {
 }
 
 /// Attendee permission bitmask. Verified values; see docs/NEXTCLOUD_API.md § 4.
+/// How a conversation's breakout rooms get their people. Cap `breakout-rooms-v1`.
+enum BreakoutRoomMode: Int, Sendable, Codable, CaseIterable {
+    case notConfigured = 0
+    /// Spread out evenly by the server.
+    case automatic = 1
+    /// A moderator puts each person in a room.
+    case manual = 2
+    /// Everyone picks a room themselves.
+    case free = 3
+}
+
+/// Whether breakout rooms are running. On a breakout room itself, also whether its people
+/// have asked a moderator for help.
+enum BreakoutRoomStatus: Int, Sendable, Codable {
+    case stopped = 0
+    case started = 1
+    case assistanceRequested = 2
+}
+
 struct ConversationPermissions: OptionSet, Sendable, Codable, Hashable {
     let rawValue: Int
     init(rawValue: Int) { self.rawValue = rawValue }
@@ -163,6 +182,30 @@ struct Conversation: Sendable, Hashable, Identifiable, Codable {
     private var lastPinnedValue: Int?
     private var hiddenPinnedValue: Int?
 
+    /// On a conversation that hosts breakout rooms: how people are put in them.
+    var breakoutRoomMode: BreakoutRoomMode {
+        get { BreakoutRoomMode(rawValue: breakoutModeValue ?? 0) ?? .notConfigured }
+        set { breakoutModeValue = newValue.rawValue }
+    }
+
+    /// On the host, whether they're running; on a breakout room, whether help was asked for.
+    var breakoutRoomStatus: BreakoutRoomStatus {
+        get { BreakoutRoomStatus(rawValue: breakoutStatusValue ?? 0) ?? .stopped }
+        set { breakoutStatusValue = newValue.rawValue }
+    }
+
+    private var breakoutModeValue: Int?
+    private var breakoutStatusValue: Int?
+
+    /// The user's own tags on this conversation — the sidebar groups it's in. Cap
+    /// `conversation-tags`.
+    var tagIDs: [String] {
+        get { tagIDsValue ?? [] }
+        set { tagIDsValue = newValue }
+    }
+
+    private var tagIDsValue: [String]?
+
     var unreadMessages: Int
     var unreadMention: Bool
     var unreadMentionDirect: Bool
@@ -181,6 +224,16 @@ struct Conversation: Sendable, Hashable, Identifiable, Codable {
     // MARK: - Derived
 
     var isOneToOne: Bool { type == .oneToOne || type == .formerOneToOne }
+
+    /// A breakout room: its `objectType` is `room`, and its `objectID` the host's token.
+    var isBreakoutRoom: Bool { objectType == "room" && !objectID.isEmpty }
+    /// The conversation a breakout room belongs to.
+    var breakoutParentToken: String? { isBreakoutRoom ? objectID : nil }
+    /// Set up with breakout rooms, running or not.
+    var hasBreakoutRooms: Bool { breakoutRoomMode != .notConfigured }
+    var areBreakoutRoomsRunning: Bool { hasBreakoutRooms && breakoutRoomStatus == .started }
+    /// Groups and public conversations can host breakout rooms — not a breakout room itself.
+    var canHostBreakoutRooms: Bool { (type == .group || type == .publicRoom) && !isBreakoutRoom }
     var isNoteToSelf: Bool { type == .noteToSelf }
     var isPublic: Bool { type == .publicRoom }
 
@@ -209,8 +262,14 @@ struct Conversation: Sendable, Hashable, Identifiable, Codable {
     /// the people in the call have on: 1 joined, 2 audio, 4 video, 8 dialled in by phone.
     var isVideoCall: Bool { hasCall && callFlag & 4 != 0 }
 
-    /// The lobby hides the conversation's content from non-moderators until it opens.
-    var isLobbyBlocking: Bool { lobbyState == 1 && !isModerator }
+    /// The lobby hides the conversation's content from non-moderators until it opens — except
+    /// from anyone a moderator has let skip it.
+    var isLobbyBlocking: Bool {
+        lobbyState == 1 && !isModerator && !permissions.contains(.ignoreLobby)
+    }
+
+    /// Whether this conversation can have a lobby at all: groups and public ones.
+    var supportsLobby: Bool { type == .group || type == .publicRoom }
 
     /// Sidebar ordering key. Favorites float, then most recent activity. Note to Self sits
     /// with everything else — pinning it above real conversations is a web-UI habit, not a

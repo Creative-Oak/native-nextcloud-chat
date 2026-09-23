@@ -22,6 +22,14 @@ struct ChatView: View {
     var liveConversation: Conversation?
     /// Reminders on this conversation's messages, and the way to set one.
     var reminders: ReminderStore?
+    /// Translates messages on this Mac; nil in previews.
+    var translator: MessageTranslator?
+    /// Its breakout rooms, as the conversation list has them; and, when it is one, the
+    /// conversation it belongs to.
+    var breakoutRooms: [Conversation] = []
+    var breakoutParent: Conversation?
+    /// Opens a conversation this user has only just been put in, once the list has caught up.
+    var onOpenNewConversation: (String) async -> Void = { _ in }
     /// Reply Privately: opens the one-to-one with the author, with the message quoted.
     var onReplyPrivately: (Message) -> Void = { _ in }
     /// Forward…: asks where to, then sends it there.
@@ -39,6 +47,10 @@ struct ChatView: View {
     var isInCall = false
 
     @State private var highlightedMessageID: Int?
+    /// The message a reminder is being set on for a time of the user's own.
+    @State private var customReminderFor: Message?
+    /// A message going into Calendar or Reminders.
+    @State private var addingFromMessage: (message: Message, kind: AddFromMessageSheet.Kind)?
     @State private var didInitialScroll = false
     @State private var highlightClearTask: Task<Void, Never>?
     @State private var viewingAttachment: RichObject?
@@ -59,109 +71,174 @@ struct ChatView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            transcript
-                .overlay(alignment: .top) {
-                    // The transient bar, one at a time, then the pinned message under it —
-                    // a pin is standing information and shouldn't give way to a call.
-                    VStack(spacing: 6) {
-                        if let callElsewhere {
-                            ReturnToCallPill(call: callElsewhere, onReturn: onReturnToCall)
-                                .transition(.move(edge: .top).combined(with: .opacity))
-                        }
-                        if let thread = model.openThread {
-                            ThreadBar(
-                                thread: thread,
-                                replies: model.replyCount(for: thread),
-                                isLoading: model.isLoadingThread,
-                                onClose: { model.closeThread() }
-                            )
-                            // Built by AppKit when it opens, like a message's: a SwiftUI context
-                            // menu is rebuilt with every redraw of this view, and its submenu
-                            // blinked each time the conversation refreshed underneath it.
-                            .overlay {
-                                ThreadBarMenuHost { [model] in
-                                    ThreadBarMenu.make(
-                                        level: model.notificationLevel(ofThread: thread.id),
-                                        onRename: model.canRenameThread(thread) ? { beginRenaming(thread) } : nil,
-                                        onSetLevel: { model.setNotificationLevel($0, forThread: thread.id) }
-                                    )
-                                }
-                            }
-                            .transition(.move(edge: .top).combined(with: .opacity))
-                        }
-                        if let error = model.lastError, error != .cancelled {
-                            InlineStatusBar(error: error, state: model.syncState)
-                                .transition(.move(edge: .top).combined(with: .opacity))
-                        } else if let messageID = model.unreachableMessageID {
-                            UnreachableMessageBar(
-                                onOpenInBrowser: {
-                                    NSWorkspace.shared.open(model.webURL(forMessage: messageID))
-                                    model.dismissUnreachableMessage()
-                                },
-                                onDismiss: { model.dismissUnreachableMessage() }
-                            )
-                            .transition(.move(edge: .top).combined(with: .opacity))
-                        } else if model.isRevealing {
-                            RevealingBar()
-                                .transition(.opacity)
-                        } else if let target = model.forwardedTo {
-                            ForwardedBar(name: target.displayName) {
-                                model.forwardedTo = nil
-                                onOpenConversation(target.token)
-                            }
-                            .transition(.move(edge: .top).combined(with: .opacity))
-                        } else if !isInCall, let live = liveConversation, live.hasCall {
-                            CallInProgressBar(conversation: live, onJoin: onJoinCall) {
-                                NSWorkspace.shared.open(model.webURL)
-                            }
-                            .transition(.move(edge: .top).combined(with: .opacity))
-                        }
-
-                        if model.openThread == nil, let absence = model.absence {
-                            AbsenceBar(
-                                name: model.conversation.displayName,
-                                absence: absence,
-                                onMessageReplacement: absence.replacementUserID.map { id in { onMessageUser(id) } },
-                                onDismiss: { model.absence = nil }
-                            )
-                            .transition(.move(edge: .top).combined(with: .opacity))
-                        }
-
-                        if model.openThread == nil, let summary = model.unreadSummary {
-                            SummaryBar(summary: summary) {
-                                summary.cancel()
-                                model.unreadSummary = nil
-                            }
-                            .transition(.move(edge: .top).combined(with: .opacity))
-                        }
-
-                        if model.openThread == nil, let pin = model.visiblePin {
-                            PinnedBar(model: model, pin: pin) { messageID in
-                                Task { await model.reveal(messageID: messageID) }
-                            }
-                            .transition(.move(edge: .top).combined(with: .opacity))
-                        }
+            // Held in the lobby: nothing of the conversation, and no way to write to it, until
+            // it opens — see `ChatModel.waitInLobby()`.
+            if model.conversation.isLobbyBlocking {
+                LobbyWaitingView(conversation: model.conversation)
+            } else {
+                transcript
+                    // Where macOS asks to download a language for translating, when one is needed.
+                    .background {
+                        if let translator { TranslationDownloadHost(translator: translator) }
                     }
-                    .padding(.top, ConversationHeader.depthBelowToolbar + 10)
-                    .padding(.horizontal, 16)
-                }
-                .animation(.smooth(duration: 0.25), value: model.lastError)
-                .animation(.smooth(duration: 0.25), value: model.unreachableMessageID)
-                .animation(.smooth(duration: 0.25), value: model.isRevealing)
-                .animation(.smooth(duration: 0.25), value: liveConversation?.hasCall)
-                .animation(.smooth(duration: 0.25), value: model.visiblePin?.id)
-                .animation(.smooth(duration: 0.25), value: model.forwardedTo?.token)
-                .animation(.smooth(duration: 0.25), value: model.absence)
-                .animation(.smooth(duration: 0.25), value: model.openThread?.id)
-                .animation(.smooth(duration: 0.25), value: model.unreadSummary == nil)
-                // An inset rather than another row in the stack: the composer floats over
-                // the transcript the way Messages' does, and the scroll view still knows
-                // not to hide the newest message behind it.
-                .safeAreaInset(edge: .bottom, spacing: 0) {
-                    ComposerView(model: model, isFocused: $composerFocused)
-                }
+                    .overlay(alignment: .top) {
+                        // The transient bar, one at a time, then the pinned message under it —
+                        // a pin is standing information and shouldn't give way to a call.
+                        VStack(spacing: 6) {
+                            if let callElsewhere {
+                                ReturnToCallPill(call: callElsewhere, onReturn: onReturnToCall)
+                                    .transition(.move(edge: .top).combined(with: .opacity))
+                            }
+                            if let thread = model.openThread {
+                                ThreadBar(
+                                    thread: thread,
+                                    replies: model.replyCount(for: thread),
+                                    isLoading: model.isLoadingThread,
+                                    onClose: { model.closeThread() }
+                                )
+                                // Built by AppKit when it opens, like a message's: a SwiftUI context
+                                // menu is rebuilt with every redraw of this view, and its submenu
+                                // blinked each time the conversation refreshed underneath it.
+                                .overlay {
+                                    ThreadBarMenuHost { [model] in
+                                        ThreadBarMenu.make(
+                                            level: model.notificationLevel(ofThread: thread.id),
+                                            onRename: model.canRenameThread(thread) ? { beginRenaming(thread) } : nil,
+                                            onSetLevel: { model.setNotificationLevel($0, forThread: thread.id) }
+                                        )
+                                    }
+                                }
+                                .transition(.move(edge: .top).combined(with: .opacity))
+                            }
+                            if let error = model.lastError, error != .cancelled {
+                                InlineStatusBar(error: error, state: model.syncState)
+                                    .transition(.move(edge: .top).combined(with: .opacity))
+                            } else if let messageID = model.unreachableMessageID {
+                                UnreachableMessageBar(
+                                    onOpenInBrowser: {
+                                        NSWorkspace.shared.open(model.webURL(forMessage: messageID))
+                                        model.dismissUnreachableMessage()
+                                    },
+                                    onDismiss: { model.dismissUnreachableMessage() }
+                                )
+                                .transition(.move(edge: .top).combined(with: .opacity))
+                            } else if model.isRevealing {
+                                RevealingBar()
+                                    .transition(.opacity)
+                            } else if let target = model.forwardedTo {
+                                ForwardedBar(name: target.displayName) {
+                                    model.forwardedTo = nil
+                                    onOpenConversation(target.token)
+                                }
+                                .transition(.move(edge: .top).combined(with: .opacity))
+                            } else if !isInCall, let live = liveConversation, live.hasCall {
+                                CallInProgressBar(conversation: live, onJoin: onJoinCall) {
+                                    NSWorkspace.shared.open(model.webURL)
+                                }
+                                .transition(.move(edge: .top).combined(with: .opacity))
+                            }
+
+                            if model.isAsking {
+                                AskBar(
+                                    asker: model.asker,
+                                    onAsk: { model.ask() },
+                                    onOpen: { messageID in Task { await model.reveal(messageID: messageID) } },
+                                    onClose: {
+                                        model.asker.reset()
+                                        model.isAsking = false
+                                    }
+                                )
+                                .transition(.move(edge: .top).combined(with: .opacity))
+                            }
+
+                            if BreakoutBar.isShown(for: model.conversation) {
+                                BreakoutBar(
+                                    conversation: model.conversation,
+                                    rooms: breakoutRooms,
+                                    parent: breakoutParent,
+                                    model: model.breakoutRooms,
+                                    onOpen: onOpenConversation,
+                                    onOpenNew: onOpenNewConversation
+                                )
+                                .transition(.move(edge: .top).combined(with: .opacity))
+                            }
+
+                            if model.conversation.lobbyState == 1, model.conversation.isModerator, !model.conversation.isBreakoutRoom {
+                                LobbyBar(opensAt: model.conversation.lobbyTimer) { model.openLobby() }
+                                    .transition(.move(edge: .top).combined(with: .opacity))
+                            }
+
+                            if model.openThread == nil, let absence = model.absence {
+                                AbsenceBar(
+                                    name: model.conversation.displayName,
+                                    absence: absence,
+                                    onMessageReplacement: absence.replacementUserID.map { id in { onMessageUser(id) } },
+                                    onDismiss: { model.absence = nil }
+                                )
+                                .transition(.move(edge: .top).combined(with: .opacity))
+                            }
+
+                            // A thread's own summary shows over the thread.
+                            if let summary = model.unreadSummary, model.openThread == nil || summary.subject != nil {
+                                SummaryBar(summary: summary) {
+                                    summary.cancel()
+                                    model.unreadSummary = nil
+                                }
+                                .transition(.move(edge: .top).combined(with: .opacity))
+                            }
+
+                            if model.openThread == nil, let pin = model.visiblePin {
+                                PinnedBar(model: model, pin: pin) { messageID in
+                                    Task { await model.reveal(messageID: messageID) }
+                                }
+                                .transition(.move(edge: .top).combined(with: .opacity))
+                            }
+                        }
+                        .padding(.top, ConversationHeader.depthBelowToolbar + 10)
+                        .padding(.horizontal, 16)
+                    }
+                    .animation(.smooth(duration: 0.25), value: model.lastError)
+                    .animation(.smooth(duration: 0.25), value: model.unreachableMessageID)
+                    .animation(.smooth(duration: 0.25), value: model.isRevealing)
+                    .animation(.smooth(duration: 0.25), value: liveConversation?.hasCall)
+                    .animation(.smooth(duration: 0.25), value: model.visiblePin?.id)
+                    .animation(.smooth(duration: 0.25), value: model.forwardedTo?.token)
+                    .animation(.smooth(duration: 0.25), value: model.absence)
+                    .animation(.smooth(duration: 0.25), value: model.conversation.lobbyState)
+                    .animation(.smooth(duration: 0.25), value: model.conversation.breakoutRoomStatus)
+                    .animation(.smooth(duration: 0.25), value: model.isAsking)
+                    .animation(.smooth(duration: 0.25), value: model.openThread?.id)
+                    .animation(.smooth(duration: 0.25), value: model.unreadSummary == nil)
+                    // An inset rather than another row in the stack: the composer floats over
+                    // the transcript the way Messages' does, and the scroll view still knows
+                    // not to hide the newest message behind it.
+                    .safeAreaInset(edge: .bottom, spacing: 0) {
+                        ComposerView(model: model, isFocused: $composerFocused, translator: translator)
+                    }
+            }
         }
         .background(Color(nsColor: .textBackgroundColor))
+        // Someone else voted: the poll's card catches up.
+        .onChange(of: model.pollChangeCount) {
+            for id in model.takeChangedPolls() {
+                Task { await pollStore?.refresh(id) }
+            }
+        }
+        .sheet(isPresented: Binding(get: { addingFromMessage != nil }, set: { if !$0 { addingFromMessage = nil } })) {
+            if let adding = addingFromMessage {
+                let message = adding.message
+                let text = model.content(for: message).preview
+                let author = message.actor.resolvedDisplayName
+                let conversation = model.conversation.displayName
+                let url = model.webURL(forMessage: message.messageID)
+                AddFromMessageSheet(kind: adding.kind) {
+                    await MessageToCalendar.draft(from: text, author: author, conversation: conversation, url: url, forTask: adding.kind == .reminder)
+                }
+            }
+        }
+        .sheet(item: $customReminderFor) { message in
+            CustomReminderSheet { date in reminders?.set(on: message, at: date) }
+        }
         .alert("Rename Thread", isPresented: Binding(get: { renamingThread != nil }, set: { if !$0 { renamingThread = nil } })) {
             TextField("Title", text: $threadTitleDraft)
             Button("Rename") {
@@ -517,6 +594,7 @@ struct ChatView: View {
                 onSetThreadNotifications: { model.setNotificationLevel($1, forThread: $0.id) },
                 reminder: reminders?.reminder(token: message.token, messageID: message.messageID),
                 onRemind: reminders?.canSetReminders == true ? { date in reminders?.set(on: message, at: date) } : nil,
+                onCustomReminder: { customReminderFor = $0 },
                 onRemoveReminder: { reminders?.remove($0) },
                 pin: model.pin(for: message.messageID),
                 onPin: model.canPin ? { duration in model.pin(message, for: duration) } : nil,
@@ -527,13 +605,37 @@ struct ChatView: View {
                 onRetry: { model.retry($0) },
                 onDiscard: { model.discard($0) },
                 onShowParent: { highlightedMessageID = $0 },
+                translation: translator?.display(for: message),
+                onTranslate: translator != nil && isTranslatable(message) ? { translate($0) } : nil,
+                onShowOriginal: { translator?.hide($0) },
+                onAddToCalendar: isTranslatable(message) ? { addingFromMessage = ($0, .event) } : nil,
+                onAddToReminders: isTranslatable(message) ? { addingFromMessage = ($0, .reminder) } : nil,
                 isTapbackTarget: tapbackMessageID == message.messageID,
                 onShowTapback: { pressed in
                     withAnimation(reduceMotion ? nil : .snappy(duration: 0.25)) { tapbackMessageID = pressed.messageID }
                 }
             )
             .background(highlightedMessageID == message.messageID ? Color.accentColor.opacity(0.12) : .clear)
+            // In a conversation that translates by itself: other people's messages, as they
+            // come on screen, and again when it's switched on.
+            .task(id: translator?.isAutomatic(in: message.token) == true) {
+                guard let translator, translator.isAutomatic(in: message.token),
+                      !model.isFromMe(message), isTranslatable(message)
+                else { return }
+                translator.translateAutomatically(message, text: model.content(for: message).preview)
+            }
         }
+    }
+
+    /// Words to translate: not a picture or a poll, not a line from the system.
+    private func isTranslatable(_ message: Message) -> Bool {
+        guard !message.isSystem, !message.isDeleted else { return false }
+        let content = model.content(for: message)
+        return content.standalone == nil && !content.preview.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func translate(_ message: Message) {
+        translator?.translate(message, text: model.content(for: message).preview)
     }
 
     @ViewBuilder

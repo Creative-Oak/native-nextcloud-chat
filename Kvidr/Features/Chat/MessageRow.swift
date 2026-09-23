@@ -32,6 +32,8 @@ struct MessageRow: View {
     var reminder: Reminder?
     /// Nil where reminders can't be set.
     var onRemind: ((Date) -> Void)?
+    /// Asks for a date and time of the user's own.
+    var onCustomReminder: ((Message) -> Void)?
     var onRemoveReminder: (Reminder) -> Void = { _ in }
     /// The pin on this message, if it is pinned.
     var pin: PinnedMessage?
@@ -44,6 +46,14 @@ struct MessageRow: View {
     var onRetry: (Message) -> Void
     var onDiscard: (Message) -> Void
     var onShowParent: (Int) -> Void
+    /// Its translation, when there is one to show.
+    var translation: MessageTranslator.Display?
+    /// Nil where there's nothing to translate.
+    var onTranslate: ((Message) -> Void)?
+    var onShowOriginal: (Message) -> Void = { _ in }
+    /// Nil where the message mentions no day or time.
+    var onAddToCalendar: ((Message) -> Void)?
+    var onAddToReminders: ((Message) -> Void)?
     /// True while this message's reactions float above it — see `TapbackBar`.
     var isTapbackTarget = false
     var onShowTapback: (Message) -> Void
@@ -224,23 +234,60 @@ struct MessageRow: View {
                 .font(.callout)
                 .foregroundStyle(.tertiary)
                 .italic()
+        } else if let translation {
+            VStack(alignment: .leading, spacing: 6) {
+                original
+                translated(translation)
+            }
         } else {
-            HStack(alignment: .bottom, spacing: 6) {
-                MessageContentView(content: content, isFromMe: isFromMe)
-                    .font(.body)
-                    .opacity(message.deliveryState.isPending ? 0.6 : 1)
-                if message.lastEdit != nil {
-                    Text("edited")
-                        .font(.caption2)
-                        .foregroundStyle(bubbleSecondary)
-                        .help(editedHelp)
-                }
-                if message.isSilent && capabilities.showsSilentState {
-                    Image(systemName: "bell.slash")
-                        .font(.caption2)
-                        .foregroundStyle(bubbleSecondary)
-                        .help("Sent without a notification")
-                }
+            original
+        }
+    }
+
+    /// Under the original, set off by a hairline: the translation and where it's from — or,
+    /// asked for from the menu, that it's on its way or why it couldn't be done.
+    @ViewBuilder
+    private func translated(_ translation: MessageTranslator.Display) -> some View {
+        Rectangle()
+            .fill(bubbleSecondary)
+            .frame(height: 0.5)
+            .opacity(0.6)
+        switch translation {
+        case .working:
+            Label("Translating…", systemImage: "translate")
+                .font(.caption)
+                .foregroundStyle(bubbleSecondary)
+        case .done(let text, let fromName):
+            Text(text)
+                .font(.body)
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+            Label("Translated from \(fromName)", systemImage: "translate")
+                .font(.caption2)
+                .foregroundStyle(bubbleSecondary)
+        case .problem(let reason):
+            Label(reason, systemImage: "translate")
+                .font(.caption)
+                .foregroundStyle(bubbleSecondary)
+        }
+    }
+
+    private var original: some View {
+        HStack(alignment: .bottom, spacing: 6) {
+            MessageContentView(content: content, isFromMe: isFromMe)
+                .font(.body)
+                .opacity(message.deliveryState.isPending ? 0.6 : 1)
+            if message.lastEdit != nil {
+                Text("edited")
+                    .font(.caption2)
+                    .foregroundStyle(bubbleSecondary)
+                    .help(editedHelp)
+            }
+            if message.isSilent && capabilities.showsSilentState {
+                Image(systemName: "bell.slash")
+                    .font(.caption2)
+                    .foregroundStyle(bubbleSecondary)
+                    .help("Sent without a notification")
             }
         }
     }
@@ -330,6 +377,7 @@ struct MessageRow: View {
             onForward: onForward.map { handler in { handler(message) } },
             reminder: reminder?.date,
             onRemind: onRemind,
+            onCustomReminder: onRemind == nil ? nil : onCustomReminder.map { handler in { handler(message) } },
             onRemoveReminder: reminder.map { reminder in { onRemoveReminder(reminder) } },
             isPinned: pin != nil,
             onPin: onPin,
@@ -340,6 +388,12 @@ struct MessageRow: View {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(content.preview, forType: .string)
             },
+            onTranslate: onTranslate.map { handler in { handler(message) } },
+            isTranslated: { if case .done = translation { true } else { false } }(),
+            onShowOriginal: { onShowOriginal(message) },
+            onAddToCalendar: onAddToCalendar.map { handler in { handler(message) } },
+            calendarText: onAddToCalendar == nil ? nil : content.preview,
+            onAddToReminders: onAddToReminders.map { handler in { handler(message) } },
             onReact: { onReact($0, message) },
             onShowReactions: { isShowingReactionDetail = true },
             onMoreReactions: { onShowTapback(message) },

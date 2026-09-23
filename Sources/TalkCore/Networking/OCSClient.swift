@@ -8,6 +8,9 @@ struct OCSRequest: Sendable {
     var query: [URLQueryItem] = []
     /// Form-encoded body. Nextcloud's OCS endpoints take `application/x-www-form-urlencoded`.
     var form: [String: String]?
+    /// A JSON body instead, for what a form can't say: a list whose order counts, or an empty
+    /// one. Nextcloud reads JSON bodies the same as forms.
+    var json: Data?
     var timeout: TimeInterval = 30
     var requiresAuthentication = true
     /// Extra headers — `If-None-Match` for a poll that should cost nothing when nothing changed.
@@ -35,6 +38,13 @@ struct OCSRequest: Sendable {
 
     static func delete(_ path: String, form: [String: String] = [:]) -> OCSRequest {
         OCSRequest(method: .delete, path: path, form: form.isEmpty ? nil : form)
+    }
+
+    /// A request with `body` as JSON.
+    static func json(_ method: HTTPMethod, _ path: String, body: some Encodable) -> OCSRequest {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+        return OCSRequest(method: method, path: path, json: (try? encoder.encode(body)) ?? Data("{}".utf8))
     }
 }
 
@@ -151,6 +161,9 @@ actor OCSClient {
         if let form = request.form {
             headers["Content-Type"] = "application/x-www-form-urlencoded; charset=UTF-8"
             body = Self.formEncode(form)
+        } else if let json = request.json {
+            headers["Content-Type"] = "application/json"
+            body = json
         }
 
         let url = server.url(path: request.path, query: request.query)

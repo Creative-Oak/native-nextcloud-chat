@@ -1,4 +1,5 @@
 import AVFoundation
+import FoundationModels
 import Observation
 import Speech
 
@@ -20,6 +21,12 @@ final class VoiceTranscriber {
     }
 
     private(set) var states: [String: State] = [:]
+    /// Summaries of long transcripts, asked for one by one: nil while being written, a
+    /// problem said in place of a summary when it couldn't be.
+    private(set) var summaries: [String: String?] = [:]
+
+    /// Transcripts longer than this get the offer of a summary — a minute or so of talking.
+    static let summarizableLength = 400
     /// Goes up whenever transcripts are thrown away, so what is on screen asks again — and
     /// so a transcription still running in the old language can't land afterwards.
     private(set) var generation = 0
@@ -62,12 +69,35 @@ final class VoiceTranscriber {
         }
     }
 
+    /// A sentence or two on what a long voice message says, written on this Mac.
+    func summarize(id: String) {
+        guard case .done(let text) = states[id], summaries[id] == nil else { return }
+        summaries[id] = .some(nil)
+        Task { [weak self] in
+            let summary: String
+            if case .available = UnreadSummary.availability {
+                let session = LanguageModelSession(instructions: """
+                    You summarize a transcribed voice message in one or two short sentences, in \
+                    the language it is spoken in. Only what it says; no introduction.
+                    """)
+                summary = (try? await session.respond(to: text).content.trimmingCharacters(in: .whitespacesAndNewlines))
+                    ?? "The summary couldn’t be written."
+            } else if case .notYet(let reason) = UnreadSummary.availability {
+                summary = reason
+            } else {
+                summary = "Summaries need Apple Intelligence, which this Mac doesn’t have."
+            }
+            self?.summaries[id] = .some(summary)
+        }
+    }
+
     /// Forgets every transcript, and has the voice messages on screen transcribed again —
     /// the language changed, so the old ones are in the wrong one.
     func reset() {
         queue?.cancel()
         queue = nil
         states = [:]
+        summaries = [:]
         generation += 1
     }
 

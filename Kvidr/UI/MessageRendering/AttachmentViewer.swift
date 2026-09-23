@@ -24,10 +24,9 @@ struct AttachmentViewer: View {
 
             VStack(spacing: 12) {
                 if let image {
-                    Image(nsImage: image)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .clipShape(.rect(cornerRadius: 12))
+                    // Live Text: the words in the picture can be selected and copied.
+                    LiveTextImage(image: image)
+                        .aspectRatio(image.size, contentMode: .fit)
                         .shadow(color: .black.opacity(0.3), radius: 24, y: 8)
                 } else {
                     ProgressView()

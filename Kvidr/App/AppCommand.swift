@@ -110,6 +110,7 @@ struct AppCommandRegistry {
         var editLatest: () -> Void = {}
         var markUnread: () -> Void = {}
         var summarize: () -> Void = {}
+        var ask: () -> Void = {}
         var toggleFavorite: () -> Void = {}
         var toggleArchive: () -> Void = {}
         var toggleInspector: () -> Void = {}
@@ -223,6 +224,12 @@ struct AppCommandRegistry {
                 symbolName: "apple.intelligence", shortcut: KeyboardShortcut("s", modifiers: [.command, .option]), placement: .conversation,
                 isEnabled: chat && c.canSummarize,
                 disabledReason: c.hasChat ? "Apple Intelligence isn’t available on this Mac" : noChat, perform: c.summarize
+            ),
+            AppCommand(
+                id: "conversation.ask", title: "Ask This Conversation…", aliases: ["ask", "question", "find out", "apple intelligence"],
+                symbolName: "questionmark.bubble", shortcut: KeyboardShortcut("a", modifiers: [.command, .option]), placement: .conversation,
+                isEnabled: chat && c.canSummarize,
+                disabledReason: c.hasChat ? "Apple Intelligence isn’t available on this Mac" : noChat, perform: c.ask
             ),
             AppCommand(
                 id: "conversation.markUnread", title: "Mark as Unread", aliases: ["unread", "later"],

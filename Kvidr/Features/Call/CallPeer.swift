@@ -1,5 +1,5 @@
 import Foundation
-@preconcurrency import WebRTC
+@preconcurrency import LiveKitWebRTC
 
 /// One WebRTC connection in a call: this Mac's own media going up to the media server, or one
 /// other participant's coming down from it. Negotiation is asked for with async calls; what
@@ -13,34 +13,36 @@ final class CallPeer: NSObject {
     var sid: String
     /// `video` for the camera and microphone, `screen` for a shared screen.
     let roomType: String
-    let connection: RTCPeerConnection
+    let connection: LKRTCPeerConnection
 
     var onCandidate: (IceCandidate) -> Void = { _ in }
     /// Their camera, once it arrives on a connection that receives.
-    var onRemoteVideo: (RTCVideoTrack) -> Void = { _ in }
+    var onRemoteVideo: (LKRTCVideoTrack) -> Void = { _ in }
+    /// Their voice: for Live Captions, which listen to it on their own.
+    var onRemoteAudio: (LKRTCAudioTrack) -> Void = { _ in }
     /// What they say about their microphone and camera, on the "status" data channel.
     var onStatus: (MediaStatus) -> Void = { _ in }
 
     /// The "status" data channel: made here on the connection that sends, opened by the other
     /// side on one that receives.
-    private var statusChannel: RTCDataChannel?
+    private var statusChannel: LKRTCDataChannel?
     /// Said before the channel was open, sent once it is.
     private var pendingStatus: [MediaStatus] = []
     var onConnectionChange: (_ isConnected: Bool, _ hasFailed: Bool) -> Void = { _, _ in }
 
     private var hasRemoteDescription = false
     /// Candidates that came before the description they belong to.
-    private var pendingCandidates: [RTCIceCandidate] = []
+    private var pendingCandidates: [LKRTCIceCandidate] = []
 
-    init?(factory: RTCPeerConnectionFactory, iceServers: [IceServerConfig], remoteSession: String, sid: String, roomType: String = "video") {
-        let configuration = RTCConfiguration()
+    init?(factory: LKRTCPeerConnectionFactory, iceServers: [IceServerConfig], remoteSession: String, sid: String, roomType: String = "video") {
+        let configuration = LKRTCConfiguration()
         configuration.iceServers = iceServers.map {
-            RTCIceServer(urlStrings: $0.urls, username: $0.username, credential: $0.credential)
+            LKRTCIceServer(urlStrings: $0.urls, username: $0.username, credential: $0.credential)
         }
         configuration.sdpSemantics = .unifiedPlan
         configuration.bundlePolicy = .maxBundle
         configuration.continualGatheringPolicy = .gatherContinually
-        let constraints = RTCMediaConstraints(mandatoryConstraints: nil, optionalConstraints: nil)
+        let constraints = LKRTCMediaConstraints(mandatoryConstraints: nil, optionalConstraints: nil)
         guard let connection = factory.peerConnection(with: configuration, constraints: constraints, delegate: nil) else { return nil }
         self.connection = connection
         self.remoteSession = remoteSession
@@ -54,7 +56,7 @@ final class CallPeer: NSObject {
 
     func makeOffer() async throws -> String {
         try await withCheckedThrowingContinuation { continuation in
-            connection.offer(for: RTCMediaConstraints(mandatoryConstraints: nil, optionalConstraints: nil)) { description, error in
+            connection.offer(for: LKRTCMediaConstraints(mandatoryConstraints: nil, optionalConstraints: nil)) { description, error in
                 if let description { continuation.resume(returning: description.sdp) } else { continuation.resume(throwing: error ?? CallError.negotiation) }
             }
         }
@@ -62,14 +64,14 @@ final class CallPeer: NSObject {
 
     func makeAnswer() async throws -> String {
         try await withCheckedThrowingContinuation { continuation in
-            connection.answer(for: RTCMediaConstraints(mandatoryConstraints: nil, optionalConstraints: nil)) { description, error in
+            connection.answer(for: LKRTCMediaConstraints(mandatoryConstraints: nil, optionalConstraints: nil)) { description, error in
                 if let description { continuation.resume(returning: description.sdp) } else { continuation.resume(throwing: error ?? CallError.negotiation) }
             }
         }
     }
 
-    func setLocal(_ type: RTCSdpType, sdp: String) async throws {
-        let description = RTCSessionDescription(type: type, sdp: sdp)
+    func setLocal(_ type: LKRTCSdpType, sdp: String) async throws {
+        let description = LKRTCSessionDescription(type: type, sdp: sdp)
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
             connection.setLocalDescription(description) { error in
                 if let error { continuation.resume(throwing: error) } else { continuation.resume() }
@@ -77,8 +79,8 @@ final class CallPeer: NSObject {
         }
     }
 
-    func setRemote(_ type: RTCSdpType, sdp: String) async throws {
-        let description = RTCSessionDescription(type: type, sdp: sdp)
+    func setRemote(_ type: LKRTCSdpType, sdp: String) async throws {
+        let description = LKRTCSessionDescription(type: type, sdp: sdp)
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
             connection.setRemoteDescription(description) { error in
                 if let error { continuation.resume(throwing: error) } else { continuation.resume() }
@@ -91,7 +93,7 @@ final class CallPeer: NSObject {
     }
 
     func add(_ candidate: IceCandidate) {
-        let rtc = RTCIceCandidate(sdp: candidate.candidate, sdpMLineIndex: candidate.sdpMLineIndex, sdpMid: candidate.sdpMid)
+        let rtc = LKRTCIceCandidate(sdp: candidate.candidate, sdpMLineIndex: candidate.sdpMLineIndex, sdpMid: candidate.sdpMid)
         if hasRemoteDescription {
             connection.add(rtc) { _ in }
         } else {
@@ -102,7 +104,7 @@ final class CallPeer: NSObject {
     /// Makes the "status" channel. On the connection that sends, before the offer.
     func openStatusChannel() {
         guard statusChannel == nil,
-              let channel = connection.dataChannel(forLabel: "status", configuration: RTCDataChannelConfiguration())
+              let channel = connection.dataChannel(forLabel: "status", configuration: LKRTCDataChannelConfiguration())
         else { return }
         adopt(channel)
     }
@@ -114,18 +116,42 @@ final class CallPeer: NSObject {
             pendingStatus.append(status)
             return
         }
-        statusChannel.sendData(RTCDataBuffer(data: status.dataChannelMessage, isBinary: false))
+        let sent = statusChannel.sendData(LKRTCDataBuffer(data: status.dataChannelMessage, isBinary: false))
+        if status == .videoOn || status == .videoOff {
+            Log.sync.notice("Call: said \(status.rawValue) on the status channel\(sent ? "" : " — refused")")
+        }
     }
 
-    fileprivate func adopt(_ channel: RTCDataChannel) {
+    fileprivate func adopt(_ channel: LKRTCDataChannel) {
         statusChannel = channel
         channel.delegate = self
     }
 
     fileprivate func channelOpened() {
+        Log.sync.notice("Call: status channel open to \(self.remoteSession.prefix(6)) (\(self.roomType)), \(self.pendingStatus.count) waiting")
         let pending = pendingStatus
         pendingStatus = []
         for status in pending { send(status) }
+    }
+
+    /// How loud this connection is, 0 to 1 — the microphone going out on the one that sends,
+    /// the voice coming in on one that receives. Nil while the connection has nothing to say
+    /// about it, which is how a stream that doesn't report levels is told from a quiet one.
+    func audioLevel(sending: Bool) async -> Double? {
+        let wanted = sending ? "media-source" : "inbound-rtp"
+        return await withCheckedContinuation { continuation in
+            connection.statistics { report in
+                var level: Double?
+                for stat in report.statistics.values where stat.type == wanted {
+                    let values = stat.values
+                    guard (values["kind"] as? String) == "audio" else { continue }
+                    if let found = (values["audioLevel"] as? NSNumber)?.doubleValue {
+                        level = max(level ?? 0, found)
+                    }
+                }
+                continuation.resume(returning: level)
+            }
+        }
     }
 
     /// What WebRTC says about the video this connection sends: a line for the log.
@@ -165,46 +191,53 @@ enum CallError: Error {
     case negotiation
 }
 
-extension CallPeer: RTCPeerConnectionDelegate {
-    nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didGenerate candidate: RTCIceCandidate) {
+extension CallPeer: LKRTCPeerConnectionDelegate {
+    nonisolated func peerConnection(_ peerConnection: LKRTCPeerConnection, didGenerate candidate: LKRTCIceCandidate) {
         let found = IceCandidate(candidate: candidate.sdp, sdpMid: candidate.sdpMid, sdpMLineIndex: candidate.sdpMLineIndex)
         Task { @MainActor in self.onCandidate(found) }
     }
 
-    nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didChange newState: RTCPeerConnectionState) {
+    nonisolated func peerConnection(_ peerConnection: LKRTCPeerConnection, didChange newState: LKRTCPeerConnectionState) {
         let connected = newState == .connected
         let failed = newState == .failed
         Task { @MainActor in self.onConnectionChange(connected, failed) }
     }
 
-    nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didChange stateChanged: RTCSignalingState) {}
-    nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didAdd stream: RTCMediaStream) {}
-    nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didRemove stream: RTCMediaStream) {}
-    nonisolated func peerConnectionShouldNegotiate(_ peerConnection: RTCPeerConnection) {}
-    nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didChange newState: RTCIceConnectionState) {}
-    nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didChange newState: RTCIceGatheringState) {}
-    nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didRemove candidates: [RTCIceCandidate]) {}
-    nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didOpen dataChannel: RTCDataChannel) {
+    nonisolated func peerConnection(_ peerConnection: LKRTCPeerConnection, didChange stateChanged: LKRTCSignalingState) {}
+    nonisolated func peerConnection(_ peerConnection: LKRTCPeerConnection, didAdd stream: LKRTCMediaStream) {}
+    nonisolated func peerConnection(_ peerConnection: LKRTCPeerConnection, didRemove stream: LKRTCMediaStream) {}
+    nonisolated func peerConnectionShouldNegotiate(_ peerConnection: LKRTCPeerConnection) {}
+    nonisolated func peerConnection(_ peerConnection: LKRTCPeerConnection, didChange newState: LKRTCIceConnectionState) {}
+    nonisolated func peerConnection(_ peerConnection: LKRTCPeerConnection, didChange newState: LKRTCIceGatheringState) {}
+    nonisolated func peerConnection(_ peerConnection: LKRTCPeerConnection, didRemove candidates: [LKRTCIceCandidate]) {}
+    nonisolated func peerConnection(_ peerConnection: LKRTCPeerConnection, didOpen dataChannel: LKRTCDataChannel) {
         guard dataChannel.label == "status" else { return }
         nonisolated(unsafe) let channel = dataChannel
         Task { @MainActor in self.adopt(channel) }
     }
 
-    nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didAdd rtpReceiver: RTCRtpReceiver, streams mediaStreams: [RTCMediaStream]) {
-        guard let track = rtpReceiver.track as? RTCVideoTrack else { return }
+    nonisolated func peerConnection(_ peerConnection: LKRTCPeerConnection, didAdd rtpReceiver: LKRTCRtpReceiver, streams mediaStreams: [LKRTCMediaStream]) {
+        if let track = rtpReceiver.track as? LKRTCAudioTrack {
+            nonisolated(unsafe) let audio = track
+            Task { @MainActor in self.onRemoteAudio(audio) }
+        }
+        guard let track = rtpReceiver.track as? LKRTCVideoTrack else { return }
         nonisolated(unsafe) let video = track
         Task { @MainActor in self.onRemoteVideo(video) }
     }
 }
 
-extension CallPeer: RTCDataChannelDelegate {
-    nonisolated func dataChannelDidChangeState(_ dataChannel: RTCDataChannel) {
+extension CallPeer: LKRTCDataChannelDelegate {
+    nonisolated func dataChannelDidChangeState(_ dataChannel: LKRTCDataChannel) {
         guard dataChannel.readyState == .open else { return }
         Task { @MainActor in self.channelOpened() }
     }
 
-    nonisolated func dataChannel(_ dataChannel: RTCDataChannel, didReceiveMessageWith buffer: RTCDataBuffer) {
+    nonisolated func dataChannel(_ dataChannel: LKRTCDataChannel, didReceiveMessageWith buffer: LKRTCDataBuffer) {
         guard let status = MediaStatus(dataChannelMessage: buffer.data) else { return }
+        if status == .videoOn || status == .videoOff || status == .audioOn || status == .audioOff {
+            Log.sync.notice("Call: heard \(status.rawValue) on a status channel")
+        }
         Task { @MainActor in self.onStatus(status) }
     }
 }

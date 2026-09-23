@@ -26,6 +26,21 @@ final class ConversationListModel {
     private(set) var favoriteOrder: [String] = []
     private var favoriteOrderKey: String { "favoriteOrder.\(CacheKey.fileName(session.account.id))" }
 
+    /// The user's own groups in the sidebar, in their order — see `ConversationListModel+Tags`.
+    /// Kept on this Mac too, so the sidebar opens already grouped.
+    var tags: [ConversationTag] = [] {
+        didSet {
+            guard tags != oldValue, let data = try? JSONEncoder().encode(tags) else { return }
+            UserDefaults.standard.set(data, forKey: tagsKey)
+        }
+    }
+    var tagsKey: String { "conversationTags.\(CacheKey.fileName(session.account.id))" }
+    /// Asking for a tag's name — a new tag, or a new name for one.
+    var namingTag: TagNaming?
+    /// Tags just given to conversations here, by token, held over refreshes until the server
+    /// has them — see `ConversationListModel+Tags`.
+    @ObservationIgnored var pendingTagIDs: [String: PendingTags] = [:]
+
     let session: Session
     private let notifications: NotificationController
     /// Tokens we have already notified about, so a re-fetch doesn't re-announce old news.
@@ -39,6 +54,10 @@ final class ConversationListModel {
         self.session = session
         self.notifications = notifications
         favoriteOrder = UserDefaults.standard.stringArray(forKey: favoriteOrderKey) ?? []
+        if let data = UserDefaults.standard.data(forKey: tagsKey),
+           let saved = try? JSONDecoder().decode([ConversationTag].self, from: data) {
+            tags = saved
+        }
     }
 
     var conversations: [Conversation] {
@@ -55,7 +74,7 @@ final class ConversationListModel {
         guard !isFiltering else {
             return [ConversationIndex.SectionGroup(section: .conversations, items: conversations)]
         }
-        return ConversationIndex.sections(for: index.allConversations).map { group in
+        return ConversationIndex.sections(for: index.allConversations, tags: hasTags ? tags : []).map { group in
             guard group.section == .favorites else { return group }
             var arranged = group
             arranged.items = ConversationIndex.arrange(favorites: group.items, by: favoriteOrder)
@@ -107,12 +126,17 @@ final class ConversationListModel {
 
     func apply(_ result: ConversationListResult) async {
         let change = index.apply(result)
+        keepPendingTags()
 
         // The cursor advances even on a quiet refresh — that is the point of `modifiedSince`.
         var cursor = await session.store.syncState(accountID: session.account.id)
         cursor.conversationsModifiedSince = result.modifiedBefore ?? cursor.conversationsModifiedSince
         if !result.isIncremental { cursor.lastFullRefresh = Date() }
         await session.store.save(syncState: cursor, accountID: session.account.id)
+
+        // A full refresh brings the tags up to date too: they change on other devices, and
+        // nothing announces it.
+        if !result.isIncremental, hasTags { Task { await loadTags() } }
 
         guard !change.isEmpty else { return }
 
@@ -328,7 +352,14 @@ final class ConversationListModel {
         }
     }
 
-    private func persist(token: String) {
+    /// Changes one conversation here and on disk, ahead of the server — for the extensions,
+    /// which can't write to the index themselves.
+    func updateLocally(_ token: String, _ change: (inout Conversation) -> Void) {
+        index.update(token: token, change)
+        persist(token: token)
+    }
+
+    func persist(token: String) {
         guard let conversation = index[token] else { return }
         let store = session.store
         let accountID = session.account.id

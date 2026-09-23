@@ -232,6 +232,18 @@ extension ConversationService {
         )
     }
 
+    /// The lobby on or off. While it's on, only moderators — and anyone allowed to skip it —
+    /// can read, write and call; everyone else waits until it opens: at `opensAt` by itself,
+    /// or when a moderator opens it. Group and public conversations only.
+    func setLobby(_ isOn: Bool, opensAt: Date? = nil, token: String) async throws(TalkError) {
+        var form = ["state": isOn ? "1" : "0"]
+        if isOn, let opensAt { form["timer"] = String(Int(opensAt.timeIntervalSince1970)) }
+        _ = try await client.send(
+            OCSRequest.put(Endpoint.room(token) + "/webinar/lobby", form: form),
+            as: EmptyResponse.self
+        )
+    }
+
     /// Opens the conversation to guests with a link, or closes it again.
     func setPublic(_ isPublic: Bool, token: String, password: String? = nil) async throws(TalkError) {
         let path = Endpoint.room(token) + "/public"
@@ -337,6 +349,14 @@ enum SettingsToken {
 
 /// The sidebar selection that shows the list of upcoming reminders. Not a conversation token,
 /// for the same reasons as ``SettingsToken``.
+/// The catch-up page — every unread conversation in a few lines — as a selection in the
+/// sidebar, like Reminders.
+enum CatchUpToken {
+    static let value = "#catch-up"
+
+    static func isCatchUp(_ token: String?) -> Bool { token == value }
+}
+
 enum RemindersToken {
     static let value = "#reminders"
 

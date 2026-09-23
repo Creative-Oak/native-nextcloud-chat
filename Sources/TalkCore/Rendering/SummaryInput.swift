@@ -34,6 +34,31 @@ enum SummaryInput {
         }
     }
 
+    /// Most chunks a long summary is made from: at about ten seconds a chunk on the Mac's
+    /// model, more than this is a wait nobody asked for. The newest are kept.
+    static let maximumChunks = 8
+
+    /// Every line, oldest first, in transcripts that each fit the model — for summarizing more
+    /// than one window holds: each chunk is noted down, then the notes summarized. Past
+    /// ``maximumChunks``, the oldest go.
+    static func chunks(_ lines: [Line], budget: Int = characterBudget, maximum: Int = maximumChunks) -> [String] {
+        var chunks: [[String]] = []
+        var current: [String] = []
+        var used = 0
+        for line in lines {
+            let rendered = "\(line.author): \(line.text)"
+            if used + rendered.count + 1 > budget, !current.isEmpty {
+                chunks.append(current)
+                current = []
+                used = 0
+            }
+            current.append(rendered)
+            used += rendered.count + 1
+        }
+        if !current.isEmpty { chunks.append(current) }
+        return chunks.suffix(maximum).map { $0.joined(separator: "\n") }
+    }
+
     /// The transcript for the model, oldest first, and how many of the lines made it in. When
     /// they don't all fit, the newest are kept — they are what someone catching up needs.
     static func transcript(_ lines: [Line], budget: Int = characterBudget) -> (text: String, included: Int) {

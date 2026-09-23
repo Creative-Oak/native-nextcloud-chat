@@ -249,3 +249,30 @@ enum MediaStatus: String, Sendable, Equatable {
         }
     }
 }
+
+/// What people in a call tell each other besides their media: a hand raised, an emoji, and —
+/// from a moderator — "you're muted". Sent through the signaling server to each session in
+/// the call, the way Talk's web app sends them.
+enum CallMessage: Sendable, Equatable {
+    /// `at` orders the raised hands: who was first.
+    case raiseHand(Bool, at: Date)
+    case reaction(String)
+    /// `target` — a session — is muted. Everyone hears it; only the target mutes itself.
+    case forceMute(target: String)
+
+    func data(to session: String) -> [String: Any] {
+        var data: [String: Any] = ["to": session, "roomType": "video"]
+        switch self {
+        case let .raiseHand(raised, date):
+            data["type"] = "raiseHand"
+            data["payload"] = ["state": raised, "timestamp": Int(date.timeIntervalSince1970 * 1000)] as [String: Any]
+        case let .reaction(emoji):
+            data["type"] = "reaction"
+            data["payload"] = ["reaction": emoji]
+        case let .forceMute(target):
+            data["type"] = "control"
+            data["payload"] = ["action": "forceMute", "peerId": target]
+        }
+        return data
+    }
+}

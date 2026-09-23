@@ -1,7 +1,7 @@
 import AVFoundation
 import CoreAudio
 import Foundation
-@preconcurrency import WebRTC
+@preconcurrency import LiveKitWebRTC
 
 /// A call this Mac is in: joining it on Nextcloud, sending the microphone to the media server,
 /// and receiving everyone else who sends something. Audio only for now.
@@ -29,6 +29,11 @@ final class CallController {
         var isConnected = false
         var isAudioOn = true
         var isVideoOn = false
+        /// Their voice is coming through right now.
+        var isSpeaking = false
+        /// Their hand is up, since when — whoever raised theirs first comes first.
+        var handRaisedAt: Date?
+        var isHandRaised: Bool { handRaisedAt != nil }
         /// Their camera, once it has arrived.
         var video: VideoTrack?
         /// Their screen, while they share it.
@@ -49,7 +54,26 @@ final class CallController {
         return false
     }
     private(set) var participants: [Participant] = []
+    /// Whoever started talking last — who a small view of a group call shows.
+    private(set) var recentSpeakerID: String?
+    /// This Mac's hand is up.
+    private(set) var isHandRaised = false
+
+    /// An emoji someone sent, floating up over the call for a few seconds.
+    struct Reaction: Identifiable, Equatable {
+        let id = UUID()
+        let emoji: String
+        let name: String
+    }
+
+    private(set) var reactions: [Reaction] = []
+    /// The emoji on offer — the server's list.
+    var reactionChoices: [String] { session.capabilitySnapshot.config.effectiveCallReactions }
+    /// Moderators can mute others, as in Talk's apps.
+    var canMuteOthers: Bool { conversation.isModerator }
     private(set) var isMuted = false
+    /// This Mac's own microphone has someone talking into it — the ring around your tile.
+    private(set) var isSpeaking = false
     private(set) var isCameraOn = false
     /// This Mac's camera, to show in the corner.
     private(set) var localVideo: VideoTrack?
@@ -76,6 +100,21 @@ final class CallController {
     }
     /// When this Mac's own connection came up.
     private(set) var connectedAt: Date?
+
+    /// Someone came or went, said on the stage for a few seconds.
+    struct Notice: Equatable, Identifiable {
+        let id = UUID()
+        let text: String
+        let symbol: String
+    }
+
+    /// In a group call: who just joined or left. A one-to-one says it by itself — the call
+    /// is answered, or over.
+    private(set) var notice: Notice?
+    @ObservationIgnored private var noticeTask: Task<Void, Never>?
+    /// Comings and goings count as news from here on: the people already in the call when this
+    /// Mac joined — or rejoined, for another microphone — aren't.
+    @ObservationIgnored private var announcesFrom: Date?
     /// When the first other person's media reached this Mac — the call "answered", which is
     /// where its timer starts, as a phone's does.
     private(set) var answeredAt: Date?
@@ -91,28 +130,61 @@ final class CallController {
     @ObservationIgnored private var subscribers: [String: CallPeer] = [:]
     @ObservationIgnored private var screenPublisher: CallPeer?
     @ObservationIgnored private var screenShare: ScreenShare?
-    @ObservationIgnored private var screenTrack: RTCVideoTrack?
-    @ObservationIgnored private var audioTrack: RTCAudioTrack?
-    @ObservationIgnored private var videoTrack: RTCVideoTrack?
-    @ObservationIgnored private var capturer: RTCCameraVideoCapturer?
+    @ObservationIgnored private var screenTrack: LKRTCVideoTrack?
+    @ObservationIgnored private var audioTrack: LKRTCAudioTrack?
+    @ObservationIgnored private var videoTrack: LKRTCVideoTrack?
+    @ObservationIgnored private var capturer: LKRTCCameraVideoCapturer?
     @ObservationIgnored private var statsTask: Task<Void, Never>?
+    /// Reads how loud everyone is, a few times a second: the ring around whoever is talking.
+    @ObservationIgnored private var levelsTask: Task<Void, Never>?
+    @ObservationIgnored private var ownSpeaking = SpeakingDetector()
+    @ObservationIgnored private var speaking: [String: SpeakingDetector] = [:]
+    /// Sessions whose loudness this Mac can measure for itself; for anyone else, what they
+    /// say on the data channel has to do. See ``received(_:from:)``.
+    @ObservationIgnored private var measured: Set<String> = []
     /// The state being said again, per session — "" for everyone. See ``repeatState(to:)``.
     @ObservationIgnored private var stateRepeats: [String: Task<Void, Never>] = [:]
+    /// People to ask for their media once this Mac is in the call — see ``requestOffer(from:)``.
+    @ObservationIgnored private var heldOfferRequests: Set<String> = []
     /// Made afresh for each start of the call's media: its audio opens the Mac's default
     /// microphone and speaker then, and keeps them.
-    @ObservationIgnored private var factory = CallController.makeFactory()
+    @ObservationIgnored private var factory: LKRTCPeerConnectionFactory
     /// The microphones and speakers to choose from.
     let audioDevices = AudioDevices()
+    /// What everyone says, written out — when they're on.
+    let captions: LiveCaptions
+    /// Notes on the call, from the captions' transcript: written when it ends, or asked for.
+    let summary = CallSummary()
+    /// The microphone as WebRTC sends it, for captions. Part of the audio from the start;
+    /// silent until captions listen.
+    @ObservationIgnored private let microphoneTap: MicrophoneTap
 
-    private static let sslReady: Void = { RTCInitializeSSL() }()
+    private static let sslReady: Void = { LKRTCInitializeSSL() }()
 
-    private static func makeFactory() -> RTCPeerConnectionFactory {
+    /// The Mac's own audio device handling, as WebRTC has it; the microphone passes the tap
+    /// on its way out, after echo cancellation and noise suppression.
+    private static func makeFactory(microphone: MicrophoneTap) -> LKRTCPeerConnectionFactory {
         _ = sslReady
-        return RTCPeerConnectionFactory(encoderFactory: RTCDefaultVideoEncoderFactory(), decoderFactory: RTCDefaultVideoDecoderFactory())
+        // Spelled out rather than left to defaults: with a processing module of our own, what's
+        // switched on is ours to say. The same as WebRTC's own defaults for a call — echo
+        // cancelling, noise suppression, the rumble filter and automatic gain.
+        let config = LKRTCAudioProcessingConfig()
+        config.isEchoCancellationEnabled = true
+        config.isNoiseSuppressionEnabled = true
+        config.isHighpassFilterEnabled = true
+        config.isAutoGainControl1Enabled = true
+        let processing = LKRTCDefaultAudioProcessingModule(config: config, capturePostProcessingDelegate: microphone, renderPreProcessingDelegate: nil)
+        return LKRTCPeerConnectionFactory(
+            audioDeviceModuleType: .platformDefault,
+            bypassVoiceProcessing: false,
+            encoderFactory: LKRTCDefaultVideoEncoderFactory(),
+            decoderFactory: LKRTCDefaultVideoDecoderFactory(),
+            audioProcessingModule: processing
+        )
     }
 
     init(session: Session, conversation: Conversation, ownSessionID: String, iceServers: [IceServerConfig],
-         nick: String, nameForSession: @escaping (String) -> String?) {
+         nick: String, captions: LiveCaptions, nameForSession: @escaping (String) -> String?) {
         self.session = session
         self.conversation = conversation
         self.token = conversation.token
@@ -121,6 +193,10 @@ final class CallController {
         self.nick = nick
         self.nameForSession = nameForSession
         self.roster = CallRoster(ownSessionID: ownSessionID)
+        self.captions = captions
+        let microphone = MicrophoneTap()
+        self.microphoneTap = microphone
+        self.factory = Self.makeFactory(microphone: microphone)
     }
 
     // MARK: - Joining and leaving
@@ -130,6 +206,7 @@ final class CallController {
         // Left meanwhile — say, while the audio was restarting: don't walk back in.
         guard phase == .joining else { return }
         Log.sync.notice("Call: joining")
+        captions.begin()
         do throws(TalkError) {
             // With video: the camera's track goes out from the start, off.
             try await session.calls.join(token: token, flags: [.inCall, .withAudio, .withVideo])
@@ -167,6 +244,7 @@ final class CallController {
         guard !isEnded else { return }
         tearDown()
         phase = .ended(reason: nil)
+        summarizeIfCaptioned()
         let calls = session.calls
         let token = self.token
         Task {
@@ -200,7 +278,7 @@ final class CallController {
         Log.sync.notice("Call: restarting audio for another device")
         tearDown()
         roster = CallRoster(ownSessionID: ownSessionID)
-        factory = Self.makeFactory()
+        factory = Self.makeFactory(microphone: microphoneTap)
         phase = .joining
         try? await session.calls.leave(token: token)
         await join()
@@ -209,6 +287,11 @@ final class CallController {
     func toggleMute() {
         isMuted.toggle()
         audioTrack?.isEnabled = !isMuted
+        microphoneTap.isMuted = isMuted
+        if isMuted {
+            ownSpeaking.silence()
+            setOwnSpeaking(false)
+        }
         broadcast(isMuted ? .audioOff : .audioOn)
     }
 
@@ -289,7 +372,7 @@ final class CallController {
 
     /// Up to 720p: plenty for a call, and what the media server passes on without strain.
     private static func format(for device: AVCaptureDevice) -> AVCaptureDevice.Format? {
-        let formats = RTCCameraVideoCapturer.supportedFormats(for: device)
+        let formats = LKRTCCameraVideoCapturer.supportedFormats(for: device)
         func width(_ format: AVCaptureDevice.Format) -> Int32 { CMVideoFormatDescriptionGetDimensions(format.formatDescription).width }
         return formats.filter { width($0) <= 1280 }.max { width($0) < width($1) } ?? formats.first
     }
@@ -306,9 +389,12 @@ final class CallController {
         repeatState(to: nil)
     }
 
-    /// Someone new hears where things stand.
+    /// Someone new hears where things stand — a hand that's up included.
     private func tellCurrentState(to id: String) {
         repeatState(to: id)
+        if isHandRaised {
+            Task { await self.session.signaling.send(.callMessage(toSession: id, .raiseHand(true, at: Date()))) }
+        }
     }
 
     /// The state again, now and after 1, 2, 4, 8 and 16 seconds — as Talk's web app sends it.
@@ -326,7 +412,11 @@ final class CallController {
                 let state: [MediaStatus] = [self.isMuted ? .audioOff : .audioOn, self.isCameraOn ? .videoOn : .videoOff]
                 let targets = id.map { [$0] } ?? Array(self.roster.inCall.keys)
                 for status in state {
-                    if id == nil { self.publisher?.send(status) }
+                    // On the data channel for a newcomer's repeats too, though it reaches
+                    // everyone: Talk for iOS only listens there — a mute or unmute through
+                    // signaling it ignores — so a camera turned on before the phone had
+                    // joined stayed dark on it until turned off and on again.
+                    self.publisher?.send(status)
                     for target in targets {
                         await self.session.signaling.send(.mediaStatus(toSession: target, status))
                     }
@@ -344,7 +434,124 @@ final class CallController {
         case .audioOff: participants[index].isAudioOn = false
         case .videoOn: participants[index].isVideoOn = true
         case .videoOff: participants[index].isVideoOn = false
+        // Talk's own clients say this too; it's only needed for a stream WebRTC reports
+        // no level for, since a measured one is quicker and doesn't depend on them.
+        case .speaking where !measured.contains(sessionID):
+            participants[index].isSpeaking = true
+            recentSpeakerID = sessionID
+        case .stoppedSpeaking where !measured.contains(sessionID): participants[index].isSpeaking = false
         case .speaking, .stoppedSpeaking: break
+        }
+    }
+
+    // MARK: - Who is talking
+
+    /// Every quarter second, how loud this Mac's microphone is and how loud each voice coming
+    /// in is — WebRTC's own measurements, which need nothing of the other clients.
+    private func watchLevels() {
+        levelsTask?.cancel()
+        levelsTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(250))
+                guard let self, !Task.isCancelled, !self.isEnded else { return }
+                await self.readLevels()
+            }
+        }
+    }
+
+    private func readLevels() async {
+        let now = Date()
+        if let publisher, !isMuted, let level = await publisher.audioLevel(sending: true) {
+            if measured.insert(ownSessionID).inserted {
+                Log.sync.notice("Call: hearing this Mac's own level")
+            }
+            if ownSpeaking.update(level: level, at: now) { setOwnSpeaking(ownSpeaking.isSpeaking) }
+        }
+        for id in participants.map(\.id) {
+            guard let peer = subscribers[id], let level = await peer.audioLevel(sending: false) else { continue }
+            if measured.insert(id).inserted {
+                Log.sync.notice("Call: hearing levels from \(id.prefix(6))")
+            }
+            var detector = speaking[id] ?? SpeakingDetector()
+            let changed = detector.update(level: level, at: now)
+            speaking[id] = detector
+            guard changed, let index = participants.firstIndex(where: { $0.id == id }) else { continue }
+            participants[index].isSpeaking = detector.isSpeaking
+            if detector.isSpeaking { recentSpeakerID = id }
+        }
+    }
+
+    /// Tells the others, so their own ring around this Mac's tile comes on — Talk's clients
+    /// listen for this on the data channel.
+    private func setOwnSpeaking(_ talking: Bool) {
+        guard isSpeaking != talking else { return }
+        isSpeaking = talking
+        publisher?.send(talking ? .speaking : .stoppedSpeaking)
+    }
+
+    // MARK: - Hands, reactions, and a moderator's mute
+
+    /// Up, or down again.
+    func toggleHand() {
+        isHandRaised.toggle()
+        sendToEveryone(.raiseHand(isHandRaised, at: Date()))
+    }
+
+    /// Sends an emoji to everyone — and shows it here too, as nobody sends one back.
+    func react(_ emoji: String) {
+        sendToEveryone(.reaction(emoji))
+        show(Reaction(emoji: emoji, name: "You"))
+    }
+
+    /// A moderator mutes someone. Everyone in the call hears it; they mute themselves.
+    func forceMute(_ participantID: String) {
+        guard canMuteOthers else { return }
+        Log.sync.notice("Call: muting \(participantID.prefix(6)), told to \(self.roster.inCall.count) session(s)")
+        sendToEveryone(.forceMute(target: participantID))
+        if let index = participants.firstIndex(where: { $0.id == participantID }) {
+            participants[index].isAudioOn = false
+            participants[index].isSpeaking = false
+        }
+    }
+
+    func receivedHand(_ isRaised: Bool, from sessionID: String) {
+        guard let index = participants.firstIndex(where: { $0.id == sessionID }) else { return }
+        let was = participants[index].isHandRaised
+        participants[index].handRaisedAt = isRaised ? (participants[index].handRaisedAt ?? Date()) : nil
+        if isRaised, !was { show("\(participants[index].name) raised their hand", symbol: "hand.raised.fill") }
+    }
+
+    func receivedReaction(_ emoji: String, from sessionID: String) {
+        guard let participant = participants.first(where: { $0.id == sessionID }) else { return }
+        show(Reaction(emoji: emoji, name: participant.name))
+    }
+
+    /// A moderator muted someone — maybe this Mac.
+    func receivedForceMute(target: String) {
+        if target == ownSessionID {
+            guard !isMuted else { return }
+            toggleMute()
+            show("A moderator muted you", symbol: "mic.slash.fill")
+        } else if let index = participants.firstIndex(where: { $0.id == target }) {
+            participants[index].isAudioOn = false
+            participants[index].isSpeaking = false
+        }
+    }
+
+    private func show(_ reaction: Reaction) {
+        reactions.append(reaction)
+        // A flood of them — a room full of applause — keeps only the latest few on screen.
+        if reactions.count > 12 { reactions.removeFirst(reactions.count - 12) }
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(4))
+            self?.reactions.removeAll { $0.id == reaction.id }
+        }
+    }
+
+    /// To each session in the call — how Talk's clients send what isn't media.
+    private func sendToEveryone(_ message: CallMessage) {
+        for id in roster.inCall.keys {
+            Task { await self.session.signaling.send(.callMessage(toSession: id, message)) }
         }
     }
 
@@ -422,13 +629,13 @@ final class CallController {
         }
     }
 
-    private func publishScreen(_ track: RTCVideoTrack) async {
+    private func publishScreen(_ track: LKRTCVideoTrack) async {
         let sid = String(Int(Date().timeIntervalSince1970 * 1000))
         guard let peer = CallPeer(factory: factory, iceServers: iceServers, remoteSession: ownSessionID, sid: sid, roomType: "screen") else {
             stopSharingScreen()
             return
         }
-        let options = RTCRtpTransceiverInit()
+        let options = LKRTCRtpTransceiverInit()
         options.direction = .sendOnly
         options.streamIds = [ownSessionID + "-screen"]
         peer.connection.addTransceiver(with: track, init: options)
@@ -479,14 +686,16 @@ final class CallController {
             end(reason: "The call couldn’t be set up on this Mac.")
             return
         }
-        let source = factory.audioSource(with: RTCMediaConstraints(mandatoryConstraints: nil, optionalConstraints: nil))
+        let source = factory.audioSource(with: LKRTCMediaConstraints(mandatoryConstraints: nil, optionalConstraints: nil))
         let track = factory.audioTrack(with: source, trackId: "audio")
         track.isEnabled = !isMuted
-        let options = RTCRtpTransceiverInit()
+        let options = LKRTCRtpTransceiverInit()
         options.direction = .sendOnly
         options.streamIds = [ownSessionID]
         peer.connection.addTransceiver(with: track, init: options)
         audioTrack = track
+        microphoneTap.isMuted = isMuted
+        captions.addMicrophone(microphoneTap)
 
         // The camera's track, off until the camera is turned on — there from the start even
         // without a camera, so one plugged in later needs no new connection.
@@ -495,22 +704,27 @@ final class CallController {
             let videoSource = factory.videoSource()
             let video = factory.videoTrack(with: videoSource, trackId: "video")
             video.isEnabled = isCameraOn
-            let videoOptions = RTCRtpTransceiverInit()
+            let videoOptions = LKRTCRtpTransceiverInit()
             videoOptions.direction = .sendOnly
             videoOptions.streamIds = [ownSessionID]
             peer.connection.addTransceiver(with: video, init: videoOptions)
             videoTrack = video
             localVideo = VideoTrack(video)
-            capturer = RTCCameraVideoCapturer(delegate: videoSource)
+            capturer = LKRTCCameraVideoCapturer(delegate: videoSource)
         }
         peer.openStatusChannel()
         publisher = peer
         wire(peer)
+        watchLevels()
         peer.onConnectionChange = { [weak self] connected, failed in
             guard let self else { return }
             Log.sync.notice("Call: publisher connected=\(connected) failed=\(failed)")
             if connected, self.connectedAt == nil { self.connectedAt = Date() }
-            if connected, self.phase == .joining { self.phase = .inCall }
+            if connected, self.announcesFrom == nil { self.announcesFrom = Date().addingTimeInterval(2) }
+            if connected, self.phase == .joining {
+                self.phase = .inCall
+                self.releaseHeldOfferRequests()
+            }
             if failed { self.end(reason: "Your audio couldn’t reach the call.") }
         }
 
@@ -554,6 +768,10 @@ final class CallController {
             guard let self, let index = self.participants.firstIndex(where: { $0.id == sessionID }) else { return }
             self.participants[index].video = VideoTrack(track)
         }
+        peer.onRemoteAudio = { [weak self] track in
+            guard let self, let participant = self.participants.first(where: { $0.id == sessionID }) else { return }
+            self.captions.add(track: track, id: sessionID, name: participant.name)
+        }
         peer.onStatus = { [weak self] status in self?.received(status, from: sessionID) }
         peer.onConnectionChange = { [weak self] connected, failed in
             Log.sync.notice("Call: subscriber \(sessionID.prefix(6)) connected=\(connected) failed=\(failed)")
@@ -583,9 +801,18 @@ final class CallController {
     }
 
     private func apply(_ change: CallRoster.Change) {
+        let leaving = participants.filter { change.toDrop.contains($0.id) }.map(\.name)
+        if !leaving.isEmpty { announce(leaving, did: "left", symbol: "person.fill.xmark") }
+        let arriving = change.toSubscribe
+            .filter { user in !participants.contains { $0.id == user.sessionID } }
+            .map { name(for: $0) }
+        if !arriving.isEmpty { announce(arriving, did: "joined", symbol: "person.fill.checkmark") }
         for id in change.toDrop {
             subscribers.removeValue(forKey: id)?.close()
             subscribers.removeValue(forKey: Self.key(id, "screen"))?.close()
+            speaking[id] = nil
+            measured.remove(id)
+            captions.remove(id: id)
         }
         participants.removeAll { change.toDrop.contains($0.id) }
         for user in change.toSubscribe {
@@ -603,9 +830,51 @@ final class CallController {
             tellCurrentState(to: user.sessionID)
             // Joined while this Mac shares its screen: they need the offer too.
             if isSharingScreen, screenPublisher != nil { offerScreen(to: user.sessionID) }
-            let session = user.sessionID
-            Log.sync.notice("Call: requesting offer from \(session.prefix(6))")
-            Task { await self.send(CallSignal(kind: .requestOffer), to: session) }
+            requestOffer(from: user.sessionID)
+        }
+    }
+
+    /// Asks for someone's media — or, while this Mac is still getting into the call, holds the
+    /// request until it's in. Switching the microphone or speaker leaves and rejoins, and the
+    /// roster that arrived in between asked straight away: the server refused ("not allowed"),
+    /// and once back in, the roster already had them, so nothing asked again — no sound
+    /// from them after a device switch.
+    private func requestOffer(from session: String) {
+        guard phase == .inCall else {
+            heldOfferRequests.insert(session)
+            return
+        }
+        Log.sync.notice("Call: requesting offer from \(session.prefix(6))")
+        Task { await self.send(CallSignal(kind: .requestOffer), to: session) }
+    }
+
+    private func releaseHeldOfferRequests() {
+        let held = heldOfferRequests
+        heldOfferRequests = []
+        for session in held where participants.contains(where: { $0.id == session }) {
+            requestOffer(from: session)
+        }
+    }
+
+    /// "Anna joined", "Anna and Bo left", "3 people joined".
+    private func announce(_ names: [String], did what: String, symbol: String) {
+        guard !conversation.isOneToOne, let announcesFrom, Date() >= announcesFrom else { return }
+        let who = switch names.count {
+        case 1: names[0]
+        case 2: "\(names[0]) and \(names[1])"
+        default: "\(names.count) people"
+        }
+        show("\(who) \(what)", symbol: symbol)
+    }
+
+    /// Says something on the stage for a few seconds.
+    private func show(_ text: String, symbol: String) {
+        notice = Notice(text: text, symbol: symbol)
+        noticeTask?.cancel()
+        noticeTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(3))
+            guard !Task.isCancelled else { return }
+            self?.notice = nil
         }
     }
 
@@ -627,6 +896,23 @@ final class CallController {
     private func end(reason: String?) {
         tearDown()
         phase = .ended(reason: reason)
+        summarizeIfCaptioned()
+    }
+
+    /// Notes on what has been said so far — the call goes on.
+    func summarizeSoFar() {
+        summary.write(from: captions.log.transcript, conversationName: conversation.displayName)
+    }
+
+    /// Over: with enough captioned to go on, the notes are written while the end screen shows.
+    private func summarizeIfCaptioned() {
+        guard captions.log.transcript.count >= CallSummary.minimumLines, summary.state == .idle || hasSummarySoFar else { return }
+        summary.write(from: captions.log.transcript, conversationName: conversation.displayName)
+    }
+
+    private var hasSummarySoFar: Bool {
+        if case .written = summary.state { return true }
+        return false
     }
 
     private func tearDown() {
@@ -639,8 +925,19 @@ final class CallController {
         isSharingScreen = false
         for task in stateRepeats.values { task.cancel() }
         stateRepeats = [:]
+        heldOfferRequests = []
+        noticeTask?.cancel()
+        noticeTask = nil
+        notice = nil
+        announcesFrom = nil
         statsTask?.cancel()
         statsTask = nil
+        levelsTask?.cancel()
+        levelsTask = nil
+        ownSpeaking.silence()
+        isSpeaking = false
+        speaking = [:]
+        measured = []
         capturer?.stopCapture()
         capturer = nil
         videoTrack = nil
@@ -648,19 +945,23 @@ final class CallController {
         isCameraOn = false
         publisher?.close()
         publisher = nil
+        captions.removeAll()
         for peer in subscribers.values { peer.close() }
         subscribers = [:]
         audioTrack = nil
         participants = []
+        recentSpeakerID = nil
+        isHandRaised = false
+        reactions = []
     }
 }
 
 /// A video track, compared by which track it is — so a participant with one can still be
 /// compared, and a view knows when it was handed another.
 final class VideoTrack: Equatable {
-    let track: RTCVideoTrack
+    let track: LKRTCVideoTrack
 
-    init(_ track: RTCVideoTrack) {
+    init(_ track: LKRTCVideoTrack) {
         self.track = track
     }
 
