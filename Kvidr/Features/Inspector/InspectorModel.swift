@@ -14,9 +14,9 @@ final class InspectorModel {
 
         var title: String {
             switch self {
-            case .details: "Info"
-            case .people: "People"
-            case .files: "Files"
+            case .details: String(localized: "Info", comment: "Inspector tab: about the conversation")
+            case .people: String(localized: "People", comment: "Inspector tab: the participants")
+            case .files: String(localized: "Files", comment: "Inspector tab: what has been shared")
             }
         }
 

@@ -97,14 +97,16 @@ struct ChatRow: Sendable, Identifiable, Equatable {
 /// The one-line summary shown in the sidebar and in notifications.
 enum ConversationPreview {
     /// What stands in for the last message of a sensitive conversation.
-    static let hiddenText = "Preview hidden"
+    static let hiddenText = String(localized: "Preview hidden", comment: "Stands in for the last message of a sensitive conversation")
 
     /// - Parameter includeSender: group conversations prefix the sender's name; one-to-ones
     ///   don't, because you already know who it is.
     static func text(for conversation: Conversation) -> String {
         if conversation.isSensitive { return hiddenText }
         guard let message = conversation.lastMessage else {
-            return conversation.isNoteToSelf ? "Notes to yourself" : "No messages yet"
+            return conversation.isNoteToSelf
+                ? String(localized: "Notes to yourself", comment: "Sidebar preview of an empty note-to-self conversation")
+                : String(localized: "No messages yet", comment: "Sidebar preview of an empty conversation")
         }
 
         let body = MessageContentParser(currentUserID: "", markdownEnabled: false)
@@ -114,7 +116,7 @@ enum ConversationPreview {
         guard !message.isSystem, !conversation.isOneToOne else { return body }
         let sender = message.actor.resolvedDisplayName
         guard !sender.isEmpty else { return body }
-        return "\(sender): \(body)"
+        return String(localized: "\(sender): \(body)", comment: "Sidebar preview: sender name, then the message")
     }
 }
 
@@ -139,7 +141,7 @@ enum RelativeTimestamp {
         }
         if let yesterday = calendar.date(byAdding: .day, value: -1, to: now),
            calendar.isDate(date, inSameDayAs: yesterday) {
-            return "Yesterday"
+            return String(localized: "Yesterday")
         }
         if let weekAgo = calendar.date(byAdding: .day, value: -6, to: now), date > weekAgo {
             return date.formatted(.dateTime.weekday(.abbreviated).locale(locale))
@@ -153,10 +155,10 @@ enum RelativeTimestamp {
         calendar: Calendar = .current,
         locale: Locale = .current
     ) -> String {
-        if calendar.isDate(day, inSameDayAs: now) { return "Today" }
+        if calendar.isDate(day, inSameDayAs: now) { return String(localized: "Today") }
         if let yesterday = calendar.date(byAdding: .day, value: -1, to: now),
            calendar.isDate(day, inSameDayAs: yesterday) {
-            return "Yesterday"
+            return String(localized: "Yesterday")
         }
         if let weekAgo = calendar.date(byAdding: .day, value: -6, to: now), day > weekAgo {
             return day.formatted(.dateTime.weekday(.wide).locale(locale))

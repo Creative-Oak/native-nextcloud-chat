@@ -130,8 +130,7 @@ struct MessageRow: View {
                     HStack(spacing: 8) {
                         if let pin {
                             Label("Pinned", systemImage: "pin.fill")
-                                .help("Pinned by \(pin.pinnedBy.resolvedDisplayName)"
-                                      + (pin.pinnedUntil.map { " until \($0.formatted(date: .abbreviated, time: .shortened))" } ?? ""))
+                                .help(pinnedHelp(pin))
                         }
                         if let reminder {
                             Label(ReminderTime.text(reminder.date), systemImage: "alarm")
@@ -169,23 +168,33 @@ struct MessageRow: View {
         .accessibilityLabel(accessibilityLabel)
     }
 
+    private func pinnedHelp(_ pin: PinnedMessage) -> String {
+        let name = pin.pinnedBy.resolvedDisplayName
+        guard let until = pin.pinnedUntil else {
+            return String(localized: "Pinned by \(name)", comment: "Tooltip on a pinned message; %@ is who pinned it")
+        }
+        return String(localized: "Pinned by \(name) until \(until.formatted(date: .abbreviated, time: .shortened))", comment: "Tooltip on a pinned message; who pinned it, and the date and time the pin ends")
+    }
+
     /// VoiceOver reads one coherent sentence per message rather than a pile of fragments.
     private var accessibilityLabel: String {
         var parts = [message.actor.resolvedDisplayName]
         if message.isDeleted {
-            parts.append("message deleted")
+            parts.append(String(localized: "message deleted", comment: "VoiceOver, part of a message's description"))
         } else {
             parts.append(content.preview)
         }
         if let parent = message.parent {
-            parts.append("replying to \(parent.actor.resolvedDisplayName)")
+            parts.append(String(localized: "replying to \(parent.actor.resolvedDisplayName)", comment: "VoiceOver, part of a message's description; %@ is a name"))
         }
-        if message.lastEdit != nil { parts.append("edited") }
+        if message.lastEdit != nil { parts.append(String(localized: "edited")) }
         if !message.reactions.isEmpty {
             let total = message.reactions.values.reduce(0, +)
-            parts.append("\(total) reaction\(total == 1 ? "" : "s")")
+            parts.append(String(localized: "\(total) reactions", comment: "VoiceOver, part of a message's description"))
         }
-        if case .failed(let reason) = message.deliveryState { parts.append("not sent: \(reason)") }
+        if case .failed(let reason) = message.deliveryState {
+            parts.append(String(localized: "not sent: \(reason)", comment: "VoiceOver, part of a message's description; %@ is why"))
+        }
         parts.append(message.timestamp.formatted(date: .abbreviated, time: .shortened))
         return parts.joined(separator: ", ")
     }
@@ -322,7 +331,7 @@ struct MessageRow: View {
 
     private var editedHelp: String {
         guard let edit = message.lastEdit else { return "" }
-        return "Edited by \(edit.actor.resolvedDisplayName) at \(edit.timestamp.formatted(date: .abbreviated, time: .shortened))"
+        return String(localized: "Edited by \(edit.actor.resolvedDisplayName) at \(edit.timestamp.formatted(date: .abbreviated, time: .shortened))", comment: "Tooltip; %1$@ is a name, %2$@ a date and time")
     }
 
     @ViewBuilder
@@ -446,7 +455,7 @@ struct QuotedMessageView: View {
                     Text(parent.actor.resolvedDisplayName)
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(.secondary)
-                    Text(parent.isDeleted ? "Message deleted" : preview)
+                    Text(parent.isDeleted ? String(localized: "Message deleted") : preview)
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
                         .lineLimit(2)

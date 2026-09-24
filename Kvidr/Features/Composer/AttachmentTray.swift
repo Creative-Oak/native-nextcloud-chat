@@ -41,7 +41,7 @@ private struct TransferRow: View {
                         .lineLimit(1)
                         .truncationMode(.middle)
                     if transfer.byteCount > 0 {
-                        Text(ByteCountFormatter.string(fromByteCount: Int64(transfer.byteCount), countStyle: .file))
+                        Text(Int64(transfer.byteCount).formatted(.byteCount(style: .file)))
                             .font(.caption2)
                             .foregroundStyle(.tertiary)
                     }
@@ -98,11 +98,11 @@ private struct TransferRow: View {
 
     private var statusText: String {
         switch transfer.state {
-        case .queued: "Waiting"
-        case .uploading(let fraction): "\(Int(fraction * 100))%"
-        case .uploaded: "Ready to send"
-        case .sharing: "Sharing…"
-        case .completed: "Sent"
+        case .queued: String(localized: "Waiting", comment: "Attachment upload status: queued")
+        case .uploading(let fraction): Int(fraction * 100).formatted(.percent)
+        case .uploaded: String(localized: "Ready to send", comment: "Attachment upload status: uploaded, waiting for Send")
+        case .sharing: String(localized: "Sharing…", comment: "Attachment upload status: being posted into the conversation")
+        case .completed: String(localized: "Sent", comment: "Attachment upload status: done")
         case .failed(let reason): reason
         }
     }

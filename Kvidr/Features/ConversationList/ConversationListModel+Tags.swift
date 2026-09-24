@@ -13,8 +13,8 @@ struct TagNaming: Identifiable {
     var name: String
 
     var title: String {
-        if case .rename = purpose { return "Rename Tag" }
-        return "New Tag"
+        if case .rename = purpose { return String(localized: "Rename Tag", comment: "Alert title: naming a sidebar tag") }
+        return String(localized: "New Tag", comment: "Alert title: naming a sidebar tag")
     }
 }
 

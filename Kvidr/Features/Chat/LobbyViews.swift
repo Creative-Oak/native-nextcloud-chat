@@ -53,12 +53,12 @@ struct LobbyWaitingView: View {
 
     private var explanation: String {
         if conversation.isBreakoutRoom {
-            return "\(conversation.displayName) is a breakout room. It opens when a moderator starts the breakout rooms, and you’ll be taken in then."
+            return String(localized: "\(conversation.displayName) is a breakout room. It opens when a moderator starts the breakout rooms, and you’ll be taken in then.", comment: "Lobby; %@ is the breakout room's name")
         }
         if conversation.lobbyTimer.map({ $0 > .now }) == true {
-            return "Only moderators can see \(conversation.displayName) until it opens. You’ll be taken in as soon as it does."
+            return String(localized: "Only moderators can see \(conversation.displayName) until it opens. You’ll be taken in as soon as it does.", comment: "Lobby with an opening time; %@ is the conversation's name")
         }
-        return "Only moderators can see \(conversation.displayName) until one of them opens it. You’ll be taken in as soon as they do."
+        return String(localized: "Only moderators can see \(conversation.displayName) until one of them opens it. You’ll be taken in as soon as they do.", comment: "Lobby without an opening time; %@ is the conversation's name")
     }
 }
 
@@ -91,7 +91,7 @@ struct LobbyBar: View {
     }
 
     private var text: String {
-        guard let opensAt, opensAt > .now else { return "Lobby is on — only moderators can see this conversation" }
-        return "Lobby is on — opens \(opensAt.formatted(date: .abbreviated, time: .shortened))"
+        guard let opensAt, opensAt > .now else { return String(localized: "Lobby is on — only moderators can see this conversation", comment: "Bar shown to moderators") }
+        return String(localized: "Lobby is on — opens \(opensAt.formatted(date: .abbreviated, time: .shortened))", comment: "Bar shown to moderators; %@ is a date and time")
     }
 }

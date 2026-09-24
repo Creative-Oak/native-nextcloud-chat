@@ -41,15 +41,15 @@ struct ComposerView: View {
                 ComposerContextBar(
                     symbol: "arrowshape.turn.up.left",
                     title: model.isReplyingPrivately
-                        ? "Replying privately to \(replyingTo.actor.resolvedDisplayName)"
-                        : "Replying to \(replyingTo.actor.resolvedDisplayName)",
+                        ? String(localized: "Replying privately to \(replyingTo.actor.resolvedDisplayName)", comment: "Above the composer; %@ is the person being replied to")
+                        : String(localized: "Replying to \(replyingTo.actor.resolvedDisplayName)", comment: "Above the composer; %@ is the person being replied to"),
                     detail: model.content(for: replyingTo).preview,
                     onCancel: { model.cancelReply() }
                 )
             } else if model.editing != nil {
                 ComposerContextBar(
                     symbol: "pencil",
-                    title: "Editing message",
+                    title: String(localized: "Editing message", comment: "Above the composer while an already sent message is edited"),
                     detail: nil,
                     onCancel: { model.cancelEdit() }
                 )
@@ -158,11 +158,11 @@ struct ComposerView: View {
         // rejected.
         if model.capabilities.supportsPolls, model.conversation.type.allowsPolls {
             items.append(.divider)
-            items.append(.action("Poll…", systemImage: "chart.bar.doc.horizontal") { isShowingNewPoll = true })
+            items.append(.action(String(localized: "Poll…", comment: "Composer + menu: create a poll"), systemImage: "chart.bar.doc.horizontal") { isShowingNewPoll = true })
         }
         if model.canCreateThread {
             items.append(.divider)
-            items.append(.action("New Thread", systemImage: "bubble.left.and.bubble.right") {
+            items.append(.action(String(localized: "New Thread", comment: "Composer + menu: start a new thread"), systemImage: "bubble.left.and.bubble.right") {
                 model.beginNewThread()
                 isThreadTitleFocused = true
             })
@@ -174,7 +174,7 @@ struct ComposerView: View {
         }
         // Proofread or rewrite what's in the field — Apple Intelligence, on this Mac.
         // Right-clicking the field has it too.
-        items.append(.action("Writing Tools", systemImage: "apple.writing.tools", isEnabled: !isEmpty) {
+        items.append(.action(String(localized: "Writing Tools", comment: "Composer + menu: Apple Intelligence Writing Tools"), systemImage: "apple.writing.tools", isEnabled: !isEmpty) {
             isFocused = true
             Task { @MainActor in
                 NSApp.sendAction(#selector(NSResponder.showWritingTools(_:)), to: nil, from: nil)
@@ -183,7 +183,7 @@ struct ComposerView: View {
         if model.canSchedule, model.editing == nil {
             items.append(.divider)
             // Straight to the capsule in the field; the quick times are in there.
-            items.append(.action("Send Later", systemImage: "clock") { model.beginSendLater() })
+            items.append(.action(String(localized: "Send Later", comment: "Composer + menu: schedule the message"), systemImage: "clock") { model.beginSendLater() })
         }
         return items
     }
@@ -199,7 +199,7 @@ struct ComposerView: View {
         for language in translationLanguages where language.minimalIdentifier != recent?.minimalIdentifier {
             languages.append(.action(MessageTranslator.name(of: language)) { translateDraft(into: language, with: translator) })
         }
-        return .submenu(hasSelection ? "Translate Selection" : "Translate", systemImage: "translate", isEnabled: isEnabled, languages)
+        return .submenu(hasSelection ? String(localized: "Translate Selection", comment: "Composer + menu: translate the selected words of the draft") : String(localized: "Translate", comment: "Composer + menu: translate the draft"), systemImage: "translate", isEnabled: isEnabled, languages)
     }
 
     /// Words selected in the field, inside what's there now.
@@ -234,7 +234,7 @@ struct ComposerView: View {
                 model.draftText = (original as NSString).replacingCharacters(in: range, with: leading + text + trailing)
                 draftTranslation = DraftTranslation(language: name, state: .translated)
             case .sameLanguage:
-                draftTranslation = DraftTranslation(language: name, state: .problem("This is already in \(name)."))
+                draftTranslation = DraftTranslation(language: name, state: .problem(String(localized: "This is already in \(name).", comment: "Translating the draft; %@ is a language name")))
             case .failed(let reason):
                 draftTranslation = DraftTranslation(language: name, state: .problem(reason))
             }
@@ -423,16 +423,20 @@ struct ComposerView: View {
     }
 
     private var placeholder: String {
-        if model.editing != nil { return "Edit message" }
-        if model.newThreadTitle != nil { return "First message in the thread" }
-        if let thread = model.openThread { return "Reply in \(thread.title.isEmpty ? "thread" : thread.title)" }
-        return "Message \(model.conversation.displayName)"
+        if model.editing != nil { return String(localized: "Edit message", comment: "Composer placeholder while editing a sent message") }
+        if model.newThreadTitle != nil { return String(localized: "First message in the thread", comment: "Composer placeholder while starting a thread") }
+        if let thread = model.openThread {
+            return thread.title.isEmpty
+                ? String(localized: "Reply in thread", comment: "Composer placeholder inside an untitled thread")
+                : String(localized: "Reply in \(thread.title)", comment: "Composer placeholder inside a thread; %@ is the thread's title")
+        }
+        return String(localized: "Message \(model.conversation.displayName)", comment: "Composer placeholder; %@ is the conversation's name")
     }
 
     private var sendHelp: String {
         (preferences?.sendsOnReturn ?? true)
-            ? "Send (Return · Shift-Return for a new line)"
-            : "Send (⌘Return)"
+            ? String(localized: "Send (Return · Shift-Return for a new line)", comment: "Tooltip on the send button")
+            : String(localized: "Send (⌘Return)", comment: "Tooltip on the send button")
     }
 
     /// Floats above the composer rather than pushing it down, so the text you're typing
@@ -520,7 +524,7 @@ private struct PastedFilesBar: View {
     }
 
     private var title: String {
-        files.count == 1 ? "Attach this pasted file?" : "Attach these \(files.count) pasted files?"
+        String(localized: "Attach these \(files.count) pasted files?", comment: "Asked before files named by a paste are attached")
     }
 
     /// The names, so what is about to be uploaded is readable *before* it is uploaded —

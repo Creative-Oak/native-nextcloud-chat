@@ -67,7 +67,7 @@ struct MessageSearchSheet: View {
 
             if model.canScopeToConversation {
                 Picker("Search in", selection: $model.scope) {
-                    Text(model.currentConversationName ?? "This Conversation")
+                    Text(model.currentConversationName ?? String(localized: "This Conversation", comment: "Message search scope, when the conversation has no name"))
                         .tag(MessageSearchModel.Scope.thisConversation)
                     Text("All Conversations")
                         .tag(MessageSearchModel.Scope.everywhere)
@@ -183,7 +183,7 @@ struct MessageSearchSheet: View {
     private var footer: some View {
         HStack {
             if !model.hits.isEmpty {
-                Text("\(model.hits.count) result\(model.hits.count == 1 ? "" : "s")")
+                Text("\(model.hits.count) results", comment: "Message search footer: how many results")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

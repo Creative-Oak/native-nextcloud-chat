@@ -952,7 +952,7 @@ final class AppModel {
             }
         }
         guard ownSessionID != nil else {
-            controller.fail("Calls go over the live connection to your server, and it isn’t up right now.")
+            controller.fail(String(localized: "Calls go over the live connection to your server, and it isn’t up right now."))
             return
         }
         await controller.join()

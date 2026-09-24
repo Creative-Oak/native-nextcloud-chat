@@ -147,7 +147,7 @@ struct CommandPaletteView: View {
 
     private func header(_ section: CommandPaletteModel.Section) -> some View {
         HStack(spacing: 8) {
-            Text(section.kind.rawValue)
+            Text(section.kind.title)
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(.secondary)
             if section.isLoading {
@@ -226,8 +226,8 @@ struct CommandPaletteView: View {
         case .command(let c): c.title
         case .person(let p): p.label
         case .message(let m): m.title
-        case .seeAllMessages: "See all results for “\(model.trimmedQuery)”"
-        case .noResults: "No results for “\(model.trimmedQuery)”"
+        case .seeAllMessages: String(localized: "See all results for “\(model.trimmedQuery)”", comment: "Command palette: %@ is what was typed")
+        case .noResults: String(localized: "No results for “\(model.trimmedQuery)”", comment: "Command palette: %@ is what was typed")
         }
     }
 
@@ -254,11 +254,17 @@ struct CommandPaletteView: View {
             if conversation.hasUnread {
                 Circle().fill(Color.accentColor).frame(width: 7, height: 7)
             }
-            kindLabel(conversation.isOneToOne ? "Direct" : "Conversation")
+            kindLabel(conversation.isOneToOne
+                      ? String(localized: "Direct", comment: "Command palette row tag: a one-to-one conversation")
+                      : String(localized: "Conversation", comment: "Command palette row tag: a group conversation"))
         case .person(let entry):
-            kindLabel(entry.isGroupLike ? "Group" : "Person")
+            kindLabel(entry.isGroupLike
+                      ? String(localized: "Group", comment: "Command palette row tag: a group or team to start a conversation with")
+                      : String(localized: "Person", comment: "Command palette row tag: a person to start a conversation with"))
         case .message(let hit):
-            kindLabel(hit.threadID == nil ? "Message" : "Message · in thread")
+            kindLabel(hit.threadID == nil
+                      ? String(localized: "Message", comment: "Command palette row tag: a message found by search")
+                      : String(localized: "Message · in thread", comment: "Command palette row tag: a message found by search, inside a thread"))
         case .seeAllMessages, .noResults:
             EmptyView()
         }

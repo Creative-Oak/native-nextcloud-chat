@@ -209,12 +209,12 @@ final class ConversationSettingsModel: Identifiable {
     }
 
     static let expirationOptions: [ExpirationOption] = [
-        ExpirationOption(seconds: 0, title: "Never"),
-        ExpirationOption(seconds: 3600, title: "1 hour"),
-        ExpirationOption(seconds: 28800, title: "8 hours"),
-        ExpirationOption(seconds: 86400, title: "1 day"),
-        ExpirationOption(seconds: 604800, title: "1 week"),
-        ExpirationOption(seconds: 2419200, title: "4 weeks")
+        ExpirationOption(seconds: 0, title: String(localized: "Never", comment: "Messages never expire")),
+        ExpirationOption(seconds: 3600, title: String(localized: "1 hour")),
+        ExpirationOption(seconds: 28800, title: String(localized: "8 hours")),
+        ExpirationOption(seconds: 86400, title: String(localized: "1 day")),
+        ExpirationOption(seconds: 604800, title: String(localized: "1 week")),
+        ExpirationOption(seconds: 2419200, title: String(localized: "4 weeks"))
     ]
 
     func copyLink() {

@@ -210,11 +210,11 @@ final class LoginModel {
     /// server claimed is deliberately not repeated — that is the untrusted half.
     private static func message(for failure: TalkError, address: ServerAddress) -> String {
         guard AuthenticationService.isOriginMismatch(failure) else { return failure.userMessage }
-        return """
+        return String(localized: """
         This server answers as a different address than \(address.displayString). \
         Sign in with the address your Nextcloud calls its own — the one your browser shows \
         while you’re using it.
-        """
+        """, comment: "Login error: the server's configured address differs from the one typed; %@ is the typed address")
     }
 
     func reopenBrowser() {

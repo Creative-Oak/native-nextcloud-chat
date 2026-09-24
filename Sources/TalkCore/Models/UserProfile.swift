@@ -24,19 +24,19 @@ enum ProfileScope: String, Sendable, Hashable, CaseIterable {
 
     var title: String {
         switch self {
-        case .private: "Private"
-        case .local: "Local"
-        case .federated: "Federated"
-        case .published: "Published"
+        case .private: String(localized: "Private", comment: "Profile field visibility")
+        case .local: String(localized: "Local", comment: "Profile field visibility")
+        case .federated: String(localized: "Federated", comment: "Profile field visibility")
+        case .published: String(localized: "Published", comment: "Profile field visibility")
         }
     }
 
     var explanation: String {
         switch self {
-        case .private: "Only people you share with, and trusted servers"
-        case .local: "Only people on your server"
-        case .federated: "People on your server and trusted servers"
-        case .published: "Anyone, including search"
+        case .private: String(localized: "Only people you share with, and trusted servers")
+        case .local: String(localized: "Only people on your server")
+        case .federated: String(localized: "People on your server and trusted servers")
+        case .published: String(localized: "Anyone, including search")
         }
     }
 }
@@ -50,19 +50,19 @@ struct ProfileField: Sendable, Hashable, Identifiable {
 
         var title: String {
             switch self {
-            case .email: "Email"
-            case .phone: "Phone"
-            case .address: "Location"
-            case .website: "Website"
-            case .pronouns: "Pronouns"
-            case .headline: "Headline"
-            case .organisation: "Organisation"
-            case .role: "Role"
-            case .biography: "About"
+            case .email: String(localized: "Email", comment: "Profile field")
+            case .phone: String(localized: "Phone", comment: "Profile field: phone number")
+            case .address: String(localized: "Location", comment: "Profile field: where the person is")
+            case .website: String(localized: "Website", comment: "Profile field")
+            case .pronouns: String(localized: "Pronouns", comment: "Profile field")
+            case .headline: String(localized: "Headline", comment: "Profile field: a one-line professional title")
+            case .organisation: String(localized: "Organisation", comment: "Profile field")
+            case .role: String(localized: "Role", comment: "Profile field: job role")
+            case .biography: String(localized: "About", comment: "Profile field: the person’s biography")
             case .fediverse: "Fediverse"
             case .bluesky: "Bluesky"
             case .twitter: "X"
-            case .birthdate: "Birthday"
+            case .birthdate: String(localized: "Birthday", comment: "Profile field")
             }
         }
 

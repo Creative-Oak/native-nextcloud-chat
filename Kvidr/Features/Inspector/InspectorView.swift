@@ -115,13 +115,13 @@ struct InspectorView: View {
     /// Only things this app can actually do. No placeholder buttons.
     private var actions: some View {
         HStack(spacing: 16) {
-            InspectorAction(symbol: "magnifyingglass", label: "Search in Conversation", action: onSearch)
-            InspectorAction(symbol: "link", label: "Copy Link") {
+            InspectorAction(symbol: "magnifyingglass", label: String(localized: "Search in Conversation"), action: onSearch)
+            InspectorAction(symbol: "link", label: String(localized: "Copy Link")) {
                 guard let url = webURL else { return }
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(url.absoluteString, forType: .string)
             }
-            InspectorAction(symbol: "safari", label: "Open in Nextcloud") {
+            InspectorAction(symbol: "safari", label: String(localized: "Open in Nextcloud")) {
                 guard let url = webURL else { return }
                 NSWorkspace.shared.open(url)
             }
@@ -144,7 +144,7 @@ struct InspectorView: View {
         if let status = conversation.userStatus, let message = status.message, !message.isEmpty {
             return [status.icon, message].compactMap { $0 }.joined(separator: " ")
         }
-        if conversation.isNoteToSelf { return "Only you can see this" }
+        if conversation.isNoteToSelf { return String(localized: "Only you can see this", comment: "Inspector subtitle for a note-to-self conversation") }
         return nil
     }
 }
@@ -307,26 +307,32 @@ private struct DetailsTab: View {
             }
         }
 
-        InspectorCard(title: "Conversation") {
-            InspectorRow(label: "Type", value: typeDescription)
+        InspectorCard(title: String(localized: "Conversation", comment: "Inspector card heading")) {
+            InspectorRow(label: String(localized: "Type", comment: "Inspector row label: the kind of conversation"), value: typeDescription)
             if conversation.hasPassword {
-                InspectorRow(label: "Password", value: "Required")
+                InspectorRow(
+                    label: String(localized: "Password", comment: "Inspector row label"),
+                    value: String(localized: "Required", comment: "Inspector row value: the conversation needs a password")
+                )
             }
             if conversation.isReadOnly {
-                InspectorRow(label: "Posting", value: "Read-only")
+                InspectorRow(
+                    label: String(localized: "Posting", comment: "Who can post in the conversation"),
+                    value: String(localized: "Read-only", comment: "Only moderators can post")
+                )
             }
             if conversation.messageExpiration > 0 {
-                InspectorRow(label: "Messages expire", value: expiration)
+                InspectorRow(label: String(localized: "Messages expire", comment: "Inspector row label; the value is a duration"), value: expiration)
             }
             InspectorRow(
-                label: "Last activity",
+                label: String(localized: "Last activity", comment: "Inspector row label; the value is a date"),
                 value: conversation.lastActivity.formatted(date: .abbreviated, time: .shortened)
             )
         }
 
         if model.capabilities.supportsNotificationLevels {
-            InspectorCard(title: "Notifications") {
-                InspectorRow(label: "Level", value: conversation.notificationLevel.title)
+            InspectorCard(title: String(localized: "Notifications")) {
+                InspectorRow(label: String(localized: "Level", comment: "Inspector row label: the notification level"), value: conversation.notificationLevel.title)
                 Text("Change this by right-clicking the conversation in the sidebar.")
                     .font(.system(size: 11))
                     .foregroundStyle(.tertiary)
@@ -335,7 +341,7 @@ private struct DetailsTab: View {
         }
 
         InspectorCard {
-            InspectorActionRow(title: "Copy Conversation Token") {
+            InspectorActionRow(title: String(localized: "Copy Conversation Token")) {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(conversation.token, forType: .string)
             }
@@ -344,12 +350,12 @@ private struct DetailsTab: View {
 
     private var typeDescription: String {
         switch model.conversation.type {
-        case .oneToOne: "Direct message"
-        case .formerOneToOne: "Direct message (account deleted)"
-        case .group: "Private group"
-        case .publicRoom: "Open conversation"
-        case .noteToSelf: "Note to self"
-        case .changelog: "Talk updates"
+        case .oneToOne: String(localized: "Direct message", comment: "Conversation type")
+        case .formerOneToOne: String(localized: "Direct message (account deleted)", comment: "Conversation type")
+        case .group: String(localized: "Private group", comment: "Conversation type")
+        case .publicRoom: String(localized: "Open conversation", comment: "Conversation type: anyone with the link can join (adjective, not a verb)")
+        case .noteToSelf: String(localized: "Note to self", comment: "Conversation type")
+        case .changelog: String(localized: "Talk updates", comment: "Conversation type: Talk's changelog conversation")
         }
     }
 
@@ -376,7 +382,7 @@ private struct PeopleTab: View {
             }
         }
 
-        InspectorCard(title: "Participants") {
+        InspectorCard(title: String(localized: "Participants", comment: "Inspector card heading")) {
             if model.participants.isEmpty && !model.isLoading {
                 Text("No participants to show.")
                     .font(.system(size: 13))
@@ -510,7 +516,7 @@ private struct ParticipantRow: View {
             return [participant.status?.icon, message].compactMap { $0 }.joined(separator: " ")
         }
         if participant.actor.isFederated { return participant.actor.federationServer }
-        if participant.actor.kind == .guests { return "Guest" }
+        if participant.actor.kind == .guests { return String(localized: "Guest", comment: "Participant detail: a guest, not a user") }
         return nil
     }
 }
@@ -555,7 +561,7 @@ private struct SharedItemRow: View {
                     .foregroundStyle(.secondary)
                     .frame(width: 18)
                 VStack(alignment: .leading, spacing: 0) {
-                    Text(object?.displayName ?? "Attachment")
+                    Text(object?.displayName ?? String(localized: "Attachment"))
                         .font(.system(size: 13))
                         .lineLimit(1)
                         .truncationMode(.middle)

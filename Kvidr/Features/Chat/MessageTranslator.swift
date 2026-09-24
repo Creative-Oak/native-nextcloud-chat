@@ -109,11 +109,11 @@ final class MessageTranslator {
         let byHand = askedFor.contains(key)
         switch state {
         case .done(let text, let from):
-            return .done(text: text, fromName: Self.name(of: from))
+            return .done(text: text, fromName: Self.nameInSentence(of: from))
         case .working:
             return byHand ? .working : nil
         case .sameLanguage:
-            return byHand ? .problem("This is already in \(Self.name(of: target)).") : nil
+            return byHand ? .problem(String(localized: "This is already in \(Self.nameInSentence(of: target)).", comment: "Translating a message; %@ is a language")) : nil
         case .failed(let reason):
             return byHand ? .problem(reason) : nil
         }
@@ -143,25 +143,25 @@ final class MessageTranslator {
         let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return .sameLanguage }
         guard let source = Self.language(of: text, sure: false) else {
-            return .failed("kvidr couldn’t tell which language you wrote in.")
+            return .failed(String(localized: "kvidr couldn’t tell which language you wrote in."))
         }
         if source.languageCode == target.languageCode { return .sameLanguage }
         var status = await LanguageAvailability().status(from: source, to: target)
         if status == .supported {
             // macOS fetches the language first, through its own prompt.
             guard await requestDownload(source, target) else {
-                return .failed("\(Self.name(of: target)) wasn’t downloaded for translation.")
+                return .failed(String(localized: "\(Self.name(of: target)) wasn’t downloaded for translation.", comment: "%@ is a language"))
             }
             status = await LanguageAvailability().status(from: source, to: target)
         }
         guard status == .installed else {
-            return .failed("\(Self.name(of: source)) can’t be translated into \(Self.name(of: target)) on this Mac.")
+            return .failed(String(localized: "\(Self.name(of: source)) can’t be translated into \(Self.nameInSentence(of: target)) on this Mac.", comment: "%1$@ and %2$@ are languages"))
         }
         do {
             return .translated(try await session(from: source, to: target).translate(text).targetText)
         } catch {
             Log.ui.warning("Couldn’t translate the draft: \(error.localizedDescription)")
-            return .failed("Your message couldn’t be translated.")
+            return .failed(String(localized: "Your message couldn’t be translated."))
         }
     }
 
@@ -199,7 +199,7 @@ final class MessageTranslator {
         let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         guard let source = Self.language(of: text, sure: !byHand) else {
-            states[key] = .failed("kvidr couldn’t tell which language this is in.")
+            states[key] = .failed(String(localized: "kvidr couldn’t tell which language this is in."))
             return
         }
         if source.languageCode == target.languageCode {
@@ -219,21 +219,21 @@ final class MessageTranslator {
                 states[item.key] = .done(text: response.targetText, from: item.source)
             } catch {
                 Log.ui.warning("Couldn’t translate a message: \(error.localizedDescription)")
-                states[item.key] = .failed("This message couldn’t be translated.")
+                states[item.key] = .failed(String(localized: "This message couldn’t be translated."))
             }
         case .supported:
             // macOS has to fetch the language first, and only its own prompt can.
             let pair = Self.pair(item.source, target)
             guard !declined.contains(pair) else {
-                states[item.key] = .failed("\(Self.name(of: item.source)) isn’t downloaded for translation.")
+                states[item.key] = .failed(String(localized: "\(Self.name(of: item.source)) isn’t downloaded for translation.", comment: "%@ is a language"))
                 return
             }
             waiting.append(item)
             if download == nil { download = TranslationSession.Configuration(source: item.source, target: target) }
         case .unsupported:
-            states[item.key] = .failed("\(Self.name(of: item.source)) can’t be translated into \(Self.name(of: target)) on this Mac.")
+            states[item.key] = .failed(String(localized: "\(Self.name(of: item.source)) can’t be translated into \(Self.nameInSentence(of: target)) on this Mac.", comment: "%1$@ and %2$@ are languages"))
         @unknown default:
-            states[item.key] = .failed("This message couldn’t be translated.")
+            states[item.key] = .failed(String(localized: "This message couldn’t be translated."))
         }
     }
 
@@ -249,7 +249,7 @@ final class MessageTranslator {
             if downloaded {
                 Task { await run(item) }
             } else {
-                states[item.key] = .failed("\(Self.name(of: source)) wasn’t downloaded for translation.")
+                states[item.key] = .failed(String(localized: "\(Self.name(of: source)) wasn’t downloaded for translation.", comment: "%@ is a language"))
             }
         }
         downloadWaiters.removeValue(forKey: pair)?.forEach { $0.resume(returning: downloaded) }
@@ -298,6 +298,12 @@ final class MessageTranslator {
     nonisolated static func name(of language: Locale.Language) -> String {
         let name = Locale.current.localizedString(forIdentifier: language.minimalIdentifier) ?? language.minimalIdentifier
         return name.prefix(1).uppercased() + name.dropFirst()
+    }
+
+    /// A language's name as it reads inside a sentence — "English" in English, but "engelsk"
+    /// in Danish, where language names aren't capitalized.
+    nonisolated static func nameInSentence(of language: Locale.Language) -> String {
+        Locale.current.localizedString(forIdentifier: language.minimalIdentifier) ?? language.minimalIdentifier
     }
 }
 

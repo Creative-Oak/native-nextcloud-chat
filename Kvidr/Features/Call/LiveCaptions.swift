@@ -68,7 +68,7 @@ final class LiveCaptions {
     }
 
     func addMicrophone(_ tap: MicrophoneTap) {
-        add(Voice(name: "You", source: .microphone(tap)), id: Self.ownVoiceID)
+        add(Voice(name: String(localized: "You", comment: "Speaker name over your own lines in Live Captions"), source: .microphone(tap)), id: Self.ownVoiceID)
     }
 
     func add(track: LKRTCAudioTrack, id: String, name: String) {
@@ -137,10 +137,10 @@ final class LiveCaptions {
     private func prepare() {
         preparing?.cancel()
         let wanted = wantedLocale
-        status = .preparing("Getting captions ready…")
+        status = .preparing(String(localized: "Getting captions ready…"))
         preparing = Task { [weak self] in
             guard let found = await CaptionModel.find(for: wanted) else {
-                self?.status = .problem("Live Captions aren’t available in \(Self.name(of: wanted)).")
+                self?.status = .problem(String(localized: "Live Captions aren’t available in \(Self.name(of: wanted)).", comment: "%@ is a language, e.g. Dansk"))
                 self?.preparing = nil
                 return
             }
@@ -152,7 +152,7 @@ final class LiveCaptions {
                     let watcher = Task { [weak self] in
                         while !Task.isCancelled {
                             let percent = Int(progress.fractionCompleted * 100)
-                            self?.status = .preparing("Downloading \(name) for captions… \(percent) %")
+                            self?.status = .preparing(String(localized: "Downloading \(name) for captions… \(percent) %", comment: "%@ is a language, e.g. Dansk; then how far along the download is, in percent"))
                             try? await Task.sleep(for: .milliseconds(500))
                         }
                     }
@@ -162,7 +162,7 @@ final class LiveCaptions {
             } catch {
                 guard let self, !Task.isCancelled else { return }
                 Log.sync.warning("Captions: the \(found.locale.identifier) model couldn’t be installed — \(error.localizedDescription)")
-                self.status = .problem("Live Captions couldn’t get \(name) ready.")
+                self.status = .problem(String(localized: "Live Captions couldn’t get \(name) ready.", comment: "%@ is a language, e.g. Dansk"))
                 self.preparing = nil
                 return
             }
@@ -231,7 +231,7 @@ final class LiveCaptions {
         // What was said is never logged; only that the model gave up.
         Log.sync.warning("Captions: a voice’s model stopped — \(message)")
         stopListening(to: id)
-        status = .problem("Live Captions stopped working. Turn them off and on to try again.")
+        status = .problem(String(localized: "Live Captions stopped working. Turn them off and on to try again."))
     }
 }
 
@@ -343,7 +343,7 @@ final class VoiceListener: Sendable {
 private enum CaptionError: LocalizedError {
     case noAudioFormat
 
-    var errorDescription: String? { "The speech model takes no audio this Mac can give it." }
+    var errorDescription: String? { String(localized: "The speech model takes no audio this Mac can give it.") }
 }
 
 /// A buffer handed from WebRTC's audio thread to the model's task, which is its only user

@@ -121,10 +121,10 @@ struct ConversationIndex: Sendable, Equatable {
 
         var title: String {
             switch self {
-            case .favorites: "Favourites"
-            case .tagged: "Tagged"
-            case .conversations: "Conversations"
-            case .archived: "Archived"
+            case .favorites: String(localized: "Favourites", comment: "Sidebar section heading")
+            case .tagged: String(localized: "Tagged", comment: "Sidebar section heading")
+            case .conversations: String(localized: "Conversations", comment: "Sidebar section heading")
+            case .archived: String(localized: "Archived", comment: "Sidebar section heading: archived conversations")
             }
         }
 

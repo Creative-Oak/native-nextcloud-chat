@@ -67,6 +67,10 @@ content. See `docs/ARCHITECTURE.md` § Liquid Glass.
 Everything is gated on server capabilities rather than version numbers, so a feature your
 server doesn't support is hidden rather than broken.
 
+**Languages** — English and Danish, following the Mac's language (or kvidr's own, under
+System Settings → General → Language & Region → Applications). Adding one: see
+`docs/ARCHITECTURE.md` § Localization.
+
 ## Keyboard
 
 | Shortcut | Action |

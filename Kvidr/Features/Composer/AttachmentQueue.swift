@@ -138,7 +138,7 @@ final class AttachmentQueue {
               let png = bitmap.representation(using: .png, properties: [:])
         else { return }
 
-        let base = named.map(Self.fileSafe).flatMap { $0.isEmpty ? nil : $0 } ?? "Pasted image \(Self.timestampFormatter.string(from: .now))"
+        let base = named.map(Self.fileSafe).flatMap { $0.isEmpty ? nil : $0 } ?? Self.pastedImageName(at: .now)
         let name = "\(base).png"
         do {
             // Its own scratch directory, like a picked photo: the name carries a timestamp
@@ -454,12 +454,27 @@ final class AttachmentQueue {
     /// Fixed format, so fixed locale: left to the user's own, this same pattern writes
     /// 2568 on a Buddhist calendar and Arabic-Indic digits in some locales — into a file
     /// name, which is the one place a date should be plain and sortable.
-    private static let timestampFormatter: DateFormatter = {
+    private static let dayFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "yyyy-MM-dd 'at' HH.mm.ss"
+        formatter.dateFormat = "yyyy-MM-dd"
         return formatter
     }()
+
+    private static let timeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "HH.mm.ss"
+        return formatter
+    }()
+
+    /// Named the way macOS names a screenshot, in the user's language.
+    private static func pastedImageName(at date: Date) -> String {
+        String(
+            localized: "Pasted image \(dayFormatter.string(from: date)) at \(timeFormatter.string(from: date))",
+            comment: "File name of a pasted image; like macOS's “Screenshot 2026-09-23 at 15.55.00”. %1$@ is the date, %2$@ the time"
+        )
+    }
 }
 
 /// Where the app puts files it makes for an upload: a pasted image, or a photo copied out of

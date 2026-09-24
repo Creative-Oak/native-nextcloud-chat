@@ -73,7 +73,7 @@ struct ProfileService: Sendable {
             throw TalkError.from(status: response.status, headers: response.headers)
         }
         if let status = reply?.status, status != "success" {
-            throw .ocs(status: response.status, message: reason ?? "Nextcloud didn’t accept that picture.")
+            throw .ocs(status: response.status, message: reason ?? String(localized: "Nextcloud didn’t accept that picture.", comment: "Setting a profile picture failed"))
         }
         if reply?.status == nil, let reason {
             throw .ocs(status: response.status, message: reason)

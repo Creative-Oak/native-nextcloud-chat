@@ -31,7 +31,7 @@ final class NotificationController: NSObject {
         center.setNotificationCategories([
             UNNotificationCategory(
                 identifier: Self.callCategory,
-                actions: [UNNotificationAction(identifier: Self.joinAction, title: "Join in Browser", options: [.foreground])],
+                actions: [UNNotificationAction(identifier: Self.joinAction, title: String(localized: "Join in Browser", comment: "Notification button: join the call in the web browser"), options: [.foreground])],
                 intentIdentifiers: [],
                 options: []
             ),
@@ -39,7 +39,7 @@ final class NotificationController: NSObject {
             // Options menu; the notification's own close button declines.
             UNNotificationCategory(
                 identifier: Self.incomingCallCategory,
-                actions: [UNNotificationAction(identifier: Self.answerAction, title: "Answer", options: [.foreground])],
+                actions: [UNNotificationAction(identifier: Self.answerAction, title: String(localized: "Answer", comment: "Notification button: answer an incoming call"), options: [.foreground])],
                 intentIdentifiers: [],
                 options: [.customDismissAction]
             ),
@@ -88,7 +88,9 @@ final class NotificationController: NSObject {
                 content.body = preview
             }
         } else {
-            content.body = isMention ? "Mentioned you" : "New message"
+            content.body = isMention
+                ? String(localized: "Mentioned you", comment: "Notification body when the message's text is hidden: someone @-mentioned you")
+                : String(localized: "New message", comment: "Notification body when the message's text is hidden")
         }
 
         if preferences.playsNotificationSound { content.sound = .default }
@@ -118,8 +120,8 @@ final class NotificationController: NSObject {
         }
 
         let content = UNMutableNotificationContent()
-        content.title = conversation?.displayName ?? "Call"
-        content.body = notification.subject.isEmpty ? "A call is waiting for you" : notification.subject
+        content.title = conversation?.displayName ?? String(localized: "notification.call.title", defaultValue: "Call", comment: "Notification title for a call in an unknown conversation (noun)")
+        content.body = notification.subject.isEmpty ? String(localized: "A call is waiting for you") : notification.subject
         content.categoryIdentifier = Self.callCategory
         content.interruptionLevel = .timeSensitive
         if preferences.playsNotificationSound { content.sound = .default }
@@ -139,7 +141,7 @@ final class NotificationController: NSObject {
     func announceIncomingCall(_ conversation: Conversation) {
         let content = UNMutableNotificationContent()
         content.title = conversation.displayName
-        content.body = conversation.isVideoCall ? "Incoming video call" : "Incoming call"
+        content.body = conversation.isVideoCall ? String(localized: "Incoming video call") : String(localized: "Incoming call")
         content.categoryIdentifier = Self.incomingCallCategory
         content.interruptionLevel = .timeSensitive
         content.userInfo = ["token": conversation.token, "incoming": true]
@@ -170,7 +172,8 @@ final class NotificationController: NSObject {
         let requests = reminders.filter { $0.date > Date() }.map { reminder in
             let room = conversation(reminder.token)
             let content = UNMutableNotificationContent()
-            content.title = room.map { "Reminder: \($0.displayName)" } ?? "Reminder"
+            content.title = room.map { String(localized: "Reminder: \($0.displayName)", comment: "Notification title: %@ is the conversation") }
+                ?? String(localized: "Reminder", comment: "Notification title for a message reminder")
             let sender = reminder.actor.resolvedDisplayName
             if preferences.showsNotificationPreviews, room?.isSensitive != true, !reminder.text.isEmpty {
                 let preview = MessageContentParser(currentUserID: "", markdownEnabled: false)
@@ -180,7 +183,9 @@ final class NotificationController: NSObject {
                 content.subtitle = sender
                 content.body = preview
             } else {
-                content.body = sender.isEmpty ? "A message you asked to be reminded about" : "A message from \(sender)"
+                content.body = sender.isEmpty
+                    ? String(localized: "A message you asked to be reminded about")
+                    : String(localized: "A message from \(sender)", comment: "Reminder notification body: %@ is who wrote the message")
             }
             if preferences.playsNotificationSound { content.sound = .default }
             content.userInfo = ["token": reminder.token, "messageID": reminder.messageID]

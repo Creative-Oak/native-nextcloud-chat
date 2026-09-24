@@ -77,7 +77,7 @@ struct CompactCaptionsView: View {
             let lines = Array(captions.log.visible(at: context.date).suffix(2))
             VStack(alignment: .leading, spacing: 4) {
                 if lines.isEmpty {
-                    Label(captions.note ?? "Live Captions", systemImage: "captions.bubble")
+                    Label(captions.note ?? String(localized: "Live Captions"), systemImage: "captions.bubble")
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(.white.opacity(0.6))
                         .lineLimit(2)
@@ -98,7 +98,7 @@ struct CompactCaptionsView: View {
             .padding(Self.padding)
             .background(.black.opacity(0.55), in: .rect(cornerRadius: cornerRadius, style: .continuous))
             .accessibilityElement(children: .combine)
-            .accessibilityLabel(lines.isEmpty ? (captions.note ?? "Live Captions") : lines.map { "\($0.speaker): \($0.text)" }.joined(separator: ". "))
+            .accessibilityLabel(lines.isEmpty ? (captions.note ?? String(localized: "Live Captions")) : lines.map { "\($0.speaker): \($0.text)" }.joined(separator: ". "))
         }
     }
 }
@@ -125,9 +125,9 @@ extension LiveCaptions {
 extension LiveCaptions {
     /// The captions part of the call's More menu: on and off, and which language.
     var menuItems: [PopUpMenuItem] {
-        var items: [PopUpMenuItem] = [.header("Captions")]
+        var items: [PopUpMenuItem] = [.header(String(localized: "Captions", comment: "Heading over the captions items in the call’s “more” menu"))]
         let isOn = self.isOn
-        items.append(.action("Live Captions", isChecked: isOn) { self.setOn(!isOn) })
+        items.append(.action(String(localized: "Live Captions"), isChecked: isOn) { self.setOn(!isOn) })
         guard isOn else { return items }
         var languages: [PopUpMenuItem] = [
             .action(automaticTitle, isChecked: chosenLanguage == nil) { self.setLanguage(nil) },
@@ -138,13 +138,13 @@ extension LiveCaptions {
                 self.setLanguage(locale.identifier)
             })
         }
-        items.append(.submenu("Language", languages))
+        items.append(.submenu(String(localized: "Language", comment: "Submenu: the language Live Captions listen for"), languages))
         return items
     }
 
     /// "Automatic", with the language that means right now.
     private var automaticTitle: String {
-        guard chosenLanguage == nil, let language else { return "Automatic" }
-        return "Automatic (\(Self.name(of: language)))"
+        guard chosenLanguage == nil, let language else { return String(localized: "Automatic", comment: "Live Captions language: follow the system") }
+        return String(localized: "Automatic (\(Self.name(of: language)))", comment: "Live Captions language: follow the system; %@ is the language that means now")
     }
 }

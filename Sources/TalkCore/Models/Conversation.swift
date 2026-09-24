@@ -65,10 +65,10 @@ enum NotificationLevel: Int, Sendable, Codable, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .default: "Default"
-        case .always: "All messages"
-        case .mention: "@-mentions only"
-        case .never: "Never"
+        case .default: String(localized: "Default", comment: "Notification level: follow the account default")
+        case .always: String(localized: "All messages", comment: "Notification level")
+        case .mention: String(localized: "@-mentions only", comment: "Notification level")
+        case .never: String(localized: "Never", comment: "Notification level: never notify")
         }
     }
 }

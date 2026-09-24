@@ -173,10 +173,10 @@ actor SignalingConnection {
             throw error
         }
         guard current.isExternal else {
-            throw Unavailable(reason: "This server uses Talk’s built-in signaling")
+            throw Unavailable(reason: String(localized: "This server uses Talk’s built-in signaling", comment: "Why the signaling server can’t be used; shown after “Not available — ”"))
         }
         guard let url = current.websocketURL else {
-            throw Unavailable(reason: "The signaling server isn’t on a secure address")
+            throw Unavailable(reason: String(localized: "The signaling server isn’t on a secure address", comment: "Why the signaling server can’t be used; shown after “Not available — ”"))
         }
 
         let channel = transport.open(url)
@@ -206,7 +206,7 @@ actor SignalingConnection {
                     params: ["userid": current.userID ?? "", "ticket": ticket], features: ["chat-relay"]
                 )
             } else {
-                throw Unavailable(reason: "Nextcloud gave no way to sign in to the signaling server")
+                throw Unavailable(reason: String(localized: "Nextcloud gave no way to sign in to the signaling server", comment: "Why the signaling server can’t be used; shown after “Not available — ”"))
             }
             let signedIn = try await hello(request, on: channel)
             sessionID = signedIn.sessionID

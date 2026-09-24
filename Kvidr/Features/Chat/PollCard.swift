@@ -174,15 +174,17 @@ struct PollCard: View {
     private func summary(_ poll: Poll) -> String {
         if poll.status == .closed {
             let voters = poll.voterCount ?? 0
-            return voters == 1 ? "Ended · 1 vote" : "Ended · \(voters) votes"
+            return String(localized: "Ended · \(voters) votes", comment: "Under a closed poll: how many voted")
         }
         if !poll.hasResults {
             // The honest reading of a withheld result, rather than a row of noughts that
             // looks like nobody has voted.
-            return poll.resultMode == .hiddenUntilClosed ? "Results when it ends" : "Vote to see results"
+            return poll.resultMode == .hiddenUntilClosed
+                ? String(localized: "Results when it ends", comment: "Under a poll whose results are hidden until it closes")
+                : String(localized: "Vote to see results", comment: "Under a poll")
         }
         let voters = poll.voterCount ?? 0
-        return voters == 1 ? "1 vote" : "\(voters) votes"
+        return String(localized: "\(voters) votes", comment: "Under a poll: how many voted")
     }
 }
 
@@ -250,6 +252,6 @@ private struct PollOptionCapsule: View {
     private var accessibilityLabel: String {
         guard poll.hasResults else { return label }
         let votes = poll.votes(for: optionID)
-        return votes == 1 ? "\(label), 1 vote" : "\(label), \(votes) votes"
+        return String(localized: "\(label), \(votes) votes", comment: "VoiceOver: a poll option, and how many voted for it")
     }
 }

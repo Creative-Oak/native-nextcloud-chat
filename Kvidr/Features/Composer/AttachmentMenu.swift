@@ -32,8 +32,8 @@ struct AttachmentMenu: View {
     var body: some View {
         PopUpMenuButton {
             [
-                .action("Photos…", systemImage: "photo") { isShowingPhotos = true },
-                .action("Files…", systemImage: "folder", keys: Self.filesShortcut) { chooseFiles() },
+                .action(String(localized: "Photos…", comment: "Composer + menu: pick from Photos"), systemImage: "photo") { isShowingPhotos = true },
+                .action(String(localized: "Files…", comment: "Composer + menu: pick files"), systemImage: "folder", keys: Self.filesShortcut) { chooseFiles() },
             ] + extraItems()
         } label: {
             Image(systemName: "plus")
@@ -97,8 +97,8 @@ struct AttachmentMenu: View {
         panel.allowsMultipleSelection = true
         panel.canChooseDirectories = false
         panel.canChooseFiles = true
-        panel.prompt = "Attach"
-        panel.message = "Choose files to attach to \(destination)"
+        panel.prompt = String(localized: "Attach", comment: "Open panel's confirm button: attach the chosen files")
+        panel.message = String(localized: "Choose files to attach to \(destination)", comment: "Open panel message; %@ is the conversation's name")
 
         guard panel.runModal() == .OK else { return }
         queue.enqueue(urls: panel.urls)

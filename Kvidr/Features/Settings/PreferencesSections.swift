@@ -8,7 +8,7 @@ struct PreferencesCards: View {
     @Environment(AppModel.self) private var app
 
     var body: some View {
-        InspectorCard(title: "Messages") {
+        InspectorCard(title: String(localized: "Messages", comment: "Settings card heading")) {
             PreferenceToggle(
                 title: "Return sends the message",
                 caption: preferences.sendsOnReturn ? "Shift-Return inserts a line break." : "Return inserts a line break; ⌘Return sends.",
@@ -26,7 +26,7 @@ struct PreferencesCards: View {
             )
         }
 
-        InspectorCard(title: "Voice Messages") {
+        InspectorCard(title: String(localized: "Voice Messages", comment: "Settings card heading")) {
             PreferenceToggle(
                 title: "Transcribe voice messages",
                 caption: "Writes out what was said under each voice message. It happens on this Mac — the recording isn’t sent anywhere. The first time, macOS may download the language’s speech model.",
@@ -36,7 +36,7 @@ struct PreferencesCards: View {
                 .disabled(!preferences.transcribesVoiceMessages)
         }
 
-        InspectorCard(title: "Translation") {
+        InspectorCard(title: String(localized: "Translation", comment: "Settings card heading")) {
             TranslationLanguagePicker(preferences: preferences)
             Text("Right-click a message and choose Translate, or have a conversation translate by itself from the Apple Intelligence menu in its toolbar. Messages are translated on this Mac and aren’t sent anywhere; the first time, macOS may ask to download a language.")
                 .font(.system(size: 11))
@@ -44,7 +44,7 @@ struct PreferencesCards: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
 
-        InspectorCard(title: "Calls") {
+        InspectorCard(title: String(localized: "Calls", comment: "Settings card heading")) {
             PreferenceToggle(
                 title: "Live Captions",
                 caption: "Writes out what everyone in a call says, as they say it, under the name of whoever is talking. It happens on this Mac — no audio is sent anywhere for it — and nothing you say while muted is written out. You can also turn it on from a call’s More menu.",
@@ -60,7 +60,7 @@ struct PreferencesCards: View {
                 .disabled(!preferences.showsCallCaptions)
         }
 
-        InspectorCard(title: "Notifications") {
+        InspectorCard(title: String(localized: "Notifications", comment: "Settings card heading")) {
             PreferenceToggle(title: "Show notifications", isOn: $preferences.showsNotifications)
             PreferenceToggle(title: "Play a sound", isOn: $preferences.playsNotificationSound)
                 .disabled(!preferences.showsNotifications)
@@ -71,14 +71,14 @@ struct PreferencesCards: View {
                 .font(.system(size: 11))
                 .foregroundStyle(.tertiary)
                 .fixedSize(horizontal: false, vertical: true)
-            InspectorActionRow(title: "Open macOS Notification Settings…") {
+            InspectorActionRow(title: String(localized: "Open macOS Notification Settings…")) {
                 if let url = URL(string: "x-apple.systempreferences:com.apple.preference.notifications") {
                     NSWorkspace.shared.open(url)
                 }
             }
         }
 
-        InspectorCard(title: "Advanced") {
+        InspectorCard(title: String(localized: "Advanced", comment: "Settings card heading")) {
             PreferenceToggle(
                 title: "Verbose logging",
                 caption: "Writes detailed logs, which may include message content, to the system log. Off by default.",
@@ -96,8 +96,8 @@ struct PreferencesCards: View {
 /// Its words on the left with a caption under them when it needs one, and the switch at the
 /// trailing edge, where macOS puts it.
 private struct PreferenceToggle: View {
-    let title: String
-    var caption: String?
+    let title: LocalizedStringKey
+    var caption: LocalizedStringKey?
     @Binding var isOn: Bool
 
     var body: some View {

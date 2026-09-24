@@ -40,16 +40,18 @@ struct KeyboardShortcutsWindow: View {
     }
 
     /// Structs rather than tuples: Swift has no key paths into tuple elements, which
-    /// `ForEach(_:id:)` needs.
+    /// `ForEach(_:id:)` needs. The words are resources, so each literal below lands in the
+    /// string catalog; the keys are glyphs, and only the ones spelled out in words are
+    /// translated where they are written.
     private struct ShortcutGroup: Identifiable {
-        var id: String { title }
-        let title: String
+        var id: String { title.key }
+        let title: LocalizedStringResource
         let shortcuts: [Shortcut]
     }
 
     private struct Shortcut: Identifiable {
-        var id: String { keys + description }
-        let description: String
+        var id: String { keys + description.key }
+        let description: LocalizedStringResource
         let keys: String
     }
 
@@ -74,14 +76,14 @@ struct KeyboardShortcutsWindow: View {
             Shortcut(description: "Favourite / unfavourite", keys: "⇧⌘D")
         ]),
         ShortcutGroup(title: "Writing", shortcuts: [
-            Shortcut(description: "Send", keys: "Return"),
-            Shortcut(description: "New line", keys: "⇧Return"),
-            Shortcut(description: "Send (always)", keys: "⌘Return"),
-            Shortcut(description: "Cancel a reply or edit", keys: "Escape"),
+            Shortcut(description: "Send", keys: String(localized: "Return", comment: "Key name in the keyboard shortcuts list")),
+            Shortcut(description: "New line", keys: String(localized: "⇧Return", comment: "Key combination in the keyboard shortcuts list: Shift-Return")),
+            Shortcut(description: "Send (always)", keys: String(localized: "⌘Return", comment: "Key combination in the keyboard shortcuts list: Command-Return")),
+            Shortcut(description: "Cancel a reply or edit", keys: String(localized: "Escape", comment: "Key name in the keyboard shortcuts list")),
             Shortcut(description: "Mention someone", keys: "@"),
-            Shortcut(description: "Choose a mention", keys: "↑ ↓ then Return or Tab"),
+            Shortcut(description: "Choose a mention", keys: String(localized: "↑ ↓ then Return or Tab", comment: "Keys in the keyboard shortcuts list: arrow keys, then Return or Tab")),
             Shortcut(description: "Attach a file", keys: "⇧⌘A"),
-            Shortcut(description: "Emoji & Symbols", keys: "⌃⌘Space")
+            Shortcut(description: "Emoji & Symbols", keys: String(localized: "⌃⌘Space", comment: "Key combination in the keyboard shortcuts list: Control-Command-Space"))
         ]),
         ShortcutGroup(title: "App", shortcuts: [
             Shortcut(description: "New conversation", keys: "⌘N"),

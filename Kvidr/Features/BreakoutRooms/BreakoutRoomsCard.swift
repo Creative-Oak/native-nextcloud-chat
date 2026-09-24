@@ -16,25 +16,25 @@ struct BreakoutRoomsCard: View {
     @State private var isConfirmingDelete = false
 
     var body: some View {
-        InspectorCard(title: "Breakout Rooms") {
+        InspectorCard(title: String(localized: "Breakout Rooms", comment: "Inspector card heading")) {
             if !conversation.hasBreakoutRooms {
                 Text("Split the conversation into smaller rooms for a while — for group work, say — and bring everyone back when you’re done.")
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-                InspectorActionRow(title: "Set Up Breakout Rooms…") { isSettingUp = true }
+                InspectorActionRow(title: String(localized: "Set Up Breakout Rooms…")) { isSettingUp = true }
             } else {
                 ForEach(rooms) { room in
                     roomRow(room)
                 }
-                InspectorActionRow(title: conversation.areBreakoutRoomsRunning ? "Stop Breakout Rooms" : "Start Breakout Rooms") {
+                InspectorActionRow(title: conversation.areBreakoutRoomsRunning ? String(localized: "Stop Breakout Rooms") : String(localized: "Start Breakout Rooms")) {
                     Task { conversation.areBreakoutRoomsRunning ? await model.stop() : await model.start() }
                 }
-                InspectorActionRow(title: "Message All Rooms…") { isBroadcasting = true }
+                InspectorActionRow(title: String(localized: "Message All Rooms…")) { isBroadcasting = true }
                 if conversation.breakoutRoomMode == .manual {
-                    InspectorActionRow(title: "Move People…") { isRearranging = true }
+                    InspectorActionRow(title: String(localized: "Move People…")) { isRearranging = true }
                 }
-                InspectorActionRow(title: "Delete Breakout Rooms…", role: .destructive) { isConfirmingDelete = true }
+                InspectorActionRow(title: String(localized: "Delete Breakout Rooms…"), role: .destructive) { isConfirmingDelete = true }
             }
             if let problem = model.problem {
                 Label(problem, systemImage: "exclamationmark.triangle")
@@ -124,7 +124,7 @@ struct BreakoutSetupSheet: View {
             Form {
                 if isSettingUp {
                     Section {
-                        Stepper("\(amount) \(amount == 1 ? "room" : "rooms")", value: $amount, in: 1...20)
+                        Stepper("\(amount) rooms", value: $amount, in: 1...20)
                         Picker("People", selection: $mode) {
                             Text("Spread out automatically").tag(BreakoutRoomMode.automatic)
                             Text("Put in rooms by you").tag(BreakoutRoomMode.manual)
@@ -205,8 +205,8 @@ struct BreakoutSetupSheet: View {
 
     /// The server calls them Room 1, Room 2, …; the ones there are keep the names they have.
     private func roomName(_ number: Int) -> String {
-        guard let rooms else { return "Room \(number + 1)" }
+        guard let rooms else { return String(localized: "Room \(number + 1)", comment: "Name of a new breakout room, numbered from 1") }
         let ordered = rooms.sorted { $0.numericID < $1.numericID }
-        return number < ordered.count ? ordered[number].displayName : "Room \(number + 1)"
+        return number < ordered.count ? ordered[number].displayName : String(localized: "Room \(number + 1)", comment: "Name of a new breakout room, numbered from 1")
     }
 }

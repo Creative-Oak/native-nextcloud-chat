@@ -402,8 +402,8 @@ struct CallStage: View {
         HStack(alignment: .top, spacing: 26) {
             CallControlButton(
                 symbol: call.isMuted ? "mic.slash.fill" : "mic.fill",
-                title: "Mute",
-                help: call.isMuted ? "Unmute (⇧⌘M)" : "Mute (⇧⌘M)",
+                title: String(localized: "call.control.mute", defaultValue: "Mute", comment: "Label under the call's microphone button"),
+                help: call.isMuted ? String(localized: "Unmute (⇧⌘M)") : String(localized: "Mute (⇧⌘M)"),
                 isActive: call.isMuted,
                 action: call.toggleMute
             )
@@ -411,8 +411,8 @@ struct CallStage: View {
 
             CallControlButton(
                 symbol: call.isCameraOn ? "video.fill" : "video.slash.fill",
-                title: "Camera",
-                help: call.isCameraOn ? "Turn camera off (⇧⌘V)" : "Turn camera on (⇧⌘V)",
+                title: String(localized: "Camera", comment: "Label under the call's camera button; also a heading in its “more” menu"),
+                help: call.isCameraOn ? String(localized: "Turn camera off (⇧⌘V)") : String(localized: "Turn camera on (⇧⌘V)"),
                 isActive: call.isCameraOn,
                 action: call.toggleCamera
             )
@@ -420,8 +420,8 @@ struct CallStage: View {
 
             CallControlButton(
                 symbol: call.isSharingScreen ? "rectangle.slash" : "rectangle.inset.filled.and.person.filled",
-                title: "Share",
-                help: call.isSharingScreen ? "Stop sharing your screen" : "Share your screen or a window",
+                title: String(localized: "Share", comment: "Label under the call's screen-sharing button"),
+                help: call.isSharingScreen ? String(localized: "Stop sharing your screen") : String(localized: "Share your screen or a window"),
                 isActive: call.isSharingScreen,
                 action: { call.isSharingScreen ? call.stopSharingScreen() : call.shareScreen() }
             )
@@ -459,14 +459,17 @@ struct CallStage: View {
                         Button(call.hangUpEndsCall ? "Leave Call" : "End Call for Everyone", systemImage: "phone.down.fill", action: onLeaveTheOtherWay)
                     }
                 }
-                CallButtonTitle("End")
+                CallButtonTitle(String(localized: "call.control.end", defaultValue: "End", comment: "Label under the call's hang-up button"))
             }
         }
     }
 
     /// What the notes are headed with, in the chat and on the clipboard.
     private var notesTitle: String {
-        "Call notes · \(call.conversation.displayName) · \(Date().formatted(date: .abbreviated, time: .shortened))"
+        String(
+            localized: "Call notes · \(call.conversation.displayName) · \(Date().formatted(date: .abbreviated, time: .shortened))",
+            comment: "Heading of a call's notes; the conversation's name, then the date and time"
+        )
     }
 
     private func ended(reason: String?) -> some View {
@@ -474,7 +477,7 @@ struct CallStage: View {
             Image(systemName: "phone.down.circle.fill")
                 .font(.system(size: 44))
                 .foregroundStyle(.white.opacity(0.8))
-            Text(reason ?? "The call has ended.")
+            Text(reason ?? String(localized: "The call has ended."))
                 .font(.system(size: 14))
                 .foregroundStyle(.white.opacity(0.85))
                 .multilineTextAlignment(.center)
@@ -541,11 +544,14 @@ private struct ParticipantTile: View {
     }
 
     private var label: String {
-        if !participant.isConnected { return "\(participant.name), connecting" }
-        var label = participant.name
-        if participant.isHandRaised { label += ", hand raised" }
-        if participant.isSpeaking { label += ", speaking" }
-        return label
+        let name = participant.name
+        if !participant.isConnected { return String(localized: "\(name), connecting", comment: "Accessibility: a tile in a call") }
+        switch (participant.isHandRaised, participant.isSpeaking) {
+        case (true, true): return String(localized: "\(name), hand raised, speaking", comment: "Accessibility: a tile in a call")
+        case (true, false): return String(localized: "\(name), hand raised", comment: "Accessibility: a tile in a call")
+        case (false, true): return String(localized: "\(name), speaking", comment: "Accessibility: a tile in a call")
+        case (false, false): return name
+        }
     }
 }
 
@@ -718,7 +724,7 @@ private struct AudioDeviceMenu: View {
     var body: some View {
         VStack(spacing: 7) {
             menu
-            CallButtonTitle("More")
+            CallButtonTitle(String(localized: "More", comment: "Label under the call's “more” button"))
         }
     }
 
@@ -744,24 +750,24 @@ private struct AudioDeviceMenu: View {
     private var items: [PopUpMenuItem] {
         var items: [PopUpMenuItem] = []
         if let onSummarize {
-            items.append(.action("Summarize Call So Far", systemImage: "apple.intelligence", perform: onSummarize))
+            items.append(.action(String(localized: "Summarize Call So Far"), systemImage: "apple.intelligence", perform: onSummarize))
         }
         items += captions.menuItems
         if cameras.count > 1 {
-            items.append(.header("Camera"))
+            items.append(.header(String(localized: "Camera", comment: "Label under the call's camera button; also a heading in its “more” menu")))
             let current = cameraID ?? cameras.first?.id
             for camera in cameras {
                 items.append(.action(camera.name, isChecked: camera.id == current) { onCamera(camera.id) })
             }
         }
-        items.append(.header("Microphone"))
+        items.append(.header(String(localized: "Microphone", comment: "Heading over the microphones in the call’s “more” menu")))
         if devices.inputs.isEmpty {
-            items.append(.action("None connected", isEnabled: false) {})
+            items.append(.action(String(localized: "None connected", comment: "Menu item under Microphone when there is no microphone"), isEnabled: false) {})
         }
         for device in devices.inputs {
             items.append(.action(device.name, isChecked: device.id == devices.defaultInput) { onMicrophone(device.id) })
         }
-        items.append(.header("Speaker"))
+        items.append(.header(String(localized: "Speaker", comment: "Heading over the audio outputs in the call’s “more” menu")))
         for device in devices.outputs {
             items.append(.action(device.name, isChecked: device.id == devices.defaultOutput) { onSpeaker(device.id) })
         }

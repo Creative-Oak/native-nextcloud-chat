@@ -78,12 +78,12 @@ struct EmojiPicker: View {
     @State private var search = ""
 
     static let categories: [(String, [String])] = [
-        ("Frequent", ["👍", "❤️", "😂", "🎉", "🙏", "👀", "🔥", "✅"]),
-        ("Smileys", ["😀", "😃", "😄", "😁", "😅", "😊", "🙂", "😉", "😍", "🤩", "😘", "😎", "🤔", "🤨",
+        (String(localized: "Frequent", comment: "Emoji picker category"), ["👍", "❤️", "😂", "🎉", "🙏", "👀", "🔥", "✅"]),
+        (String(localized: "Smileys", comment: "Emoji picker category"), ["😀", "😃", "😄", "😁", "😅", "😊", "🙂", "😉", "😍", "🤩", "😘", "😎", "🤔", "🤨",
                      "😐", "😴", "😢", "😭", "😡", "🥳", "🤯", "😱", "🤗", "🙃"]),
-        ("Gestures", ["👍", "👎", "👏", "🙌", "🤝", "💪", "✌️", "🤞", "👋", "🫶", "🙏", "☝️"]),
-        ("Objects", ["✅", "❌", "⚠️", "💡", "📌", "📎", "🔒", "🚀", "🐛", "☕️", "🍕", "🎂"]),
-        ("Hearts", ["❤️", "🧡", "💛", "💚", "💙", "💜", "🖤", "🤍", "💔", "✨", "⭐️", "🌟"])
+        (String(localized: "Gestures", comment: "Emoji picker category"), ["👍", "👎", "👏", "🙌", "🤝", "💪", "✌️", "🤞", "👋", "🫶", "🙏", "☝️"]),
+        (String(localized: "Objects", comment: "Emoji picker category"), ["✅", "❌", "⚠️", "💡", "📌", "📎", "🔒", "🚀", "🐛", "☕️", "🍕", "🎂"]),
+        (String(localized: "Hearts", comment: "Emoji picker category"), ["❤️", "🧡", "💛", "💚", "💙", "💜", "🖤", "🤍", "💔", "✨", "⭐️", "🌟"])
     ]
 
     var body: some View {

@@ -45,6 +45,17 @@ final class CommandPaletteModel {
             case commands = "Commands"
             case people = "People"
             case messages = "Messages"
+
+            /// The section's heading.
+            var title: String {
+                switch self {
+                case .topHit: String(localized: "Top Hit", comment: "Command palette section heading: the best match")
+                case .conversations: String(localized: "Conversations", comment: "Command palette section heading")
+                case .commands: String(localized: "Commands", comment: "Command palette section heading")
+                case .people: String(localized: "People", comment: "Command palette section heading")
+                case .messages: String(localized: "Messages", comment: "Command palette section heading")
+                }
+            }
         }
 
         let kind: Kind
@@ -242,7 +253,7 @@ final class CommandPaletteModel {
         do {
             return try await session.conversations.create(request).conversation
         } catch {
-            creationError = "Couldn't start a conversation with \(entry.label)."
+            creationError = String(localized: "Couldn't start a conversation with \(entry.label).", comment: "%@ is a person, group or team")
             return nil
         }
     }

@@ -32,14 +32,18 @@ final class CallSummary {
         @Guide(description: "Things someone said they or someone else would do. Empty if there were none.", .maximumCount(8))
         var actionItems: [ActionItem]
 
+        /// The headings over what was decided and who's doing what, in the notes and the Markdown.
+        static var decidedHeading: String { String(localized: "Decided", comment: "Heading in a call's notes: what was agreed or decided") }
+        static var toDoHeading: String { String(localized: "To do", comment: "Heading in a call's notes: things people said they would do") }
+
         /// As Markdown, for the chat or the clipboard.
         func markdown(title: String) -> String {
             var parts = ["**\(title)**", summary.map { "- \($0)" }.joined(separator: "\n")]
             if !decisions.isEmpty {
-                parts.append("**Decided**\n" + decisions.map { "- \($0)" }.joined(separator: "\n"))
+                parts.append("**\(Self.decidedHeading)**\n" + decisions.map { "- \($0)" }.joined(separator: "\n"))
             }
             if !actionItems.isEmpty {
-                parts.append("**To do**\n" + actionItems.map { "- [ ] \($0.who.isEmpty ? "" : "\($0.who): ")\($0.what)" }.joined(separator: "\n"))
+                parts.append("**\(Self.toDoHeading)**\n" + actionItems.map { "- [ ] \($0.who.isEmpty ? "" : "\($0.who): ")\($0.what)" }.joined(separator: "\n"))
             }
             return parts.joined(separator: "\n\n")
         }
@@ -73,15 +77,15 @@ final class CallSummary {
             state = .failed(reason)
             return
         case .unsupported:
-            state = .failed("Call summaries need Apple Intelligence, which this Mac doesn’t have.")
+            state = .failed(String(localized: "Call summaries need Apple Intelligence, which this Mac doesn’t have."))
             return
         }
         guard lines.count >= Self.minimumLines else {
-            state = .failed("Too little was said with Live Captions on to summarize.")
+            state = .failed(String(localized: "Too little was said with Live Captions on to summarize."))
             return
         }
         let chunks = SummaryInput.chunks(lines)
-        state = .writing("Reading the call…")
+        state = .writing(String(localized: "Reading the call…", comment: "Progress while call notes are written"))
         task?.cancel()
         task = Task { [weak self] in
             do {
@@ -89,13 +93,13 @@ final class CallSummary {
                 if chunks.count > 1 {
                     var notes: [String] = []
                     for (index, chunk) in chunks.enumerated() {
-                        self?.state = .writing("Reading part \(index + 1) of \(chunks.count)…")
+                        self?.state = .writing(String(localized: "Reading part \(index + 1) of \(chunks.count)…", comment: "Progress while call notes are written: part 2 of 5 of the call"))
                         let session = LanguageModelSession(instructions: Self.partInstructions)
                         notes.append(try await session.respond(to: "Part \(index + 1) of the call:\n\n\(chunk)").content)
                     }
                     material = notes.joined(separator: "\n\n")
                 }
-                self?.state = .writing("Writing the notes…")
+                self?.state = .writing(String(localized: "Writing the notes…", comment: "Progress while call notes are written"))
                 let session = LanguageModelSession(instructions: Self.instructions)
                 let prompt = chunks.count > 1
                     ? "Notes on a call in “\(conversationName)”, part by part:\n\n\(material)"
@@ -106,7 +110,7 @@ final class CallSummary {
                 return
             } catch {
                 Log.ui.warning("Couldn’t summarize the call: \(error.localizedDescription)")
-                self?.state = .failed("The call couldn’t be summarized.")
+                self?.state = .failed(String(localized: "The call couldn’t be summarized."))
             }
         }
     }
@@ -149,10 +153,10 @@ struct CallNotesView: View {
                     VStack(alignment: .leading, spacing: 10) {
                         bullets(notes.summary)
                         if !notes.decisions.isEmpty {
-                            section("Decided", notes.decisions)
+                            section(CallSummary.CallNotes.decidedHeading, notes.decisions)
                         }
                         if !notes.actionItems.isEmpty {
-                            section("To do", notes.actionItems.map { $0.who.isEmpty ? $0.what : "\($0.who): \($0.what)" })
+                            section(CallSummary.CallNotes.toDoHeading, notes.actionItems.map { $0.who.isEmpty ? $0.what : "\($0.who): \($0.what)" })
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)

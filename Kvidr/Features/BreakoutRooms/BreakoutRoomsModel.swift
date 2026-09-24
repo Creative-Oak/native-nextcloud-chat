@@ -32,33 +32,33 @@ final class BreakoutRoomsModel {
     // MARK: - Moderators
 
     func setUp(mode: BreakoutRoomMode, amount: Int, assignments: [Int: Int]) async -> Bool {
-        await run("set up the breakout rooms") { [service, token] () async throws(TalkError) in
+        await run({ String(localized: "Couldn’t set up the breakout rooms: \($0)", comment: "%@ is the reason") }) { [service, token] () async throws(TalkError) in
             _ = try await service.setUp(token: token, mode: mode, amount: amount, assignments: assignments)
         }
     }
 
     func rearrange(_ assignments: [Int: Int]) async -> Bool {
-        await run("move people between rooms") { [service, token] () async throws(TalkError) in
+        await run({ String(localized: "Couldn’t move people between rooms: \($0)", comment: "%@ is the reason") }) { [service, token] () async throws(TalkError) in
             _ = try await service.reassign(token: token, assignments: assignments)
         }
     }
 
     func start() async {
-        await run("start the breakout rooms") { [service, token] () async throws(TalkError) in _ = try await service.start(token: token) }
+        await run({ String(localized: "Couldn’t start the breakout rooms: \($0)", comment: "%@ is the reason") }) { [service, token] () async throws(TalkError) in _ = try await service.start(token: token) }
     }
 
     func stop() async {
-        await run("stop the breakout rooms") { [service, token] () async throws(TalkError) in _ = try await service.stop(token: token) }
+        await run({ String(localized: "Couldn’t stop the breakout rooms: \($0)", comment: "%@ is the reason") }) { [service, token] () async throws(TalkError) in _ = try await service.stop(token: token) }
     }
 
     func remove() async {
-        await run("delete the breakout rooms") { [service, token] () async throws(TalkError) in try await service.remove(token: token) }
+        await run({ String(localized: "Couldn’t delete the breakout rooms: \($0)", comment: "%@ is the reason") }) { [service, token] () async throws(TalkError) in try await service.remove(token: token) }
     }
 
     func broadcast(_ message: String) async -> Bool {
         let text = message.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return false }
-        return await run("send the message to the rooms") { [service, token] () async throws(TalkError) in try await service.broadcast(text, token: token) }
+        return await run({ String(localized: "Couldn’t send the message to the rooms: \($0)", comment: "%@ is the reason") }) { [service, token] () async throws(TalkError) in try await service.broadcast(text, token: token) }
     }
 
     /// Who is in which room now, as attendee id to room number — rooms numbered in the order
@@ -85,7 +85,7 @@ final class BreakoutRoomsModel {
                 .filter { !$0.participantType.isModerator }
                 .sorted { $0.actor.resolvedDisplayName.localizedStandardCompare($1.actor.resolvedDisplayName) == .orderedAscending }
         } catch {
-            problem = "Couldn’t get the conversation’s people: \(error.userMessage)"
+            problem = String(localized: "Couldn’t get the conversation’s people: \(error.userMessage)", comment: "%@ is the reason")
         }
     }
 
@@ -102,7 +102,7 @@ final class BreakoutRoomsModel {
 
     /// The free mode: into `room`, out of any other. The room's token, to open, once it worked.
     func choose(_ room: Conversation) async -> String? {
-        let ok = await run("go to \(room.displayName)") { [service, token] () async throws(TalkError) in
+        let ok = await run({ String(localized: "Couldn’t go to \(room.displayName): \($0)", comment: "First %@ is a breakout room's name, second the reason") }) { [service, token] () async throws(TalkError) in
             _ = try await service.switchTo(room.token, token: token)
         }
         return ok ? room.token : nil
@@ -111,16 +111,21 @@ final class BreakoutRoomsModel {
     /// From inside a breakout room — `roomToken` — the moderators are asked to come. `false`
     /// takes it back, or, for a moderator, marks it dealt with.
     func askForHelp(_ asking: Bool, roomToken: String) async {
-        await run(asking ? "ask for help" : "take back the request for help") { [service] () async throws(TalkError) in
+        await run({
+            asking
+                ? String(localized: "Couldn’t ask for help: \($0)", comment: "%@ is the reason")
+                : String(localized: "Couldn’t take back the request for help: \($0)", comment: "%@ is the reason")
+        }) { [service] () async throws(TalkError) in
             try await service.askForHelp(asking, roomToken: roomToken)
         }
     }
 
     // MARK: -
 
+    /// `failure` says what went wrong, given the reason.
     /// - Returns: whether it worked.
     @discardableResult
-    private func run(_ what: String, _ work: @escaping @Sendable () async throws(TalkError) -> Void) async -> Bool {
+    private func run(_ failure: (String) -> String, _ work: @escaping @Sendable () async throws(TalkError) -> Void) async -> Bool {
         isWorking = true
         defer { isWorking = false }
         problem = nil
@@ -130,8 +135,9 @@ final class BreakoutRoomsModel {
             await session.conversationSync.refreshNow(full: true)
             return true
         } catch {
-            Log.ui.warning("Breakout rooms: couldn’t \(what) — \(error.userMessage)")
-            problem = "Couldn’t \(what): \(error.userMessage)"
+            let problem = failure(error.userMessage)
+            Log.ui.warning("Breakout rooms: \(problem)")
+            self.problem = problem
             return false
         }
     }

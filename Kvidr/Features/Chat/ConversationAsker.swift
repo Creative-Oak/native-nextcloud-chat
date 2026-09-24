@@ -60,7 +60,7 @@ final class ConversationAsker {
             state = .failed(reason)
             return
         case .unsupported:
-            state = .failed("Asking needs Apple Intelligence, which this Mac doesn’t have.")
+            state = .failed(String(localized: "Asking needs Apple Intelligence, which this Mac doesn’t have."))
             return
         }
         state = .thinking
@@ -89,7 +89,7 @@ final class ConversationAsker {
                 return
             } catch {
                 Log.ui.warning("Couldn’t answer a question about the conversation: \(error.localizedDescription)")
-                self?.state = .failed("Apple Intelligence couldn’t answer that.")
+                self?.state = .failed(String(localized: "Apple Intelligence couldn’t answer that."))
             }
         }
     }

@@ -750,24 +750,24 @@ struct RootView: View {
         var items: [PopUpMenuItem] = []
         let isAvailable = UnreadSummary.availability != .unsupported
         if isAvailable {
-            items.append(.action("Summarize Conversation", systemImage: "text.append", keys: KeyboardShortcut("s", modifiers: [.command, .option])) { chat.summarize() })
+            items.append(.action(String(localized: "Summarize Conversation"), systemImage: "text.append", keys: KeyboardShortcut("s", modifiers: [.command, .option])) { chat.summarize() })
             if chat.openThread != nil {
-                items.append(.action("Summarize Thread", systemImage: "bubble.left.and.text.bubble.right") { chat.summarizeThread() })
+                items.append(.action(String(localized: "Summarize Thread"), systemImage: "bubble.left.and.text.bubble.right") { chat.summarizeThread() })
             }
-            items.append(.submenu("Summarize More", systemImage: "calendar", [
-                .action("Last 24 Hours") { chat.summarize(.day) },
-                .action("Last Week") { chat.summarize(.week) },
+            items.append(.submenu(String(localized: "Summarize More", comment: "Apple Intelligence menu: submenu to summarize a longer stretch of the conversation"), systemImage: "calendar", [
+                .action(String(localized: "Last 24 Hours", comment: "Summarize More submenu: summarize the last 24 hours")) { chat.summarize(.day) },
+                .action(String(localized: "Last Week", comment: "Summarize More submenu: summarize the last week")) { chat.summarize(.week) },
             ]))
             items.append(.divider)
         }
-        items.append(.action("Ask This Conversation…", systemImage: "questionmark.bubble", keys: KeyboardShortcut("a", modifiers: [.command, .option]), isEnabled: isAvailable) { chat.isAsking = true })
-        items.append(.action("Catch Up on Everything", systemImage: "list.bullet.clipboard", isEnabled: isAvailable) {
+        items.append(.action(String(localized: "Ask This Conversation…", comment: "Menu item: ask Apple Intelligence a question about the open conversation"), systemImage: "questionmark.bubble", keys: KeyboardShortcut("a", modifiers: [.command, .option]), isEnabled: isAvailable) { chat.isAsking = true })
+        items.append(.action(String(localized: "Catch Up on Everything", comment: "Menu item: open the summary of every unread conversation"), systemImage: "list.bullet.clipboard", isEnabled: isAvailable) {
             app.selectedToken = CatchUpToken.value
         })
         items.append(.divider)
         let translator = app.translator
         let isAutomatic = translator.isAutomatic(in: chat.token)
-        items.append(.action("Translate Automatically", systemImage: "translate", isChecked: isAutomatic) {
+        items.append(.action(String(localized: "Translate Automatically", comment: "Menu item, checkmarked: translate this conversation's messages automatically"), systemImage: "translate", isChecked: isAutomatic) {
             translator.setAutomatic(!isAutomatic, in: chat.token)
         })
         return items

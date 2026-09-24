@@ -34,16 +34,16 @@ enum SharedItemType: String, Sendable, Hashable, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .media: "Media"
-        case .file: "Files"
-        case .voice: "Voice Messages"
-        case .audio: "Audio"
-        case .location: "Locations"
-        case .deckcard: "Deck Cards"
-        case .poll: "Polls"
-        case .recording: "Recordings"
-        case .pinned: "Pinned"
-        case .other: "Other"
+        case .media: String(localized: "Media", comment: "Shared items category heading")
+        case .file: String(localized: "Files", comment: "Shared items category heading")
+        case .voice: String(localized: "Voice Messages", comment: "Shared items category heading")
+        case .audio: String(localized: "Audio", comment: "Shared items category heading")
+        case .location: String(localized: "Locations", comment: "Shared items category heading")
+        case .deckcard: String(localized: "Deck Cards", comment: "Shared items category heading: cards from the Nextcloud Deck app")
+        case .poll: String(localized: "Polls", comment: "Shared items category heading")
+        case .recording: String(localized: "Recordings", comment: "Shared items category heading")
+        case .pinned: String(localized: "Pinned", comment: "Shared items category heading: pinned messages")
+        case .other: String(localized: "Other", comment: "Shared items category heading")
         }
     }
 

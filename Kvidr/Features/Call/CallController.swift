@@ -211,7 +211,7 @@ final class CallController {
             // With video: the camera's track goes out from the start, off.
             try await session.calls.join(token: token, flags: [.inCall, .withAudio, .withVideo])
         } catch {
-            end(reason: "Couldn’t join the call: \(error.userMessage)")
+            end(reason: String(localized: "Couldn’t join the call: \(error.userMessage)", comment: "%@ is the reason"))
             return
         }
         guard phase == .joining else { return }
@@ -318,12 +318,12 @@ final class CallController {
         guard let capturer, let videoTrack else { return }
         cameraProblem = nil
         guard await AVCaptureDevice.requestAccess(for: .video) else {
-            cameraProblem = "kvidr isn’t allowed to use the camera. Turn it on in System Settings → Privacy & Security → Camera."
+            cameraProblem = String(localized: "kvidr isn’t allowed to use the camera. Turn it on in System Settings → Privacy & Security → Camera.")
             return
         }
         cameras = Self.findCameras()
         guard let device = cameras.first(where: { $0.uniqueID == cameraID }) ?? cameras.first else {
-            cameraProblem = "No camera found. Connect one, or use your iPhone as a camera with Continuity Camera."
+            cameraProblem = String(localized: "No camera found. Connect one, or use your iPhone as a camera with Continuity Camera.")
             return
         }
         cameraID = device.uniqueID
@@ -334,7 +334,7 @@ final class CallController {
             try await capturer.startCapture(with: device, format: format, fps: fps)
         } catch {
             Log.sync.warning("Couldn’t start the camera: \(error.localizedDescription)")
-            cameraProblem = "The camera couldn’t be started."
+            cameraProblem = String(localized: "The camera couldn’t be started.")
             return
         }
         videoTrack.isEnabled = true
@@ -500,7 +500,7 @@ final class CallController {
     /// Sends an emoji to everyone — and shows it here too, as nobody sends one back.
     func react(_ emoji: String) {
         sendToEveryone(.reaction(emoji))
-        show(Reaction(emoji: emoji, name: "You"))
+        show(Reaction(emoji: emoji, name: String(localized: "You", comment: "Under an emoji you sent in a call")))
     }
 
     /// A moderator mutes someone. Everyone in the call hears it; they mute themselves.
@@ -518,7 +518,7 @@ final class CallController {
         guard let index = participants.firstIndex(where: { $0.id == sessionID }) else { return }
         let was = participants[index].isHandRaised
         participants[index].handRaisedAt = isRaised ? (participants[index].handRaisedAt ?? Date()) : nil
-        if isRaised, !was { show("\(participants[index].name) raised their hand", symbol: "hand.raised.fill") }
+        if isRaised, !was { show(String(localized: "\(participants[index].name) raised their hand"), symbol: "hand.raised.fill") }
     }
 
     func receivedReaction(_ emoji: String, from sessionID: String) {
@@ -531,7 +531,7 @@ final class CallController {
         if target == ownSessionID {
             guard !isMuted else { return }
             toggleMute()
-            show("A moderator muted you", symbol: "mic.slash.fill")
+            show(String(localized: "A moderator muted you"), symbol: "mic.slash.fill")
         } else if let index = participants.firstIndex(where: { $0.id == target }) {
             participants[index].isAudioOn = false
             participants[index].isSpeaking = false
@@ -671,7 +671,7 @@ final class CallController {
     /// The signaling connection went away: without it, the call can't go on.
     func signalingLost() {
         guard !isEnded else { return }
-        end(reason: "The connection to the call was lost.")
+        end(reason: String(localized: "The connection to the call was lost."))
         let calls = session.calls
         let token = self.token
         Task { try? await calls.leave(token: token) }
@@ -683,7 +683,7 @@ final class CallController {
         let factory = factory
         let sid = String(Int(Date().timeIntervalSince1970 * 1000))
         guard let peer = CallPeer(factory: factory, iceServers: iceServers, remoteSession: ownSessionID, sid: sid) else {
-            end(reason: "The call couldn’t be set up on this Mac.")
+            end(reason: String(localized: "The call couldn’t be set up on this Mac."))
             return
         }
         let source = factory.audioSource(with: LKRTCMediaConstraints(mandatoryConstraints: nil, optionalConstraints: nil))
@@ -725,7 +725,7 @@ final class CallController {
                 self.phase = .inCall
                 self.releaseHeldOfferRequests()
             }
-            if failed { self.end(reason: "Your audio couldn’t reach the call.") }
+            if failed { self.end(reason: String(localized: "Your audio couldn’t reach the call.")) }
         }
 
         do {
@@ -736,7 +736,7 @@ final class CallController {
             let servers = self.iceServers.flatMap(\.urls).map { $0.split(separator: "?").first.map(String.init) ?? $0 }
             Log.sync.notice("Call: sent own offer, ICE servers: \(servers.joined(separator: ", "))")
         } catch {
-            end(reason: "The call couldn’t be set up: \(error.localizedDescription)")
+            end(reason: String(localized: "The call couldn’t be set up: \(error.localizedDescription)", comment: "%@ is the reason"))
         }
     }
 
@@ -802,11 +802,11 @@ final class CallController {
 
     private func apply(_ change: CallRoster.Change) {
         let leaving = participants.filter { change.toDrop.contains($0.id) }.map(\.name)
-        if !leaving.isEmpty { announce(leaving, did: "left", symbol: "person.fill.xmark") }
+        if !leaving.isEmpty { announce(leaving, joined: false, symbol: "person.fill.xmark") }
         let arriving = change.toSubscribe
             .filter { user in !participants.contains { $0.id == user.sessionID } }
             .map { name(for: $0) }
-        if !arriving.isEmpty { announce(arriving, did: "joined", symbol: "person.fill.checkmark") }
+        if !arriving.isEmpty { announce(arriving, joined: true, symbol: "person.fill.checkmark") }
         for id in change.toDrop {
             subscribers.removeValue(forKey: id)?.close()
             subscribers.removeValue(forKey: Self.key(id, "screen"))?.close()
@@ -857,14 +857,21 @@ final class CallController {
     }
 
     /// "Anna joined", "Anna and Bo left", "3 people joined".
-    private func announce(_ names: [String], did what: String, symbol: String) {
+    private func announce(_ names: [String], joined: Bool, symbol: String) {
         guard !conversation.isOneToOne, let announcesFrom, Date() >= announcesFrom else { return }
-        let who = switch names.count {
-        case 1: names[0]
-        case 2: "\(names[0]) and \(names[1])"
-        default: "\(names.count) people"
+        let text: String
+        if names.count <= 2 {
+            // "Anna", or "Anna and Bo", as the language joins two names.
+            let who = names.formatted(.list(type: .and))
+            text = joined
+                ? String(localized: "\(who) joined", comment: "Notice in a group call: one or two names")
+                : String(localized: "\(who) left", comment: "Notice in a group call: one or two names")
+        } else {
+            text = joined
+                ? String(localized: "\(names.count) people joined", comment: "Notice in a group call")
+                : String(localized: "\(names.count) people left", comment: "Notice in a group call")
         }
-        show("\(who) \(what)", symbol: symbol)
+        show(text, symbol: symbol)
     }
 
     /// Says something on the stage for a few seconds.
@@ -881,7 +888,7 @@ final class CallController {
     private func name(for user: CallParticipantState) -> String {
         if let name = user.displayName ?? nameForSession(user.sessionID) { return name }
         if conversation.isOneToOne { return conversation.displayName }
-        return user.actorID ?? user.userID ?? "Guest"
+        return user.actorID ?? user.userID ?? String(localized: "Guest", comment: "Name for someone in a call whose name isn’t known")
     }
 
     /// The best layer while there are few enough tiles for it to show; the middle one for more.

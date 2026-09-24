@@ -42,7 +42,7 @@ enum MessageToCalendar {
             hasTime: mention?.hasTime ?? !forTask,
             minutes: mention?.duration.map { Int($0 / 60) } ?? 60,
             location: "",
-            notes: "\(author) in \(conversation):\n\(text)",
+            notes: String(localized: "\(author) in \(conversation):\n\(text)", comment: "Notes of a calendar event or reminder made from a message: the author, the conversation, then the message"),
             url: url
         )
         guard case .available = UnreadSummary.availability else { return draft }
@@ -66,7 +66,7 @@ enum MessageToCalendar {
     private static let store = EKEventStore()
 
     static func addEvent(_ draft: Draft) async throws {
-        guard try await store.requestWriteOnlyAccessToEvents() else { throw AddError.noAccess("Calendar") }
+        guard try await store.requestWriteOnlyAccessToEvents() else { throw AddError.noAccessToCalendar }
         let event = EKEvent(eventStore: store)
         event.title = draft.title
         event.isAllDay = !draft.hasTime
@@ -80,7 +80,7 @@ enum MessageToCalendar {
     }
 
     static func addReminder(_ draft: Draft, isDue: Bool) async throws {
-        guard try await store.requestFullAccessToReminders() else { throw AddError.noAccess("Reminders") }
+        guard try await store.requestFullAccessToReminders() else { throw AddError.noAccessToReminders }
         let reminder = EKReminder(eventStore: store)
         reminder.title = draft.title
         reminder.notes = draft.notes
@@ -95,11 +95,15 @@ enum MessageToCalendar {
     }
 
     enum AddError: LocalizedError {
-        case noAccess(String)
+        case noAccessToCalendar
+        case noAccessToReminders
 
         var errorDescription: String? {
             switch self {
-            case .noAccess(let app): "kvidr isn’t allowed to add to \(app). Allow it in System Settings → Privacy & Security → \(app)."
+            case .noAccessToCalendar:
+                String(localized: "kvidr isn’t allowed to add to Calendar. Allow it in System Settings → Privacy & Security → Calendar.", comment: "Use the names of the Calendar app and of the settings as macOS shows them")
+            case .noAccessToReminders:
+                String(localized: "kvidr isn’t allowed to add to Reminders. Allow it in System Settings → Privacy & Security → Reminders.", comment: "Use the names of the Reminders app and of the settings as macOS shows them")
             }
         }
     }

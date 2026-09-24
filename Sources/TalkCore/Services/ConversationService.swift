@@ -314,15 +314,17 @@ extension NewConversation {
         let labels = recipients
             .map { $0.label.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
-        guard !labels.isEmpty else { return "New Conversation" }
+        guard !labels.isEmpty else { return String(localized: "New Conversation", comment: "Fallback name for a new group conversation") }
 
         let listed = 3
         if labels.count > listed {
-            return labels.prefix(listed).joined(separator: ", ") + " & \(labels.count - listed) more"
+            let names = labels.prefix(listed).joined(separator: ", ")
+            return String(localized: "\(names) & \(labels.count - listed) more", comment: "Conversation name: %@ is a comma-separated list of three names, the number counts the rest")
         }
-        guard let last = labels.last else { return "New Conversation" }
+        guard let last = labels.last else { return String(localized: "New Conversation", comment: "Fallback name for a new group conversation") }
         guard labels.count > 1 else { return last }
-        return labels.dropLast().joined(separator: ", ") + " & " + last
+        let rest = labels.dropLast().joined(separator: ", ")
+        return String(localized: "\(rest) & \(last)", comment: "Conversation name: a comma-separated list of names, then the last name")
     }
 }
 

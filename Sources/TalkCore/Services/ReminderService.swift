@@ -25,19 +25,19 @@ struct ReminderPreset: Sendable, Hashable, Identifiable {
     /// Today" drops out once the evening is too close to be later.
     static func presets(now: Date = Date(), calendar: Calendar = .current) -> [ReminderPreset] {
         var presets = [
-            ReminderPreset(title: "In 30 Minutes", date: now.addingTimeInterval(30 * 60)),
-            ReminderPreset(title: "In 1 Hour", date: now.addingTimeInterval(60 * 60)),
-            ReminderPreset(title: "In 3 Hours", date: now.addingTimeInterval(3 * 60 * 60)),
+            ReminderPreset(title: String(localized: "In 30 Minutes", comment: "Remind me: when"), date: now.addingTimeInterval(30 * 60)),
+            ReminderPreset(title: String(localized: "In 1 Hour", comment: "Remind me: when"), date: now.addingTimeInterval(60 * 60)),
+            ReminderPreset(title: String(localized: "In 3 Hours", comment: "Remind me: when"), date: now.addingTimeInterval(3 * 60 * 60)),
         ]
 
         let today = calendar.startOfDay(for: now)
         if let evening = calendar.date(bySettingHour: 18, minute: 0, second: 0, of: today),
            evening.timeIntervalSince(now) >= 60 * 60 {
-            presets.append(ReminderPreset(title: "Later Today", date: evening))
+            presets.append(ReminderPreset(title: String(localized: "Later Today", comment: "Remind me: this evening"), date: evening))
         }
         guard let tomorrow = calendar.date(byAdding: .day, value: 1, to: today) else { return presets }
         if let morning = calendar.date(bySettingHour: 9, minute: 0, second: 0, of: tomorrow) {
-            presets.append(ReminderPreset(title: "Tomorrow", date: morning))
+            presets.append(ReminderPreset(title: String(localized: "Tomorrow", comment: "Remind me: tomorrow morning"), date: morning))
         }
         // The first Monday from tomorrow on, at nine — so on a Monday it is the one after.
         if let monday = calendar.nextDate(
@@ -45,7 +45,7 @@ struct ReminderPreset: Sendable, Hashable, Identifiable {
             matching: DateComponents(hour: 9, minute: 0, weekday: 2),
             matchingPolicy: .nextTime
         ) {
-            presets.append(ReminderPreset(title: "Next Week", date: monday))
+            presets.append(ReminderPreset(title: String(localized: "Next Week", comment: "Remind me: next Monday morning"), date: monday))
         }
         return presets
     }

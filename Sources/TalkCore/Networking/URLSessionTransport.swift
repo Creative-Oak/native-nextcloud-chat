@@ -142,7 +142,7 @@ final class URLSessionTransport: HTTPTransport, @unchecked Sendable {
              NSURLErrorDataNotAllowed, NSURLErrorInternationalRoamingOff:
             return .offline
         case NSURLErrorCannotFindHost, NSURLErrorDNSLookupFailed, NSURLErrorCannotConnectToHost:
-            return .transport(code: nsError.code, description: "Couldn’t reach \(host).")
+            return .transport(code: nsError.code, description: String(localized: "Couldn’t reach \(host).", comment: "%@ is a server’s host name"))
         case NSURLErrorTimedOut:
             return .timedOut
         case NSURLErrorCancelled:

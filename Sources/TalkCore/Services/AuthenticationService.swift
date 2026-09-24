@@ -72,7 +72,7 @@ actor AuthenticationService {
             throw .missingCapability("Nextcloud Talk")
         }
         guard capabilities.supportsChat else {
-            throw .missingCapability("a supported Talk version (chat-v2)")
+            throw .missingCapability(String(localized: "a supported Talk version (chat-v2)", comment: "Completes “This server’s Talk version doesn’t support %@.”"))
         }
         return capabilities
     }
@@ -437,12 +437,12 @@ struct SignOutOutcome: Sendable, Equatable {
     var warning: String? {
         var parts: [String] = []
         if foundNothingStored {
-            parts.append("kvidr had no saved app password for this account, so there was nothing it could revoke — if this Mac is still listed under Security in your Nextcloud settings, remove it there.")
+            parts.append(String(localized: "kvidr had no saved app password for this account, so there was nothing it could revoke — if this Mac is still listed under Security in your Nextcloud settings, remove it there.", comment: "Sign-out warning; “Security” is the name of a page in Nextcloud’s settings"))
         } else if !revokedOnServer {
-            parts.append("kvidr couldn’t revoke its own access on the server — remove this device under Security in your Nextcloud settings.")
+            parts.append(String(localized: "kvidr couldn’t revoke its own access on the server — remove this device under Security in your Nextcloud settings.", comment: "Sign-out warning; “Security” is the name of a page in Nextcloud’s settings"))
         }
         if !removedLocally {
-            parts.append("The saved app password couldn’t be deleted from your keychain — remove the kvidr item in Keychain Access.")
+            parts.append(String(localized: "The saved app password couldn’t be deleted from your keychain — remove the kvidr item in Keychain Access.", comment: "Sign-out warning; Keychain Access is the macOS app"))
         }
         return parts.isEmpty ? nil : parts.joined(separator: " ")
     }

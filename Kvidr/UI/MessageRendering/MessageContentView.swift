@@ -320,8 +320,8 @@ private struct AttachmentView: View {
 
     private var detail: String? {
         switch object.type {
-        case .talkPoll: return "Poll"
-        case .geoLocation: return "Location"
+        case .talkPoll: return String(localized: "Poll", comment: "Under a poll shared in a message: what the attachment is")
+        case .geoLocation: return String(localized: "Location", comment: "Under a location shared in a message: what the attachment is")
         case .deckCard: return [object.boardName, object.stackName].compactMap { $0 }.joined(separator: " · ")
         default:
             guard let size = object.size else { return nil }

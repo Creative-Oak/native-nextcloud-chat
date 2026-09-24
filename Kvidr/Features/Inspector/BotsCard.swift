@@ -13,7 +13,7 @@ struct BotsCard: View {
 
     var body: some View {
         if !bots.isEmpty || problem != nil {
-            InspectorCard(title: "Bots") {
+            InspectorCard(title: String(localized: "Bots", comment: "Inspector card heading")) {
                 ForEach(bots) { bot in
                     row(bot)
                 }
@@ -56,8 +56,8 @@ struct BotsCard: View {
 
     private func note(for bot: ConversationBot) -> String? {
         switch bot.state {
-        case .managed: "Set up by your administrator"
-        case .unavailable: "Not available on this server right now"
+        case .managed: String(localized: "Set up by your administrator", comment: "A bot that is always on")
+        case .unavailable: String(localized: "Not available on this server right now", comment: "A bot whose app is off")
         case .on, .off: bot.description.isEmpty ? nil : bot.description
         }
     }
@@ -81,7 +81,9 @@ struct BotsCard: View {
                 problem = nil
             } catch {
                 if let index = bots.firstIndex(where: { $0.id == bot.id }) { bots[index].state = bot.state }
-                problem = "Couldn’t turn \(bot.name) \(on ? "on" : "off"): \(error.userMessage)"
+                problem = on
+                    ? String(localized: "Couldn’t turn \(bot.name) on: \(error.userMessage)", comment: "First %@ is the bot, second the error")
+                    : String(localized: "Couldn’t turn \(bot.name) off: \(error.userMessage)", comment: "First %@ is the bot, second the error")
             }
             changing.remove(bot.id)
         }

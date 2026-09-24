@@ -243,11 +243,11 @@ enum MessageMenu {
         let submenu = NSMenu()
         submenu.autoenablesItems = false
         if let date = actions.reminder {
-            let current = NSMenuItem(title: "Reminder: \(ReminderTime.text(date))", action: nil, keyEquivalent: "")
+            let current = NSMenuItem(title: String(localized: "Reminder: \(ReminderTime.text(date))", comment: "Disabled menu item: the reminder already set; %@ is when"), action: nil, keyEquivalent: "")
             current.isEnabled = false
             submenu.addItem(current)
             if let remove = actions.onRemoveReminder {
-                submenu.addItem(ClosureMenuItem("Remove Reminder", action: remove))
+                submenu.addItem(ClosureMenuItem(String(localized: "Remove Reminder"), action: remove))
             }
             submenu.addItem(.separator())
         }
@@ -258,9 +258,9 @@ enum MessageMenu {
         }
         if let custom = actions.onCustomReminder {
             submenu.addItem(.separator())
-            submenu.addItem(ClosureMenuItem("Custom…", action: custom))
+            submenu.addItem(ClosureMenuItem(String(localized: "Custom…", comment: "Remind Me submenu: pick a date and time of your own"), action: custom))
         }
-        let item = NSMenuItem(title: actions.reminder == nil ? "Remind Me" : "Change Reminder", action: nil, keyEquivalent: "")
+        let item = NSMenuItem(title: actions.reminder == nil ? String(localized: "Remind Me") : String(localized: "Change Reminder"), action: nil, keyEquivalent: "")
         item.image = NSImage(systemSymbolName: "alarm", accessibilityDescription: nil)
         item.submenu = submenu
         return item
@@ -281,16 +281,16 @@ enum MessageMenu {
         }
 
         if actions.canReply {
-            menu.addItem(ClosureMenuItem("Reply", symbol: "arrowshape.turn.up.left", action: actions.onReply))
+            menu.addItem(ClosureMenuItem(String(localized: "Reply", comment: "Message menu: reply to the message"), symbol: "arrowshape.turn.up.left", action: actions.onReply))
         }
         if let onReplyPrivately = actions.onReplyPrivately {
-            menu.addItem(ClosureMenuItem("Reply Privately", symbol: "person.fill", action: onReplyPrivately))
+            menu.addItem(ClosureMenuItem(String(localized: "Reply Privately"), symbol: "person.fill", action: onReplyPrivately))
         }
         if let onOpenThread = actions.onOpenThread {
-            menu.addItem(ClosureMenuItem("Open Thread", symbol: "bubble.left.and.bubble.right", action: onOpenThread))
+            menu.addItem(ClosureMenuItem(String(localized: "Open Thread"), symbol: "bubble.left.and.bubble.right", action: onOpenThread))
         }
         if let onRenameThread = actions.onRenameThread {
-            menu.addItem(ClosureMenuItem("Rename Thread…", symbol: "character.cursor.ibeam", action: onRenameThread))
+            menu.addItem(ClosureMenuItem(String(localized: "Rename Thread…"), symbol: "character.cursor.ibeam", action: onRenameThread))
         }
         if let current = actions.threadNotificationLevel, let onSet = actions.onSetThreadNotifications {
             let submenu = NSMenu()
@@ -299,7 +299,7 @@ enum MessageMenu {
                 item.state = level == current ? .on : .off
                 submenu.addItem(item)
             }
-            let item = NSMenuItem(title: "Thread Notifications", action: nil, keyEquivalent: "")
+            let item = NSMenuItem(title: String(localized: "Thread Notifications"), action: nil, keyEquivalent: "")
             item.image = NSImage(systemSymbolName: "bell", accessibilityDescription: nil)
             item.submenu = submenu
             menu.addItem(item)
@@ -309,24 +309,26 @@ enum MessageMenu {
         }
         if let onPin = actions.onPin {
             if actions.isPinned {
-                menu.addItem(ClosureMenuItem("Unpin", symbol: "pin.slash", action: actions.onUnpin))
+                menu.addItem(ClosureMenuItem(String(localized: "Unpin"), symbol: "pin.slash", action: actions.onUnpin))
             } else {
                 let submenu = NSMenu()
                 for duration in PinDuration.allCases {
                     submenu.addItem(ClosureMenuItem(duration.title) { onPin(duration) })
                 }
-                let item = NSMenuItem(title: "Pin", action: nil, keyEquivalent: "")
+                let item = NSMenuItem(title: String(localized: "Pin", comment: "Message menu: submenu to pin the message for a while"), action: nil, keyEquivalent: "")
                 item.image = NSImage(systemSymbolName: "pin", accessibilityDescription: nil)
                 item.submenu = submenu
                 menu.addItem(item)
             }
         }
         if let onForward = actions.onForward {
-            menu.addItem(ClosureMenuItem("Forward…", symbol: "arrowshape.turn.up.right", action: onForward))
+            menu.addItem(ClosureMenuItem(String(localized: "Forward…"), symbol: "arrowshape.turn.up.right", action: onForward))
         }
-        menu.addItem(ClosureMenuItem("Copy", symbol: "doc.on.doc", action: actions.onCopy))
+        menu.addItem(ClosureMenuItem(String(localized: "Copy", comment: "Message menu: copy the message's text"), symbol: "doc.on.doc", action: actions.onCopy))
         for link in actions.links {
-            let title = actions.links.count == 1 ? "Copy Link" : "Copy \(shortened(link))"
+            let title = actions.links.count == 1
+                ? String(localized: "Copy Link")
+                : String(localized: "Copy \(shortened(link))", comment: "Message menu: copy one of the message's links; %@ is the link")
             menu.addItem(ClosureMenuItem(title, symbol: "link") {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(link.absoluteString, forType: .string)
@@ -335,28 +337,28 @@ enum MessageMenu {
         if actions.onAddToCalendar != nil || actions.onAddToReminders != nil {
             menu.addItem(.separator())
             if let add = actions.onAddToCalendar, let text = actions.calendarText, DateMention.first(in: text) != nil {
-                menu.addItem(ClosureMenuItem("Add to Calendar…", symbol: "calendar.badge.plus", action: add))
+                menu.addItem(ClosureMenuItem(String(localized: "Add to Calendar…"), symbol: "calendar.badge.plus", action: add))
             }
             if let add = actions.onAddToReminders {
-                menu.addItem(ClosureMenuItem("Add to Reminders…", symbol: "checklist", action: add))
+                menu.addItem(ClosureMenuItem(String(localized: "Add to Reminders…"), symbol: "checklist", action: add))
             }
             menu.addItem(.separator())
         }
         if let onTranslate = actions.onTranslate {
             menu.addItem(actions.isTranslated
-                ? ClosureMenuItem("Show Original", symbol: "translate", action: actions.onShowOriginal)
-                : ClosureMenuItem("Translate", symbol: "translate", action: onTranslate))
+                ? ClosureMenuItem(String(localized: "Show Original", comment: "Message menu: hide the translation"), symbol: "translate", action: actions.onShowOriginal)
+                : ClosureMenuItem(String(localized: "Translate", comment: "Message menu: translate the message"), symbol: "translate", action: onTranslate))
         }
         if actions.canEdit {
-            menu.addItem(ClosureMenuItem("Edit…", symbol: "pencil", action: actions.onEdit))
+            menu.addItem(ClosureMenuItem(String(localized: "Edit…", comment: "Message menu: edit the message"), symbol: "pencil", action: actions.onEdit))
         }
         if actions.hasReactions {
             menu.addItem(.separator())
-            menu.addItem(ClosureMenuItem("Show Who Reacted", symbol: "person.2", action: actions.onShowReactions))
+            menu.addItem(ClosureMenuItem(String(localized: "Show Who Reacted"), symbol: "person.2", action: actions.onShowReactions))
         }
         if actions.canDelete {
             menu.addItem(.separator())
-            menu.addItem(ClosureMenuItem("Delete…", symbol: "trash", action: actions.onDelete))
+            menu.addItem(ClosureMenuItem(String(localized: "Delete…", comment: "Message menu: delete the message"), symbol: "trash", action: actions.onDelete))
         }
         return menu
     }

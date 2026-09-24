@@ -115,10 +115,10 @@ private struct CatchUpCard: View {
                 .font(.system(size: 13))
                 .fixedSize(horizontal: false, vertical: true)
             if !digest.forYou.isEmpty {
-                lines("For you", symbol: "questionmark.bubble", digest.forYou)
+                lines(String(localized: "For you", comment: "Catch Up card: questions or requests aimed at the reader"), symbol: "questionmark.bubble", digest.forYou)
             }
             if !digest.dates.isEmpty {
-                lines("Dates", symbol: "calendar", digest.dates)
+                lines(String(localized: "Dates", comment: "Catch Up card: dates and deadlines mentioned"), symbol: "calendar", digest.dates)
             }
         }
     }
@@ -142,7 +142,7 @@ struct CatchUpSidebarRow: View {
     let count: Int
 
     var body: some View {
-        SidebarShortcutRow(title: "Catch Up", systemImage: "apple.intelligence", iconStyle: AnyShapeStyle(.tint), count: count)
+        SidebarShortcutRow(title: String(localized: "Catch Up"), systemImage: "apple.intelligence", iconStyle: AnyShapeStyle(.tint), count: count)
             .accessibilityLabel("Catch Up, \(count) unread conversations")
     }
 }

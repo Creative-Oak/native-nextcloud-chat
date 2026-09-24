@@ -112,12 +112,12 @@ struct SendMessageIntent: AppIntent {
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
         let text = message.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { throw IntentError.failed("There’s nothing to send.") }
+        guard !text.isEmpty else { throw IntentError.failed(String(localized: "There’s nothing to send.")) }
         let app = try await IntentBridge.shared.readyApp()
         do throws(TalkError) {
             try await app.send(text, to: conversation.id)
         } catch {
-            throw IntentError.failed("The message couldn’t be sent: \(error.userMessage)")
+            throw IntentError.failed(String(localized: "The message couldn’t be sent: \(error.userMessage)", comment: "Shortcuts error: %@ is the reason"))
         }
         return .result(dialog: "Sent to \(conversation.name).")
     }
@@ -138,7 +138,7 @@ struct JoinCallIntent: AppIntent {
     @MainActor
     func perform() async throws -> some IntentResult {
         let app = try await IntentBridge.shared.readyApp()
-        guard app.activeCall == nil else { throw IntentError.failed("You’re already in a call.") }
+        guard app.activeCall == nil else { throw IntentError.failed(String(localized: "You’re already in a call.")) }
         app.selectedToken = conversation.id
         for _ in 0..<30 where app.chat?.token != conversation.id {
             try? await Task.sleep(for: .milliseconds(100))

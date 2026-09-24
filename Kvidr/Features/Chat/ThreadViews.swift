@@ -24,7 +24,7 @@ struct ThreadRepliesButton: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 3) {
-                Text(count == 0 ? "Reply in thread" : count == 1 ? "1 reply" : "\(count) replies")
+                Text(count == 0 ? "Reply in thread" : "\(count) replies")
                 Image(systemName: "chevron.right")
                     .font(.system(size: 9, weight: .semibold))
             }
@@ -58,7 +58,7 @@ struct ThreadBar: View {
                     .font(.system(size: 10))
                     .foregroundStyle(Color.accentColor)
 
-                Text("\(Text(thread.title.isEmpty ? "Thread" : thread.title).fontWeight(.medium))\(Text(" · \(replies == 1 ? "1 reply" : "\(replies) replies")").foregroundStyle(.secondary))")
+                Text("\(Text(thread.title.isEmpty ? String(localized: "Thread", comment: "A thread with no title") : thread.title).fontWeight(.medium))\(Text(" · \(String(localized: "\(replies) replies"))").foregroundStyle(.secondary))")
                     .lineLimit(1)
                     .truncationMode(.tail)
 
@@ -79,7 +79,9 @@ struct ThreadBar: View {
         // Esc when the text field isn't taking it — the field hands it over itself.
         .keyboardShortcut(.cancelAction)
         .help("Back to the conversation (Esc)")
-        .accessibilityLabel("Back to the conversation, from \(thread.title.isEmpty ? "the thread" : thread.title)")
+        .accessibilityLabel(thread.title.isEmpty
+            ? String(localized: "Back to the conversation, from the thread")
+            : String(localized: "Back to the conversation, from \(thread.title)", comment: "%@ is the thread's title"))
         .glass(.panel, cornerRadius: 10)
     }
 }
@@ -137,8 +139,8 @@ struct ThreadsMenu: View {
                 get: { model.openThread?.id == thread.id },
                 set: { _ in model.showThread(MessageThread(id: thread.id, title: thread.title, replies: thread.replies)) }
             )) {
-                Text(thread.title.isEmpty ? "Thread" : thread.title)
-                Text("\(thread.replies == 1 ? "1 reply" : "\(thread.replies) replies") · \(thread.lastActivity.formatted(.relative(presentation: .named)))")
+                Text(thread.title.isEmpty ? String(localized: "Thread", comment: "A thread with no title") : thread.title)
+                Text("\(String(localized: "\(thread.replies) replies")) · \(thread.lastActivity.formatted(.relative(presentation: .named)))")
             }
         }
     }
@@ -154,7 +156,7 @@ enum ThreadBarMenu {
     ) -> NSMenu {
         let menu = NSMenu()
         if let onRename {
-            menu.addItem(ClosureMenuItem("Rename Thread…", symbol: "character.cursor.ibeam", action: onRename))
+            menu.addItem(ClosureMenuItem(String(localized: "Rename Thread…"), symbol: "character.cursor.ibeam", action: onRename))
         }
         let submenu = NSMenu()
         for option in ThreadNotificationLevel.allCases {
@@ -162,7 +164,7 @@ enum ThreadBarMenu {
             item.state = option == level ? .on : .off
             submenu.addItem(item)
         }
-        let item = NSMenuItem(title: "Thread Notifications", action: nil, keyEquivalent: "")
+        let item = NSMenuItem(title: String(localized: "Thread Notifications"), action: nil, keyEquivalent: "")
         item.image = NSImage(systemSymbolName: "bell", accessibilityDescription: nil)
         item.submenu = submenu
         menu.addItem(item)

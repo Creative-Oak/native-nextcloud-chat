@@ -470,8 +470,8 @@ private struct PinnedConversations: View {
 
     private func label(for conversation: Conversation) -> String {
         var parts = [conversation.displayName]
-        if conversation.hasUnread { parts.append("\(conversation.unreadMessages) unread") }
-        if conversation.hasCall { parts.append("call in progress") }
+        if conversation.hasUnread { parts.append(String(localized: "\(conversation.unreadMessages) unread", comment: "Unread message count")) }
+        if conversation.hasCall { parts.append(String(localized: "call in progress", comment: "Accessibility: a conversation has a call going on")) }
         return parts.joined(separator: ", ")
     }
 }
@@ -592,9 +592,9 @@ struct ConversationRow: View {
 
     private var accessibilityLabel: String {
         var parts = [conversation.displayName]
-        if conversation.unreadMessages > 0 { parts.append("\(conversation.unreadMessages) unread") }
-        if conversation.unreadMention { parts.append("mentions you") }
-        if conversation.hasCall { parts.append("call in progress") }
+        if conversation.unreadMessages > 0 { parts.append(String(localized: "\(conversation.unreadMessages) unread", comment: "Unread message count")) }
+        if conversation.unreadMention { parts.append(String(localized: "mentions you", comment: "Accessibility: a conversation has an unread @-mention of you")) }
+        if conversation.hasCall { parts.append(String(localized: "call in progress", comment: "Accessibility: a conversation has a call going on")) }
         parts.append(preview)
         return parts.joined(separator: ", ")
     }

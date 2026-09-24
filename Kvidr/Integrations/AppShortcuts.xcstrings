@@ -5,9 +5,12 @@
       "extractionState" : "extracted_with_value",
       "localizations" : {
         "da" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Ring til ${conversation} med ${applicationName}"
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Ring til ${conversation} med ${applicationName}",
+              "Deltag i opkaldet i ${conversation} med ${applicationName}"
+            ]
           }
         },
         "en" : {
@@ -25,9 +28,12 @@
       "extractionState" : "extracted_with_value",
       "localizations" : {
         "da" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Hvad er nyt i ${applicationName}"
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Hvad er nyt i ${applicationName}",
+              "Hvad er der sket i ${applicationName}"
+            ]
           }
         },
         "en" : {
@@ -41,35 +47,16 @@
         }
       }
     },
-    "Join the call in ${conversation} with ${applicationName}" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "da" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Deltag i opkaldet i ${conversation} med ${applicationName}"
-          }
-        }
-      }
-    },
-    "Message ${conversation} with ${applicationName}" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "da" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Skriv til ${conversation} med ${applicationName}"
-          }
-        }
-      }
-    },
     "Open ${conversation} in ${applicationName}" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
         "da" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Åbn ${conversation} i ${applicationName}"
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Åbn ${conversation} i ${applicationName}",
+              "Vis ${conversation} i ${applicationName}"
+            ]
           }
         },
         "en" : {
@@ -87,9 +74,12 @@
       "extractionState" : "extracted_with_value",
       "localizations" : {
         "da" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Send en besked med ${applicationName}"
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Send en besked med ${applicationName}",
+              "Skriv til ${conversation} med ${applicationName}"
+            ]
           }
         },
         "en" : {
@@ -99,28 +89,6 @@
               "Send a message with ${applicationName}",
               "Message ${conversation} with ${applicationName}"
             ]
-          }
-        }
-      }
-    },
-    "Show ${conversation} in ${applicationName}" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "da" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Vis ${conversation} i ${applicationName}"
-          }
-        }
-      }
-    },
-    "What did I miss in ${applicationName}" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "da" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Hvad er der sket i ${applicationName}"
           }
         }
       }

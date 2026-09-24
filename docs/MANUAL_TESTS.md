@@ -260,8 +260,9 @@ links and sign-out clearing Spotlight.
       "Hvad er nyt i kvidr" (or "Hvad er der sket i kvidr") opens the catch-up page. "Ring til
       Anna med kvidr" calls; "Åbn Anna i kvidr" opens. Siri may need a minute, or a relaunch of
       kvidr, to learn the new phrases.
-- [ ] Expected, not a bug: macOS's own menus and dialogs in kvidr are Danish now, kvidr's own
-      text still English — until kvidr is translated.
+- [ ] The alternative Danish phrases work too (they were lost when Xcode reorganised the
+      phrase catalog, and are back): "Hvad er der sket i kvidr", "Vis Anna i kvidr",
+      "Skriv til Anna med kvidr", "Deltag i opkaldet i Anna med kvidr".
 - [x] Spotlight: type a conversation's name — it's there, under kvidr, with its last message
       (not for sensitive conversations). Picking it opens it in kvidr.
 - [ ] Links: `open "kvidr://open?conversation=Anna"` in Terminal opens it;
@@ -272,6 +273,50 @@ links and sign-out clearing Spotlight.
       Conversation**, **Write Message**, **Catch Up**, **Find Conversation** work, with ø and
       & in names.
 - [ ] Sign out: the conversations are gone from Spotlight.
+
+### Danish localization
+
+kvidr's own text is now in `Kvidr/Resources/Localizable.xcstrings`, translated into Danish,
+alongside the privacy prompts (`InfoPlist.xcstrings`). On a Mac whose first language is Dansk,
+all of kvidr should be Danish, macOS's own menus and panels included. To switch kvidr alone:
+System Settings → General → Language & Region → Applications → + → kvidr → Dansk (or English),
+then quit and reopen kvidr.
+
+Read it as a Danish user would. Anything English, stiff, cut off or wrong is a finding. Note
+where it was (and paste the string) so the catalog can be fixed.
+
+- [ ] Menu bar: kvidr's own items (New Message, Conversation, Call, View…) are Danish, next to
+      macOS's own Danish ones (Rediger, Vindue), and read as one language. Shortcuts as before.
+- [ ] Sidebar: search field, Favourites, Archive, Reminders and Catch Up rows, account bar, the
+      "no conversations" and filter texts, times ("I går", weekdays), unread counts.
+- [ ] Right-click a conversation: every item and submenu (Tags, Notifications with Important
+      and Sensitive, and their grey subtitles) is Danish.
+- [ ] Chat: date separators ("I dag", "I går"), "Nye beskeder", system lines kvidr writes itself,
+      typing ("Anna skriver…", "Anna og Bo skriver…"), message right-click menu and Tapback,
+      reply/edit bars, failed-send text, pinned message, threads, polls ("1 stemme" /
+      "2 stemmer"), lobby.
+- [ ] Composer: placeholder, attachment menu and tray (file sizes with a decimal comma),
+      voice recording bar, scheduling and reminders ("I morgen", "Næste uge", Custom… sheet).
+- [ ] Inspector and conversation settings: tabs, participant roles, "3 deltagere" style counts
+      (one and many), sharing and moderation settings, bots, breakout rooms.
+- [ ] Calls: ringing, "Ringer op…", "Forbinder…", the controls' help tags, More menu (devices,
+      captions, summarize), the end screen and call notes, screen-share picker, minimized call,
+      incoming-call notification and its buttons.
+- [ ] Settings (every tab), Keyboard Shortcuts window, command palette (search with a Danish
+      word, e.g. "ny besked", finds New Message; English aliases still work).
+- [ ] Sign-in window and its errors (wrong address, no HTTPS), and sign-out confirmation.
+- [ ] Notifications: a new message and a mention show Danish category actions (Svar, Marker som
+      læst…).
+- [ ] Errors: turn off Wi-Fi and send: the offline text is Danish.
+- [ ] Apple Intelligence: summary, catch-up, smart replies, Ask: the buttons and states are
+      Danish; the summaries themselves follow the conversation's language. Catch Up on a
+      Danish conversation: "For you" and the dates are Danish too (they could come out in
+      English before; the model is now told to write all of it in the messages' language).
+- [ ] Privacy prompts, the first time (Terminal: `tccutil reset Microphone app.kvidr.mac`, and
+      Camera, SpeechRecognition): the prompt's explanation is Danish.
+- [ ] Shortcuts app: kvidr's actions, their parameters and results ("Sendt til …") are Danish.
+- [ ] Switch kvidr to English: everything is back to English as before (nothing lost or
+      changed), including the plurals ("1 person", "2 people").
 
 ---
 

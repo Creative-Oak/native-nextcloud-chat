@@ -51,7 +51,8 @@ struct BreakoutBar: View {
 
     @ViewBuilder
     private var inRoom: some View {
-        Text("\(Text(conversation.displayName).fontWeight(.medium))\(Text(" · \(parent?.displayName ?? "breakout room")").foregroundStyle(.secondary))")
+        let whose = parent?.displayName ?? String(localized: "breakout room", comment: "Shown after a breakout room’s name when its main conversation isn’t known")
+        Text("\(Text(conversation.displayName).fontWeight(.medium))\(Text(" · \(whose)").foregroundStyle(.secondary))")
             .lineLimit(1)
             .truncationMode(.tail)
         Spacer(minLength: 6)
@@ -91,7 +92,9 @@ struct BreakoutBar: View {
     private var hosting: some View {
         let asking = rooms.filter(\.isAskingForHelp)
         if let first = asking.first {
-            Text("\(Text(first.displayName).fontWeight(.medium)) asks for help\(asking.count > 1 ? Text(" (+\(asking.count - 1))") : Text(""))")
+            let name = Text(first.displayName).fontWeight(.medium)
+            // "(+2)": how many more rooms ask for help.
+            (asking.count > 1 ? Text("\(name) asks for help (+\(asking.count - 1))") : Text("\(name) asks for help"))
                 .foregroundStyle(.orange)
                 .lineLimit(1)
             Button("Go") { onOpen(first.token) }

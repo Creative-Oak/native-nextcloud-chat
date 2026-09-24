@@ -63,7 +63,7 @@ struct VoiceMessageView: View {
                 // A long one can be put in a sentence or two, above the words themselves.
                 if let summary = player.transcriber.summaries[object.id] {
                     Label {
-                        Text(summary ?? "Summarizing…")
+                        Text(summary ?? String(localized: "Summarizing…", comment: "While Apple Intelligence summarizes a voice message"))
                             .fixedSize(horizontal: false, vertical: true)
                     } icon: {
                         Image(systemName: "apple.intelligence")
@@ -121,7 +121,7 @@ private extension VoicePlayer.LoadState {
 
     var problem: String? {
         switch self {
-        case .unplayable: "This Mac can’t play this recording"
+        case .unplayable: String(localized: "This Mac can’t play this recording", comment: "Under a voice message in a format macOS can't play")
         case .failed(let reason): reason
         default: nil
         }

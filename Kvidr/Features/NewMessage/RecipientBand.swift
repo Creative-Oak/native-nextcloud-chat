@@ -36,7 +36,7 @@ struct RecipientBand: View {
                 RecipientTextField(
                     text: $draft.search,
                     isFocused: $isFocused,
-                    prompt: draft.recipients.isEmpty ? "Name, group or team" : "",
+                    prompt: draft.recipients.isEmpty ? String(localized: "Name, group or team", comment: "Placeholder in a new message's To: field") : "",
                     onBackspaceIntoChips: {
                         guard !draft.recipients.isEmpty else { return false }
                         draft.removeLastRecipient()
@@ -69,7 +69,7 @@ struct RecipientBand: View {
             // and the keyboard, but wearing the app's own glass — a pill that tints with the
             // accent when it is on, like a reaction that includes you.
             Toggle(isOn: $draft.isOpen) {
-                Label("Open", systemImage: "globe")
+                Label(String(localized: "newMessage.open", defaultValue: "Open", comment: "Toggle in a new message's To: band: make it an open conversation anyone on the server can join (adjective, not the verb)"), systemImage: "globe")
                     .font(.callout)
                     .padding(.horizontal, 4)
                     .padding(.vertical, 1)

@@ -9,7 +9,7 @@ struct RemindersSidebarRow: View {
     let count: Int
 
     var body: some View {
-        SidebarShortcutRow(title: "Reminders", systemImage: "alarm", iconStyle: AnyShapeStyle(Color.orange), count: count)
+        SidebarShortcutRow(title: String(localized: "Reminders", comment: "Sidebar row and page title"), systemImage: "alarm", iconStyle: AnyShapeStyle(Color.orange), count: count)
             .accessibilityLabel("Reminders, \(count) upcoming")
     }
 }
@@ -128,8 +128,8 @@ struct RemindersPage: View {
 
     /// "Today", "Tomorrow", "Monday 28 September" — with the year only when it isn't this one.
     private static func title(of day: Date, calendar: Calendar = .current) -> String {
-        if calendar.isDateInToday(day) { return "Today" }
-        if calendar.isDateInTomorrow(day) { return "Tomorrow" }
+        if calendar.isDateInToday(day) { return String(localized: "Today", comment: "Reminders page: heading over today's reminders") }
+        if calendar.isDateInTomorrow(day) { return String(localized: "Tomorrow", comment: "Reminders page: heading over tomorrow's reminders") }
         if calendar.isDate(day, equalTo: .now, toGranularity: .year) {
             return day.formatted(.dateTime.weekday(.wide).day().month(.wide))
         }
@@ -214,7 +214,7 @@ private struct ReminderRow: View {
         )
         let text = MessageContentParser(currentUserID: "", markdownEnabled: false).parse(message).preview
         let isGroup = conversation.map { !$0.isOneToOne } ?? true
-        return isGroup ? "\(reminder.actor.resolvedDisplayName): \(text)" : text
+        return isGroup ? String(localized: "\(reminder.actor.resolvedDisplayName): \(text)", comment: "Message preview: the author's name, then the message") : text
     }
 }
 
@@ -232,8 +232,8 @@ private struct ReminderTimeLabelStyle: LabelStyle {
 enum ReminderTime {
     static func text(_ date: Date, calendar: Calendar = .current) -> String {
         let time = date.formatted(date: .omitted, time: .shortened)
-        if calendar.isDateInToday(date) { return "Today \(time)" }
-        if calendar.isDateInTomorrow(date) { return "Tomorrow \(time)" }
+        if calendar.isDateInToday(date) { return String(localized: "Today \(time)", comment: "When a reminder or scheduled message is due; %@ is a time of day") }
+        if calendar.isDateInTomorrow(date) { return String(localized: "Tomorrow \(time)", comment: "When a reminder or scheduled message is due; %@ is a time of day") }
         return date.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated).hour().minute())
     }
 }

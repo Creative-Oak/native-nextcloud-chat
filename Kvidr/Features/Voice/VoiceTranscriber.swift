@@ -81,11 +81,11 @@ final class VoiceTranscriber {
                     the language it is spoken in. Only what it says; no introduction.
                     """)
                 summary = (try? await session.respond(to: text).content.trimmingCharacters(in: .whitespacesAndNewlines))
-                    ?? "The summary couldn’t be written."
+                    ?? String(localized: "The summary couldn’t be written.", comment: "In place of a voice message's summary")
             } else if case .notYet(let reason) = UnreadSummary.availability {
                 summary = reason
             } else {
-                summary = "Summaries need Apple Intelligence, which this Mac doesn’t have."
+                summary = String(localized: "Summaries need Apple Intelligence, which this Mac doesn’t have.", comment: "In place of a voice message's summary")
             }
             self?.summaries[id] = .some(summary)
         }

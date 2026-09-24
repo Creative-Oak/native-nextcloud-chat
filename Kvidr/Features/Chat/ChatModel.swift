@@ -749,7 +749,9 @@ final class ChatModel {
     /// The open thread, start to finish — however long it is.
     func summarizeThread() {
         guard UnreadSummary.availability != .unsupported, let thread = openThread else { return }
-        let title = thread.title.isEmpty ? "this thread" : "the thread “\(thread.title)”"
+        let title = thread.title.isEmpty
+            ? String(localized: "Summary of this thread")
+            : String(localized: "Summary of the thread “\(thread.title)”", comment: "%@ is the thread's title")
         let summary = UnreadSummary(unreadCount: 0, subject: title, conversationName: conversation.displayName) { [weak self] in
             guard let self else { return [] }
             return SummaryInput.lines(from: self.messages(inThread: thread.id), startingAt: 0) { self.content(for: $0).preview }
@@ -761,10 +763,11 @@ final class ChatModel {
     enum SummaryPeriod {
         case day, week
 
+        /// The summary bar's headline for it.
         var subject: String {
             switch self {
-            case .day: "the last 24 hours"
-            case .week: "the last week"
+            case .day: String(localized: "Summary of the last 24 hours")
+            case .week: String(localized: "Summary of the last week")
             }
         }
 
@@ -901,7 +904,7 @@ final class ChatModel {
             // user can retry, rather than silently disappearing.
             var restored = message
             if case .sending = message.deliveryState {
-                restored.deliveryState = .failed(reason: "Not sent")
+                restored.deliveryState = .failed(reason: String(localized: "Not sent", comment: "Why a message failed: the app quit while it was being sent"))
             }
             timeline.addPending(restored)
             restoredAny = true

@@ -57,7 +57,8 @@ final class CatchUpModel {
 
     private static let instructions = """
         You help someone catch up on a chat conversation they haven't read. You get its unread \\
-        messages and the reader's name. Be brief and concrete; use only what the messages say.
+        messages and the reader's name. Be brief and concrete; use only what the messages say. \\
+        Write everything in the language the messages are in.
         """
 
     /// Starts over with `conversations` — those with unread messages, most recent first.
@@ -91,7 +92,7 @@ final class CatchUpModel {
 
     private static var unavailableReason: String {
         if case .notYet(let reason) = UnreadSummary.availability { return reason }
-        return "Catching up needs Apple Intelligence, which this Mac doesn’t have."
+        return String(localized: "Catching up needs Apple Intelligence, which this Mac doesn’t have.")
     }
 
     private func digest(_ conversation: Conversation) async {
@@ -102,7 +103,7 @@ final class CatchUpModel {
             let lines = SummaryInput.lines(from: unread, startingAt: 0) { self.parser.parse($0).preview }
             let (transcript, included) = SummaryInput.transcript(lines, budget: 4_500)
             guard included > 0 else {
-                update(conversation.token) { $0.state = .failed("Nothing to read — only system messages.") }
+                update(conversation.token) { $0.state = .failed(String(localized: "Nothing to read — only system messages.", comment: "Catch Up: a conversation whose unread messages are all system messages")) }
                 return
             }
             let model = LanguageModelSession(instructions: Self.instructions)
@@ -116,10 +117,10 @@ final class CatchUpModel {
                 update(conversation.token) { $0.state = .done(response.content) }
                 sortByNeed()
             } catch {
-                update(conversation.token) { $0.state = .failed("Apple Intelligence couldn’t read this one.") }
+                update(conversation.token) { $0.state = .failed(String(localized: "Apple Intelligence couldn’t read this one.", comment: "Catch Up: the language model failed on this conversation")) }
             }
         } catch {
-            update(conversation.token) { $0.state = .failed("Couldn’t get the messages: \(error.userMessage)") }
+            update(conversation.token) { $0.state = .failed(String(localized: "Couldn’t get the messages: \(error.userMessage)", comment: "Catch Up: %@ is the error")) }
         }
     }
 

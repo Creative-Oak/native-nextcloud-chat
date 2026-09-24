@@ -6,12 +6,12 @@ enum OnlineStatus: String, Sendable, Hashable, CaseIterable {
 
     var title: String {
         switch self {
-        case .online: "Online"
-        case .away: "Away"
-        case .dnd: "Do not disturb"
-        case .busy: "Busy"
-        case .invisible: "Invisible"
-        case .offline: "Offline"
+        case .online: String(localized: "Online", comment: "Online status")
+        case .away: String(localized: "Away", comment: "Online status")
+        case .dnd: String(localized: "Do not disturb", comment: "Online status")
+        case .busy: String(localized: "Busy", comment: "Online status")
+        case .invisible: String(localized: "Invisible", comment: "Online status")
+        case .offline: String(localized: "Offline", comment: "Online status")
         }
     }
 
@@ -51,12 +51,12 @@ enum ClearAfter: Sendable, Hashable, CaseIterable {
 
     var title: String {
         switch self {
-        case .never: "Don’t clear"
-        case .thirtyMinutes: "30 minutes"
-        case .oneHour: "1 hour"
-        case .fourHours: "4 hours"
-        case .today: "Today"
-        case .thisWeek: "This week"
+        case .never: String(localized: "Don’t clear", comment: "Status message: keep it until changed")
+        case .thirtyMinutes: String(localized: "30 minutes", comment: "Status message: clear after")
+        case .oneHour: String(localized: "1 hour", comment: "Status message: clear after")
+        case .fourHours: String(localized: "4 hours", comment: "Status message: clear after")
+        case .today: String(localized: "Today", comment: "Status message: clear at the end of today")
+        case .thisWeek: String(localized: "This week", comment: "Status message: clear at the end of this week")
         }
     }
 

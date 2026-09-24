@@ -172,7 +172,7 @@ struct CallPeoplePanel: View {
 
             ScrollView {
                 VStack(spacing: 2) {
-                    row(actor: me, name: "\(me.resolvedDisplayName) (you)", isAudioOn: !call.isMuted, isVideoOn: call.isCameraOn, isHandRaised: call.isHandRaised, isSpeaking: call.isSpeaking, mute: nil)
+                    row(actor: me, name: String(localized: "\(me.resolvedDisplayName) (you)", comment: "Your own row in the list of who is in the call; %@ is your name"), isAudioOn: !call.isMuted, isVideoOn: call.isCameraOn, isHandRaised: call.isHandRaised, isSpeaking: call.isSpeaking, mute: nil)
                     ForEach(ordered) { participant in
                         row(
                             actor: participant.actor,

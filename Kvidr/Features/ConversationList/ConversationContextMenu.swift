@@ -23,20 +23,23 @@ enum ConversationMenuEntry {
         var entries: [ConversationMenuEntry] = []
 
         if conversation.hasCall {
-            entries.append(.action("Join Call in Browser") { model.openInBrowser(conversation) })
+            entries.append(.action(String(localized: "Join Call in Browser")) { model.openInBrowser(conversation) })
             entries.append(.divider)
         }
 
-        entries.append(.action(conversation.isFavorite ? "Remove from Favourites" : "Add to Favourites") {
+        entries.append(.action(conversation.isFavorite ? String(localized: "Remove from Favourites") : String(localized: "Add to Favourites")) {
             model.toggleFavorite(conversation)
         })
         if model.hasArchive {
-            entries.append(.action(conversation.isArchived ? "Unarchive" : "Archive") {
+            let title = conversation.isArchived
+                ? String(localized: "Unarchive", comment: "Menu item: take the conversation out of the archive")
+                : String(localized: "Archive", comment: "Menu item (verb): archive the conversation")
+            entries.append(.action(title) {
                 model.toggleArchived(conversation)
             })
         }
         if model.hasMarkUnread {
-            entries.append(.action("Mark as Unread", isEnabled: conversation.unreadMessages == 0) {
+            entries.append(.action(String(localized: "Mark as Unread"), isEnabled: conversation.unreadMessages == 0) {
                 model.markUnread(conversation)
             })
         }
@@ -48,8 +51,8 @@ enum ConversationMenuEntry {
                 }
             }
             if !tags.isEmpty { tags.append(.divider) }
-            tags.append(.action("New Tag…") { model.beginNewTag(for: conversation) })
-            entries.append(.submenu("Tags", tags))
+            tags.append(.action(String(localized: "New Tag…", comment: "Menu item: make a new sidebar tag")) { model.beginNewTag(for: conversation) })
+            entries.append(.submenu(String(localized: "Tags", comment: "Submenu: the conversation's sidebar tags"), tags))
         }
 
         entries.append(.divider)
@@ -64,19 +67,21 @@ enum ConversationMenuEntry {
         }
         if model.hasImportant {
             notifications.append(.action(
-                "Important", subtitle: "Notifies you even on Do Not Disturb", isChecked: conversation.isImportant
+                String(localized: "Important", comment: "Menu item: mark the conversation important"),
+                subtitle: String(localized: "Notifies you even on Do Not Disturb"), isChecked: conversation.isImportant
             ) { model.toggleImportant(conversation) })
         }
         if model.hasSensitive {
             notifications.append(.action(
-                "Sensitive", subtitle: "Hides messages from the sidebar and notifications", isChecked: conversation.isSensitive
+                String(localized: "Sensitive", comment: "Menu item: mark the conversation sensitive"),
+                subtitle: String(localized: "Hides messages from the sidebar and notifications"), isChecked: conversation.isSensitive
             ) { model.toggleSensitive(conversation) })
         }
-        entries.append(.submenu("Notifications", notifications))
+        entries.append(.submenu(String(localized: "Notifications"), notifications))
 
         entries.append(.divider)
-        entries.append(.action("Copy Link") { model.copyLink(to: conversation) })
-        entries.append(.action("Open in Nextcloud") { model.openInBrowser(conversation) })
+        entries.append(.action(String(localized: "Copy Link")) { model.copyLink(to: conversation) })
+        entries.append(.action(String(localized: "Open in Nextcloud")) { model.openInBrowser(conversation) })
         return entries
     }
 

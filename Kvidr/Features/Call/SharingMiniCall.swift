@@ -147,7 +147,7 @@ private struct MiniCallView: View {
         } caption: {
             (call.participants.contains(where: \.isHandRaised) ? "✋ " : "")
                 + (call.participants.count > 1
-                    ? "\(shown?.name ?? call.participants[0].name) +\(call.participants.count - 1)"
+                    ? String(localized: "\(shown?.name ?? call.participants[0].name) +\(call.participants.count - 1)", comment: "Someone in the call, and how many others are in it too")
                     : call.participants.first?.name ?? call.conversation.displayName)
         }
     }
@@ -160,17 +160,17 @@ private struct MiniCallView: View {
                 ActorAvatarView(actor: me, size: 64)
             }
         } caption: {
-            call.isMuted ? "You · muted" : "You"
+            call.isMuted ? String(localized: "You · muted", comment: "Caption on your own picture in the mini call") : String(localized: "You", comment: "Caption on your own picture in the mini call")
         }
     }
 
     private var controls: some View {
         HStack(spacing: 8) {
-            MiniButton(symbol: call.isMuted ? "mic.slash.fill" : "mic.fill", help: call.isMuted ? "Unmute" : "Mute", isActive: call.isMuted, action: call.toggleMute)
-            MiniButton(symbol: call.isCameraOn ? "video.fill" : "video.slash.fill", help: call.isCameraOn ? "Turn camera off" : "Turn camera on", isActive: call.isCameraOn, action: call.toggleCamera)
-            MiniButton(symbol: "rectangle.slash", help: "Stop sharing your screen", tint: .green, action: call.stopSharingScreen)
-            MiniButton(symbol: "arrow.up.left.and.arrow.down.right", help: "Back to kvidr", action: onReturn)
-            MiniButton(symbol: "phone.down.fill", help: "End the call", tint: .red, action: onLeave)
+            MiniButton(symbol: call.isMuted ? "mic.slash.fill" : "mic.fill", help: call.isMuted ? String(localized: "Unmute") : String(localized: "Mute"), isActive: call.isMuted, action: call.toggleMute)
+            MiniButton(symbol: call.isCameraOn ? "video.fill" : "video.slash.fill", help: call.isCameraOn ? String(localized: "Turn camera off") : String(localized: "Turn camera on"), isActive: call.isCameraOn, action: call.toggleCamera)
+            MiniButton(symbol: "rectangle.slash", help: String(localized: "Stop sharing your screen"), tint: .green, action: call.stopSharingScreen)
+            MiniButton(symbol: "arrow.up.left.and.arrow.down.right", help: String(localized: "Back to kvidr"), action: onReturn)
+            MiniButton(symbol: "phone.down.fill", help: String(localized: "End the call"), tint: .red, action: onLeave)
         }
     }
 }

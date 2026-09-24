@@ -85,15 +85,15 @@ struct SettingsPage: View {
 
     private var actions: some View {
         HStack(spacing: 16) {
-            InspectorAction(symbol: "safari", label: "Edit Profile in Nextcloud") {
+            InspectorAction(symbol: "safari", label: String(localized: "Edit Profile in Nextcloud")) {
                 NSWorkspace.shared.open(profile.links.personalInfo)
             }
             if profile.profile?.isProfileEnabled == true {
-                InspectorAction(symbol: "person.crop.circle", label: "View Public Profile") {
+                InspectorAction(symbol: "person.crop.circle", label: String(localized: "View Public Profile")) {
                     NSWorkspace.shared.open(profile.links.publicProfile)
                 }
             }
-            InspectorAction(symbol: "lock.shield", label: "Security and Devices in Nextcloud") {
+            InspectorAction(symbol: "lock.shield", label: String(localized: "Security and Devices in Nextcloud")) {
                 NSWorkspace.shared.open(profile.links.security)
             }
         }
@@ -102,29 +102,35 @@ struct SettingsPage: View {
     /// The High Performance Backend, in words.
     private var liveConnection: String {
         switch app.signalingState {
-        case .idle: "Not started"
-        case .connecting: "Connecting…"
-        case .connected: "Connected"
-        case .reconnecting: "Reconnecting…"
-        case .unavailable(let reason): "Not available — \(reason.prefix(1).lowercased() + reason.dropFirst())"
+        case .idle: String(localized: "Not started", comment: "Live connection (High Performance Backend) state in Settings")
+        case .connecting: String(localized: "Connecting…", comment: "Live connection state in Settings")
+        case .connected: String(localized: "Connected", comment: "Connection state in Settings")
+        case .reconnecting: String(localized: "Reconnecting…", comment: "Live connection state in Settings")
+        case .unavailable(let reason):
+            String(localized: "Not available — \(reason.prefix(1).lowercased() + reason.dropFirst())", comment: "Live connection state in Settings; %@ is the reason, starting in lowercase")
         }
     }
 
     private var thisMac: some View {
         let account = profile.session.account
-        return InspectorCard(title: "This Mac") {
-            InspectorRow(label: "Server", value: account.server.displayString)
-            InspectorRow(label: "Account", value: account.userID)
-            InspectorRow(label: "Connection", value: app.connection == .offline ? "Offline" : "Connected")
-            InspectorRow(label: "Live connection", value: liveConnection)
+        return InspectorCard(title: String(localized: "This Mac", comment: "Settings card heading: this Mac's sign-in")) {
+            InspectorRow(label: String(localized: "Server", comment: "Settings row label"), value: account.server.displayString)
+            InspectorRow(label: String(localized: "Account", comment: "Settings row label: the user ID"), value: account.userID)
             InspectorRow(
-                label: "Versions",
-                value: "Nextcloud \(account.capabilities.serverVersion.string) · Talk \(account.capabilities.talkVersion ?? "unknown")"
+                label: String(localized: "Connection", comment: "Settings row label"),
+                value: app.connection == .offline
+                    ? String(localized: "Offline", comment: "Connection state in Settings")
+                    : String(localized: "Connected", comment: "Connection state in Settings")
             )
-            InspectorActionRow(title: "Manage Devices in Nextcloud…") {
+            InspectorRow(label: String(localized: "Live connection", comment: "Settings row label: the High Performance Backend connection"), value: liveConnection)
+            InspectorRow(
+                label: String(localized: "Versions", comment: "Settings row label: Nextcloud and Talk versions"),
+                value: "Nextcloud \(account.capabilities.serverVersion.string) · Talk \(account.capabilities.talkVersion ?? String(localized: "unknown", comment: "Talk version the server did not report"))"
+            )
+            InspectorActionRow(title: String(localized: "Manage Devices in Nextcloud…")) {
                 NSWorkspace.shared.open(profile.links.security)
             }
-            InspectorActionRow(title: "Remove Account…", role: .destructive) {
+            InspectorActionRow(title: String(localized: "Remove Account…"), role: .destructive) {
                 isConfirmingRemoval = true
             }
         }
@@ -199,8 +205,8 @@ private struct PictureControl: View {
         panel.allowedContentTypes = [.image]
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
-        panel.prompt = "Choose"
-        panel.message = "Choose a picture for your Nextcloud profile"
+        panel.prompt = String(localized: "Choose", comment: "Open panel button: use the selected picture")
+        panel.message = String(localized: "Choose a picture for your Nextcloud profile")
         guard panel.runModal() == .OK, let url = panel.url else { return }
         prepare { () async throws(TalkError) -> Data in try await ProfileModel.preparePicture(from: url) }
     }
@@ -303,7 +309,7 @@ private struct StatusCard: View {
     @FocusState private var isTextFocused: Bool
 
     var body: some View {
-        InspectorCard(title: "Status") {
+        InspectorCard(title: String(localized: "Status", comment: "Settings card heading: your online status and status message")) {
             HStack {
                 Text("Availability")
                     .font(.system(size: 13))
@@ -455,7 +461,7 @@ private struct EmojiPickerButton: View {
 
     var body: some View {
         ZStack {
-            TextField("", text: $catcher)
+            TextField(text: $catcher) { EmptyView() }
                 .textFieldStyle(.plain)
                 .frame(width: 1, height: 1)
                 .opacity(0.01)
@@ -496,7 +502,7 @@ private struct EmojiPickerButton: View {
 /// A spinner while saving, a checkmark once saved, the reason if it wasn't.
 private struct SaveIndicator: View {
     let save: ProfileModel.Save
-    let savedText: String
+    let savedText: LocalizedStringKey
 
     var body: some View {
         switch save {
@@ -526,7 +532,7 @@ private struct ProfileCard: View {
     let profile: ProfileModel
 
     var body: some View {
-        InspectorCard(title: "Profile") {
+        InspectorCard(title: String(localized: "Profile", comment: "Settings card heading: your Nextcloud profile fields")) {
             switch profile.profileLoad {
             case .failed(let reason):
                 VStack(alignment: .leading, spacing: 4) {
@@ -536,7 +542,7 @@ private struct ProfileCard: View {
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
                 }
-                InspectorActionRow(title: "Try Again") { Task { await profile.load() } }
+                InspectorActionRow(title: String(localized: "Try Again")) { Task { await profile.load() } }
             default:
                 if let loaded = profile.profile {
                     if loaded.fields.isEmpty {
@@ -551,7 +557,7 @@ private struct ProfileCard: View {
                     ProgressView().controlSize(.small).frame(maxWidth: .infinity)
                 }
             }
-            InspectorActionRow(title: "Edit in Nextcloud…") {
+            InspectorActionRow(title: String(localized: "Edit in Nextcloud…")) {
                 NSWorkspace.shared.open(profile.links.personalInfo)
             }
         }

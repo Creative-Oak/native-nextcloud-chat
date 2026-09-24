@@ -18,6 +18,9 @@ xcodebuild build \
     -quiet \
     CODE_SIGNING_ALLOWED=NO
 
+echo "==> Every string in the catalog, and translated"
+./Tools/check_translations.sh
+
 echo
 echo "All checks have passed, including the macOS build of the app."
 echo "How Liquid Glass renders, and every interaction with a real server, still need your eyes."
