@@ -1,4 +1,4 @@
-# Your own photos go here and stay on your Mac — see README.md.
+# Downloaded stock photos (see media.json) and your own replacements stay on your Mac.
 media/*
 !media/avatars/
 media/avatars/*
@@ -6,3 +6,5 @@ media/avatars/*
 !media/avatars/.gitkeep
 backdate.sql
 __pycache__/
+.seed-state.json
+.seed-cookies/

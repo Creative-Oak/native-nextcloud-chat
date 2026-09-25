@@ -3,13 +3,21 @@
   "me": "freja",
 
   "users": {
-    "freja": { "name": "Freja Holm",      "status": "online", "statusIcon": "☕️", "statusMessage": "Heads down on the launch" },
-    "sofia": { "name": "Sofia Marín",     "status": "online" },
-    "jonas": { "name": "Jonas Berg",      "status": "away",   "statusIcon": "🚲", "statusMessage": "Back after lunch" },
-    "amara": { "name": "Amara Okafor",    "status": "online", "statusIcon": "🎨", "statusMessage": "Designing" },
-    "leo":   { "name": "Leo Nakamura",    "status": "dnd",    "statusIcon": "🎧", "statusMessage": "Focus time" },
-    "ines":  { "name": "Inês Duarte",     "status": "online" },
-    "theo":  { "name": "Theo Lindqvist",  "status": "offline" }
+    "freja":  { "name": "Freja Holm",     "status": "online", "statusIcon": "☕️", "statusMessage": "Heads down on the launch" },
+    "sofia":  { "name": "Sofia Marín",    "status": "online" },
+    "jonas":  { "name": "Jonas Berg",     "status": "away",   "statusIcon": "🚲", "statusMessage": "Back after lunch" },
+    "amara":  { "name": "Amara Okafor",   "status": "online", "statusIcon": "🎨", "statusMessage": "Designing" },
+    "leo":    { "name": "Leo Nakamura",   "status": "dnd",    "statusIcon": "🎧", "statusMessage": "Focus time" },
+    "ines":   { "name": "Inês Duarte",    "status": "online" },
+    "theo":   { "name": "Theo Lindqvist", "status": "offline",
+                "absence": { "from": "-2d", "until": "+6d", "status": "🏝️ On holiday",
+                             "message": "Hiking in the Dolomites with patchy signal. For anything launch-related, ask Jonas.",
+                             "replacement": "jonas" } },
+    "noah":   { "name": "Noah Fischer",   "status": "online" },
+    "priya":  { "name": "Priya Raman",    "status": "online", "statusIcon": "📞", "statusMessage": "Customer calls all day" },
+    "kwame":  { "name": "Kwame Mensah",   "status": "away" },
+    "elena":  { "name": "Elena Rossi",    "status": "online" },
+    "olivia": { "name": "Olivia Brandt",  "status": "online", "statusIcon": "✈️", "statusMessage": "Berlin → Copenhagen" }
   },
 
   "conversations": [
@@ -20,25 +28,42 @@
       "emoji": "🚀", "color": "0082c9",
       "description": "Everything for the April release: copy, builds, press, and the party.",
       "owner": "freja",
-      "members": ["sofia", "jonas", "amara", "leo", "ines"],
+      "members": ["sofia", "jonas", "amara", "leo", "ines", "noah"],
       "favorite": true,
       "unread": 0,
+      "scheduled": [
+        { "at": "+4d 09:00", "text": "🚀 **We're live!** Thank you all — this one was a team effort. Party details below 👇" }
+      ],
       "messages": [
-        { "at": "-1d 16:05", "from": "sofia", "text": "Press kit is **done** 🎉 Screenshots, logo pack and the fact sheet are all in the shared folder." },
-        { "from": "jonas", "text": "Amazing. I'll send it to the three outlets tomorrow morning." },
-        { "from": "freja", "text": "Thank you both — great work on this 🙌", "reactions": { "❤️": ["sofia", "amara"] } },
+        { "key": "plan", "at": "-2d 09:30", "from": "freja", "pin": true,
+          "text": "**Launch plan** 📌\n\n1. Tuesday 9:00 — blog post and App Store release\n2. 9:15 — newsletter\n3. 10:00 — social posts\n4. Friday — launch party 🎉" },
+        { "from": "jonas", "text": "Perfect, that's the order the press list expects too." },
 
-        { "at": "-95m", "from": "leo", "text": "Morning! Release candidate 3 is up on TestFlight. Changelog:\n\n- Faster launch from the local cache\n- Reactions show *who* reacted\n- Fixed the unread badge getting stuck" },
-        { "from": "amara", "text": "Installing now 👀" },
-        { "key": "icon", "from": "amara", "file": "app-icon-final.png", "caption": "Final icon, all sizes exported. Last chance for comments!" },
-        { "from": "ines", "text": "That gradient is *so* good.", "reply_to": "icon", "reactions": { "👍": ["sofia", "jonas", "freja"], "😍": ["leo"] } },
+        { "at": "-1d 16:05", "from": "sofia", "text": "Press kit is **done** 🎉 Fact sheet, screenshots and the logo pack:" },
+        { "from": "sofia", "file": "Press kit.pdf" },
+        { "from": "jonas", "text": "Amazing. I'll send it to the three outlets tomorrow morning." },
+        { "from": "freja", "text": "Thank you both — great work on this 🙌", "reactions": { "❤️": ["sofia", "amara", "noah"] } },
+
+        { "key": "rc", "at": "-95m", "from": "leo", "thread": "Release checklist",
+          "text": "Morning! RC3 is up on TestFlight. Changelog:\n\n- Faster launch from the local cache\n- Reactions show *who* reacted\n- Fixed the unread badge getting stuck" },
+        { "from": "noah", "in_thread": "rc", "text": "Signed in on a fresh Mac — all good ✅" },
+        { "from": "ines", "in_thread": "rc", "text": "Accessibility pass done. VoiceOver reads every message row correctly." },
+        { "from": "leo", "in_thread": "rc", "text": "Crash-free sessions at 99.8% 🎯" },
+        { "from": "freja", "in_thread": "rc", "text": "Let's call it. RC3 is the release build 🚢", "reactions": { "🚀": ["leo", "noah", "ines"] } },
+
+        { "key": "art", "from": "amara", "file": "launch-artwork.jpg", "caption": "Final hero artwork for the launch page. Last chance for comments!" },
+        { "from": "ines", "text": "That gradient is *so* good.", "reply_to": "art",
+          "reactions": { "👍": ["sofia", "jonas", "freja"], "😍": ["leo", "noah"] } },
         { "key": "date", "from": "jonas", "text": "Are we still locked for **Tuesday 9:00** for the launch post?" },
-        { "from": "freja", "text": "Yes — Tuesday 9:00 it is. @sofia can you schedule the newsletter for 9:15?", "reply_to": "date" },
+        { "from": "freja", "reply_to": "date",
+          "text": "Yes — Tuesday 9:00 it is. @sofia can you schedule the newsletter for 9:15?",
+          "edit": "Yes — Tuesday 9:00 it is. @sofia could you schedule the newsletter for 9:15?" },
         { "from": "sofia", "text": "On it 📬 Draft is here: https://nextcloud.com/talk/", "reactions": { "✅": ["freja"] } },
-        { "from": "leo", "text": "One more thing before we ship — the release notes still mention the old keyboard shortcut. Fixing now." },
-        { "key": "party", "from": "ines", "poll": { "question": "Launch party — where?", "options": ["Rooftop at the office", "The ramen place", "Picnic in the park"], "maxVotes": 1, "votes": { "freja": [1], "sofia": [1], "jonas": [0], "amara": [1], "leo": [2] } } },
-        { "at": "-4m", "from": "amara", "text": "Ramen it is then 🍜 I'll book a table for eight." },
-        { "from": "freja", "text": "Perfect. See you all there!", "reactions": { "🎉": ["amara", "ines", "leo"] } }
+        { "key": "party", "from": "ines",
+          "poll": { "question": "Launch party — where?", "options": ["Rooftop at the office", "The ramen place", "Picnic in the park"],
+                    "maxVotes": 1, "votes": { "freja": [1], "sofia": [1], "jonas": [0], "amara": [1], "leo": [2], "noah": [1] } } },
+        { "at": "-5m", "from": "amara", "text": "Ramen it is then 🍜 I'll book a table for eight." },
+        { "from": "freja", "text": "Perfect. See you all there!", "reactions": { "🎉": ["amara", "ines", "leo", "noah"] } }
       ]
     },
 
@@ -46,14 +71,40 @@
       "key": "sofia",
       "type": "one-to-one",
       "with": "sofia",
-      "owner": "freja",
       "unread": 2,
       "messages": [
         { "at": "-1d 11:20", "from": "freja", "text": "Do you have the latest numbers for the beta sign-ups?" },
         { "from": "sofia", "text": "2,340 as of this morning — up 18% on last week 📈" },
-        { "from": "freja", "text": "That's brilliant. Let's put it in the launch post." },
-        { "at": "-12m", "from": "sofia", "text": "Newsletter is scheduled for Tuesday 9:15 ✅" },
-        { "from": "sofia", "text": "Want to grab a coffee before the all-hands?" }
+        { "key": "numbers", "from": "freja", "text": "That's brilliant. Let's put it in the launch post.", "remind": "+1d 09:00" },
+        { "at": "-10m", "from": "sofia",
+          "voice": "Hey Freja! Quick one. The newsletter is scheduled for Tuesday at nine fifteen, and I added the beta numbers to the intro. Let me know if you want to change anything before then." },
+        { "from": "sofia", "text": "Want to grab a coffee before the all-hands? ☕️" }
+      ]
+    },
+
+    {
+      "key": "watercooler",
+      "type": "group",
+      "name": "Watercooler",
+      "emoji": "☕️", "color": "a0522d",
+      "description": "Photos, cake alerts, and everything that isn't work.",
+      "owner": "olivia",
+      "members": "everyone",
+      "unread": 9,
+      "messages": [
+        { "at": "-1d 12:10", "from": "noah", "file": "coffee.jpg", "caption": "The new espresso machine has landed ☕️" },
+        { "from": "kwame", "text": "Best news all week.", "reactions": { "💯": ["elena", "priya", "freja"] } },
+        { "from": "freja", "text": "Finally! The old one sounded like a jet engine 😄" },
+
+        { "at": "-50m", "from": "theo", "file": "dolomites.jpg", "caption": "Greetings from the Dolomites 🏔️ Signal is terrible, views are not." },
+        { "from": "priya", "text": "Wow 😍", "reactions": { "😍": ["olivia", "elena"] } },
+        { "from": "elena", "text": "That water can't be real." },
+        { "from": "kwame", "text": "Theo, are you taking questions about the retry logic from there? 😇" },
+        { "from": "theo", "text": "Absolutely not 🙃", "reactions": { "😂": ["kwame", "noah", "priya", "leo", "olivia"] } },
+        { "at": "-18m", "from": "olivia", "file": "cake.jpg", "caption": "🎂 Cake in the kitchen — happy birthday @elena!" },
+        { "from": "noah", "text": "Happy birthday Elena! 🎉" },
+        { "from": "priya", "text": "Happy birthday!! 🥳" },
+        { "from": "elena", "text": "You're all very sweet. Especially the cake. 🍰", "reactions": { "❤️": ["olivia", "noah", "priya", "kwame"] } }
       ]
     },
 
@@ -64,16 +115,38 @@
       "emoji": "🎨", "color": "e9322d",
       "description": "Share work in progress. Be kind, be specific.",
       "owner": "amara",
-      "members": ["freja", "leo", "ines", "theo"],
+      "members": ["freja", "leo", "ines", "theo", "elena"],
       "unread": 4,
+      "liveCall": ["amara", "ines", "elena"],
       "messages": [
         { "at": "-1d 14:00", "from": "amara", "text": "Weekly crit is at 15:00 — drop anything you want eyes on in here first." },
-        { "from": "theo", "file": "onboarding-sketch.png", "caption": "Onboarding, take two. Fewer steps, bigger type." },
+        { "from": "theo", "file": "onboarding-sketches.jpg", "caption": "Onboarding, take two. Fewer steps, bigger type." },
         { "from": "freja", "text": "Much calmer than v1. Could the second screen lose the illustration?", "reactions": { "💯": ["amara"] } },
-        { "at": "-35m", "from": "ines", "text": "New sidebar spacing is in the Figma file — tighter rows, same tap targets." },
+        { "at": "-40m", "from": "ines", "file": "design-system.jpg", "caption": "New sidebar spacing is in the component library — tighter rows, same click targets." },
         { "from": "leo", "text": "Looks great on the 13\" too." },
         { "from": "amara", "text": "@freja could you take a look at the empty states before 3? 🙏" },
-        { "from": "theo", "text": "I'll bring snacks 🥐" }
+        { "from": "elena", "text": "Jumping on a quick call to go through them now — come join!" }
+      ]
+    },
+
+    {
+      "key": "announcements",
+      "type": "group",
+      "name": "Announcements",
+      "emoji": "📣", "color": "1e3a5f",
+      "description": "Company news. Only moderators can post here.",
+      "owner": "olivia",
+      "members": "everyone",
+      "readOnly": true,
+      "unread": 1,
+      "messages": [
+        { "key": "offsite", "at": "-3d 08:30", "from": "olivia", "pin": true,
+          "text": "**Autumn offsite** 🍂 is confirmed for 14–15 October in Aarhus. Travel and hotel are booked for everyone — details in your inbox.",
+          "reactions": { "🎉": ["freja", "sofia", "noah", "priya", "kwame"], "🙌": ["amara", "elena"] } },
+        { "from": "olivia", "file": "offsite.jpg", "caption": "Last year's, for the nostalgic 📸" },
+        { "at": "-1h", "from": "olivia",
+          "text": "@all Welcome **Priya Raman** to the team! 👋 Priya joins as Head of Customer Success. Say hi in #Watercooler.",
+          "reactions": { "👋": ["noah", "kwame", "elena", "jonas", "sofia"], "❤️": ["amara", "ines"] } }
       ]
     },
 
@@ -81,13 +154,13 @@
       "key": "jonas",
       "type": "one-to-one",
       "with": "jonas",
-      "owner": "freja",
       "unread": 0,
       "messages": [
         { "at": "-1d 09:40", "from": "jonas", "text": "The journalist from the tech podcast wants a 20-minute call next week." },
         { "from": "freja", "text": "Happy to! Wednesday afternoon works best for me." },
         { "from": "jonas", "text": "Booked for Wednesday 14:00 👍" },
-        { "at": "-2h", "from": "freja", "text": "Thanks for sorting the press list, by the way." },
+        { "at": "-150m", "call": { "with": ["freja", "jonas"], "minutes": 23 } },
+        { "from": "freja", "text": "Thanks for walking me through the press list — that helped a lot." },
         { "from": "jonas", "text": "Any time 🙂" }
       ]
     },
@@ -98,16 +171,32 @@
       "name": "Engineering",
       "emoji": "🛠️", "color": "46ba61",
       "owner": "leo",
-      "members": ["freja", "jonas", "theo"],
+      "members": ["freja", "jonas", "theo", "noah", "kwame"],
       "favorite": true,
       "unread": 0,
+      "scheduled": [
+        { "at": "+3d 09:30", "text": "Reminder: release retro at 10:00 today. Bring one thing that went well and one we should change." }
+      ],
       "messages": [
         { "at": "-2d 10:12", "from": "leo", "text": "Heads up: the build machine gets its update tonight, so expect CI to be slow for an hour." },
-        { "from": "theo", "text": "Found the scrolling hitch. We were re-measuring every row on each new message:" },
-        { "from": "theo", "text": "```swift\n// Before\nrows.forEach { $0.invalidateLayout() }\n\n// After\nrows.last?.invalidateLayout()\n```" },
-        { "from": "freja", "text": "Ha, nice catch! That explains the stutter on long threads.", "reactions": { "🚀": ["leo", "jonas"] } },
+        { "key": "fix", "from": "kwame", "text": "Found the scrolling hitch. We were re-measuring every row on each new message:" },
+        { "from": "kwame", "text": "```swift\n// Before\nrows.forEach { $0.invalidateLayout() }\n\n// After: only the row that changed\nrows.last?.invalidateLayout()\n```" },
+        { "from": "freja", "text": "Ha, nice catch! That explains the stutter on long threads.", "reactions": { "🚀": ["leo", "jonas", "noah"] } },
+        { "from": "noah", "text": "> only the row that changed\n\nThis is also why typing felt slow in big groups. Two birds, one stone.", "remind": "+1d 10:00" },
         { "at": "-3h", "from": "leo", "text": "RC3 is signed and uploaded. Crash-free sessions at **99.8%** 🎯" },
         { "from": "jonas", "text": "Ship it! 🚢" }
+      ]
+    },
+
+    {
+      "key": "theo",
+      "type": "one-to-one",
+      "with": "theo",
+      "unread": 0,
+      "messages": [
+        { "at": "-3d 17:45", "from": "theo", "text": "I'm off from tomorrow — Jonas has the keys to the release pipeline 🔑" },
+        { "from": "freja", "text": "Have a wonderful trip! Don't check Talk 😄" },
+        { "from": "theo", "text": "No promises 😅", "reactions": { "😂": ["freja"] } }
       ]
     },
 
@@ -117,14 +206,15 @@
       "name": "Friday lunch",
       "emoji": "🍜", "color": "f0a830",
       "owner": "ines",
-      "members": ["freja", "sofia", "jonas", "amara", "leo", "theo"],
+      "members": ["freja", "sofia", "jonas", "amara", "leo", "kwame"],
       "unread": 0,
       "messages": [
-        { "at": "-3d 11:02", "from": "ines", "text": "Who's in for Friday lunch? 🥗" },
+        { "at": "-3d 11:02", "from": "ines", "text": "Who's in for Friday lunch? 🥢" },
         { "from": "sofia", "text": "Me!" },
-        { "from": "theo", "text": "Count me in" },
-        { "from": "freja", "text": "Yes please — somewhere with outdoor seating?" },
-        { "from": "ines", "text": "Outdoor seating it is ☀️", "reactions": { "☀️": ["sofia", "freja", "theo"] } }
+        { "from": "kwame", "text": "Count me in" },
+        { "from": "ines", "location": { "name": "Ramen Hachi", "latitude": 55.6795, "longitude": 12.5781 } },
+        { "from": "ines", "file": "ramen.jpg", "caption": "This is the one I keep telling you about." },
+        { "from": "freja", "text": "Sold. See you there at 12 😋", "reactions": { "🍜": ["sofia", "ines", "kwame", "amara"] } }
       ]
     },
 
@@ -135,9 +225,35 @@
       "owner": "amara",
       "unread": 0,
       "messages": [
-        { "at": "-4d 16:30", "from": "amara", "file": "moodboard.png", "caption": "Moodboard for the website refresh" },
+        { "at": "-4d 16:30", "from": "amara", "file": "moodboard.jpg", "caption": "Moodboard for the website refresh" },
         { "from": "freja", "text": "Love the warm tones. Let's go with this direction." },
         { "from": "amara", "text": "🙌" }
+      ]
+    },
+
+    {
+      "key": "notes",
+      "type": "note-to-self",
+      "unread": 0,
+      "messages": [
+        { "at": "-5d 08:15", "from": "freja", "text": "**Launch week**\n\n- Book the ramen place\n- Podcast prep: three stories about the beta\n- Thank-you notes to the beta testers" },
+        { "from": "freja", "text": "Wi-Fi at the Aarhus hotel: `offsite-2026` 🔑" }
+      ]
+    },
+
+    {
+      "key": "beta",
+      "type": "public",
+      "name": "Beta feedback",
+      "emoji": "🧪", "color": "0f9d9a",
+      "description": "Open to anyone with the link. Tell us what you think!",
+      "owner": "priya",
+      "members": ["freja", "noah", "kwame"],
+      "unread": 0,
+      "messages": [
+        { "at": "-6d 13:00", "from": "priya", "text": "Welcome to the beta feedback room! 👋 Anything goes: bugs, ideas, praise." },
+        { "from": "noah", "text": "Keyboard navigation in the sidebar is *chef's kiss* ⌨️" },
+        { "from": "freja", "text": "Thank you! ⌘K is my favourite too." }
       ]
     },
 
@@ -147,7 +263,7 @@
       "name": "Book club",
       "emoji": "📚", "color": "7b4ce0",
       "owner": "theo",
-      "members": ["freja", "ines", "amara"],
+      "members": ["freja", "ines", "amara", "elena"],
       "archived": true,
       "unread": 0,
       "messages": [

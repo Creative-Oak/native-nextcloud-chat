@@ -36,5 +36,10 @@ occ config:system:set auth.bruteforce.protection.enabled --value=false --type=bo
 # Keep Talk's own conversations ("Talk updates", sample conversations) out of the sidebar.
 occ config:app:set spreed changelog --value=no >/dev/null
 occ config:app:set spreed create_samples --value=no >/dev/null
+# Nothing in the browser between you and approving kvidr at sign-in.
+occ app:disable firstrunwizard >/dev/null 2>&1 || true
 
 python3 seed.py "$@"
+
+# The scenario has a call in progress; Talk ends it unless someone keeps checking in.
+python3 seed.py --keep-call
