@@ -1,0 +1,7 @@
+# Your own photos go here and stay on your Mac — see README.md.
+media/*
+!media/avatars/
+media/avatars/*
+!media/.gitkeep
+!media/avatars/.gitkeep
+backdate.sql

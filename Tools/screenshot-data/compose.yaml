@@ -1,0 +1,36 @@
+# A throwaway Nextcloud with Talk, for filling kvidr with screenshot data.
+# Everything lives in named volumes: `docker compose down -v` gets you back to nothing.
+name: kvidr-screenshots
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: nextcloud
+      POSTGRES_USER: nextcloud
+      POSTGRES_PASSWORD: nextcloud
+    volumes:
+      - db:/var/lib/postgresql/data
+
+  app:
+    image: nextcloud:stable
+    restart: unless-stopped
+    depends_on:
+      - db
+    ports:
+      - "8080:80"
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_DB: nextcloud
+      POSTGRES_USER: nextcloud
+      POSTGRES_PASSWORD: nextcloud
+      NEXTCLOUD_ADMIN_USER: admin
+      NEXTCLOUD_ADMIN_PASSWORD: kvidr-screenshots-admin
+      NEXTCLOUD_TRUSTED_DOMAINS: localhost 127.0.0.1
+    volumes:
+      - nextcloud:/var/www/html
+
+volumes:
+  db:
+  nextcloud:

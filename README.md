@@ -28,6 +28,9 @@ and `Sources/TalkCore/` are picked up automatically — there is no file list to
 `./Tools/preflight.sh` is the check to run before pushing: that the core imports no UI
 framework, the core's tests, and a build of the app. CI runs the same on macOS.
 
+For screenshots, `./Tools/screenshot-data/setup.sh` starts a local Nextcloud in Docker,
+filled with made-up conversations. See `Tools/screenshot-data/README.md`.
+
 The non-UI half of the app is also a Swift package, so it builds and tests from the
 command line:
 
