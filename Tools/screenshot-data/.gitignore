@@ -5,3 +5,4 @@ media/avatars/*
 !media/.gitkeep
 !media/avatars/.gitkeep
 backdate.sql
+__pycache__/
