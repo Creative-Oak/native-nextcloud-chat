@@ -18,14 +18,20 @@ docker compose up -d
 
 occ() { docker compose exec -T -u www-data app php occ "$@"; }
 
-echo "Waiting for Nextcloud to finish installing…"
-for _ in $(seq 1 120); do
-    if occ status --output=json 2>/dev/null | grep -q '"installed":true'; then break; fi
+# Output is captured before it's searched: with pipefail, `occ … | grep -q` can fail when
+# grep stops reading early and occ dies writing the rest.
+installed() { local status; status=$(occ status --output=json 2>/dev/null || true); [[ "$status" == *'"installed":true'* ]]; }
+
+echo "Waiting for Nextcloud to finish installing (a few minutes the first time)…"
+for _ in $(seq 1 150); do
+    installed && break
     sleep 2
 done
-occ status --output=json | grep -q '"installed":true' || { echo "Nextcloud did not come up." >&2; exit 1; }
+installed || { echo "Nextcloud did not come up. \`docker compose logs app\` says why." >&2; exit 1; }
 
-if ! occ app:list --output=json | grep -q '"spreed"'; then
+apps=$(occ app:list --output=json)
+if [[ "$apps" != *'"spreed"'* ]]; then
+    echo "Installing Talk…"
     occ app:install spreed
 fi
 occ app:enable spreed >/dev/null

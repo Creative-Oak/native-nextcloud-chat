@@ -189,11 +189,21 @@ def fetch_media() -> None:
         target = MEDIA / name
         target.parent.mkdir(parents=True, exist_ok=True)
         try:
-            request = urllib.request.Request(url, headers={"User-Agent": "kvidr-screenshot-seed"})
-            with urllib.request.urlopen(request, timeout=60) as response:
-                target.write_bytes(response.read())
-        except (urllib.error.URLError, TimeoutError) as error:
+            download(url, target)
+        except (OSError, subprocess.CalledProcessError) as error:
+            target.unlink(missing_ok=True)
             warn(f"couldn't download {name} ({error}); a placeholder will stand in")
+
+
+def download(url: str, target: Path) -> None:
+    # curl where there is one: python.org's Python on macOS has no certificates until its
+    # "Install Certificates" step has been run, and fails every HTTPS request until then.
+    if shutil.which("curl"):
+        subprocess.run(["curl", "-fsSL", "--max-time", "60", "-o", str(target), url], check=True)
+        return
+    request = urllib.request.Request(url, headers={"User-Agent": "kvidr-screenshot-seed"})
+    with urllib.request.urlopen(request, timeout=60) as response:
+        target.write_bytes(response.read())
 
 
 def placeholder_png(name: str, width: int = 960, height: int = 640) -> bytes:
@@ -266,7 +276,10 @@ def voice_recording(text: str) -> tuple[str, bytes]:
     if shutil.which("say") and shutil.which("afconvert"):
         with tempfile.TemporaryDirectory() as folder:
             aiff, m4a = Path(folder) / "voice.aiff", Path(folder) / "voice.m4a"
-            subprocess.run(["say", "-o", str(aiff), text], check=True)
+            # A named voice: with a Siri voice as the system voice, `say -o` can write silence.
+            voice = subprocess.run(["say", "-v", "Samantha", "-o", str(aiff), text])
+            if voice.returncode != 0 or not aiff.exists() or aiff.stat().st_size < 10_000:
+                subprocess.run(["say", "-o", str(aiff), text], check=True)
             subprocess.run(["afconvert", "-f", "m4af", "-d", "aac", str(aiff), str(m4a)], check=True)
             return ".m4a", m4a.read_bytes()
     return ".wav", murmur_wav(len(text.split()) * 0.33)

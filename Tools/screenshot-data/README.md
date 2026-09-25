@@ -27,6 +27,10 @@ Then in kvidr:
 2. Sign in to `http://localhost:8080`. The browser opens Nextcloud's login page: sign in
    as **`freja`** / **`kvidr-screenshots-2026`** and approve the app.
 
+If kvidr won't connect to `localhost`, use `http://127.0.0.1:8080` instead; the server
+accepts both. If something else on your Mac already uses port 8080, change `"8080:80"` in
+`compose.yaml` and pass the same port to `seed.py` with `--server`.
+
 Don't join the call in *Design crit* from kvidr. The people in it are only the script
 checking in for them, so there's no audio or video to connect to.
 
