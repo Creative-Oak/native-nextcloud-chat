@@ -116,6 +116,23 @@
         }
       }
     },
+    "%@ added %@" : {
+      "comment" : "Collapsed events: someone added several people",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ added %2$@"
+          }
+        },
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ tilføjede %2$@"
+          }
+        }
+      }
+    },
     "%@ and %@ are typing…" : {
       "comment" : "Each %@ is a name",
       "localizations" : {
@@ -303,8 +320,41 @@
         }
       }
     },
+    "%@ joined and left the call" : {
+      "comment" : "Collapsed call events: one or more names",
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ kom og gik i opkaldet"
+          }
+        }
+      }
+    },
+    "%@ joined the call" : {
+      "comment" : "Collapsed call events: one or more names",
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ kom med i opkaldet"
+          }
+        }
+      }
+    },
     "%@ left" : {
       "comment" : "Notice in a group call: one or two names",
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ forlod opkaldet"
+          }
+        }
+      }
+    },
+    "%@ left the call" : {
+      "comment" : "Collapsed call events: one or more names",
       "localizations" : {
         "da" : {
           "stringUnit" : {
@@ -320,6 +370,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ rakte hånden op"
+          }
+        }
+      }
+    },
+    "%@ removed %@" : {
+      "comment" : "Collapsed events: someone removed several people",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ removed %2$@"
+          }
+        },
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ fjernede %2$@"
           }
         }
       }
@@ -465,6 +532,23 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$@, %2$@ and %3$@ are typing…"
+          }
+        }
+      }
+    },
+    "%@, %@ and %lld others" : {
+      "comment" : "A list of names cut short: two names, then how many more",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, %2$@ and %3$lld others"
+          }
+        },
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@, %2$@ og %3$lld andre"
           }
         }
       }
@@ -2584,6 +2668,16 @@
         }
       }
     },
+    "Collapsed" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Foldet sammen"
+          }
+        }
+      }
+    },
     "Commands" : {
       "comment" : "Command palette section heading",
       "localizations" : {
@@ -3744,6 +3838,16 @@
         }
       }
     },
+    "Expanded" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Foldet ud"
+          }
+        }
+      }
+    },
     "Favourite / unfavourite" : {
       "localizations" : {
         "da" : {
@@ -4269,6 +4373,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Skjuler beskeder i indholdsoversigten og notifikationer"
+          }
+        }
+      }
+    },
+    "Hides the events" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Skjuler hændelserne"
           }
         }
       }
@@ -7976,6 +8090,16 @@
         }
       }
     },
+    "Shows each event" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Viser hver hændelse"
+          }
+        }
+      }
+    },
     "Sign In Again" : {
       "localizations" : {
         "da" : {
@@ -10540,6 +10664,42 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "opsummering, opsummer, resumé, hvad er nyt"
+          }
+        }
+      }
+    },
+    "summary.you.object" : {
+      "comment" : "You, as the object of a sentence: “Anna added you”",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "you"
+          }
+        },
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "dig"
+          }
+        }
+      }
+    },
+    "summary.you.subject" : {
+      "comment" : "You, as the subject of a sentence: “You and Anna joined the call”",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "You"
+          }
+        },
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Du"
           }
         }
       }

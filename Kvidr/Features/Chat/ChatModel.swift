@@ -204,12 +204,16 @@ final class ChatModel {
         threadReplyCounts = MessageThread.replyCounts(in: timeline.messages + threadHistory.values)
         noticeNewThreads()
         if let openThread {
-            rows = ChatRow.build(messages: messages(inThread: openThread.id), firstUnreadMessageID: nil)
+            rows = ChatRow.build(
+                messages: messages(inThread: openThread.id), firstUnreadMessageID: nil, isMe: session.account.isMe
+            )
         } else {
             // A thread's replies live in the thread; the conversation shows its first
             // message, with the way in.
             let messages = timeline.messages.filter { $0.thread == nil || $0.isThreadRoot }
-            rows = ChatRow.build(messages: messages, firstUnreadMessageID: firstUnreadMessageID)
+            rows = ChatRow.build(
+                messages: messages, firstUnreadMessageID: firstUnreadMessageID, isMe: session.account.isMe
+            )
         }
     }
 

@@ -30,6 +30,96 @@ struct MessageGroupContext: Sendable, Equatable {
     }
 }
 
+/// Consecutive system events that read as one: everyone who came and went during a call,
+/// or the people one person added. Shown as a single line that opens to the events, the
+/// way Talk's web client does it — a call otherwise leaves a stack of "joined" and "left"
+/// lines between the messages around it.
+struct SystemMessageGroup: Sendable, Equatable {
+    /// In order, at least two.
+    let messages: [Message]
+    let summary: String
+
+    /// - Parameter locale: how names are joined ("Anna and Bo", "Anna og Bo"). Injected so
+    ///   tests don't assert whatever the machine running them is set to.
+    init(messages: [Message], isMe: (MessageActor) -> Bool = { _ in false }, locale: Locale = .current) {
+        self.messages = messages
+        self.summary = Self.summary(of: messages, isMe: isMe, locale: locale)
+    }
+
+    /// What decides which events share a line: the same key, next to each other. Nil for
+    /// anything that always stands on its own.
+    static func key(for message: Message) -> String? {
+        guard message.isSystem else { return nil }
+        let actor = "\(message.actor.kind.rawValue)/\(message.actor.id)"
+        switch message.systemMessage {
+        // Anyone's comings and goings: they are all the one call.
+        case "call_joined", "call_left": return "call"
+        // Only one person's: "Anna added Bo and Carl" has one subject.
+        case "user_added": return "user_added:\(actor)"
+        case "user_removed": return "user_removed:\(actor)"
+        default: return nil
+        }
+    }
+
+    private static func summary(of messages: [Message], isMe: (MessageActor) -> Bool, locale: Locale) -> String {
+        guard let first = messages.first else { return "" }
+        switch first.systemMessage {
+        case "call_joined", "call_left":
+            // Each person once, you first, then in the order they turned up.
+            var people: [MessageActor] = []
+            for message in messages where !people.contains(where: { same($0, message.actor) }) {
+                people.append(message.actor)
+            }
+            people = people.filter(isMe) + people.filter { !isMe($0) }
+            let who = names(people.map { isMe($0) ? you : $0.resolvedDisplayName }, locale: locale)
+            let joined = messages.contains { $0.systemMessage == "call_joined" }
+            let left = messages.contains { $0.systemMessage == "call_left" }
+            switch (joined, left) {
+            case (true, false):
+                return String(localized: "\(who) joined the call", comment: "Collapsed call events: one or more names")
+            case (false, true):
+                return String(localized: "\(who) left the call", comment: "Collapsed call events: one or more names")
+            default:
+                return String(localized: "\(who) joined and left the call", comment: "Collapsed call events: one or more names")
+            }
+        default:
+            let actor = isMe(first.actor) ? you : first.actor.resolvedDisplayName
+            var seen: Set<String> = []
+            let people = messages.compactMap { message -> String? in
+                guard let user = message.parameters["user"], seen.insert("\(user.type.rawValue)/\(user.id)").inserted
+                else { return nil }
+                let asActor = MessageActor(kind: user.type == .user ? .users : .unknown, id: user.id, displayName: user.name)
+                return isMe(asActor)
+                    ? String(localized: "summary.you.object", defaultValue: "you", comment: "You, as the object of a sentence: “Anna added you”")
+                    : asActor.resolvedDisplayName
+            }
+            let whom = names(people, locale: locale)
+            return first.systemMessage == "user_added"
+                ? String(localized: "\(actor) added \(whom)", comment: "Collapsed events: someone added several people")
+                : String(localized: "\(actor) removed \(whom)", comment: "Collapsed events: someone removed several people")
+        }
+    }
+
+    /// Its own key: the subject of a sentence, which some languages say differently from
+    /// "You" on a label (Danish: "Du", not "Dig").
+    private static var you: String {
+        String(localized: "summary.you.subject", defaultValue: "You", comment: "You, as the subject of a sentence: “You and Anna joined the call”")
+    }
+
+    /// "Anna", "Anna and Bo", "Anna, Bo and Carl" — then "Anna, Bo and 5 others".
+    private static func names(_ names: [String], locale: Locale) -> String {
+        guard names.count > 3 else { return names.formatted(.list(type: .and).locale(locale)) }
+        return String(
+            localized: "\(names[0]), \(names[1]) and \(names.count - 2) others",
+            comment: "A list of names cut short: two names, then how many more"
+        )
+    }
+
+    private static func same(_ a: MessageActor, _ b: MessageActor) -> Bool {
+        a.kind == b.kind && a.id == b.id
+    }
+}
+
 /// One row of the transcript: a message, a day divider, or the unread marker.
 ///
 /// Built once per timeline change rather than once per render — rebuilding this in every
@@ -38,6 +128,8 @@ struct MessageGroupContext: Sendable, Equatable {
 struct ChatRow: Sendable, Identifiable, Equatable {
     enum Kind: Sendable, Equatable {
         case message(Message, MessageGroupContext)
+        /// Two or more consecutive system events, summarised on one line.
+        case systemGroup(SystemMessageGroup)
         case daySeparator(Date)
         case unreadSeparator
     }
@@ -51,15 +143,29 @@ struct ChatRow: Sendable, Identifiable, Equatable {
 
     var isUnreadSeparator: Bool { kind == .unreadSeparator }
 
+    /// The events a following one could join: this row's, if it is a system event or a run of them.
+    private var collapsibleMessages: [Message]? {
+        switch kind {
+        case .message(let message, _) where message.isSystem: [message]
+        case .systemGroup(let group): group.messages
+        default: nil
+        }
+    }
+
     /// Builds the display list: day separators where the date changes, the unread marker
     /// where the user last left off, and grouping flags for each message.
     ///
     /// Invisible system messages (`message_deleted`, `reaction`, …) are dropped here — they
-    /// exist to update the cache, not to be read.
+    /// exist to update the cache, not to be read. Runs of events that say one thing together
+    /// — see `SystemMessageGroup` — become one row; a day or the unread marker splits a run.
+    ///
+    /// - Parameter isMe: whether an actor is the signed-in user, who is "You" in a summary.
     static func build(
         messages: [Message],
         firstUnreadMessageID: Int?,
-        calendar: Calendar = .current
+        calendar: Calendar = .current,
+        isMe: (MessageActor) -> Bool = { _ in false },
+        locale: Locale = .current
     ) -> [ChatRow] {
         var rows: [ChatRow] = []
         rows.reserveCapacity(messages.count + 8)
@@ -81,6 +187,18 @@ struct ChatRow: Sendable, Identifiable, Equatable {
                 rows.append(ChatRow(id: "unread-marker", kind: .unreadSeparator))
                 hasPlacedUnreadMarker = true
                 previous = nil
+            }
+
+            // Joins the run the row above started. Its id stays the first event's, so the
+            // row that was one event keeps its identity when a second arrives.
+            if let key = SystemMessageGroup.key(for: message), let last = rows.last,
+               let run = last.collapsibleMessages, SystemMessageGroup.key(for: run[0]) == key {
+                rows[rows.count - 1] = ChatRow(
+                    id: last.id,
+                    kind: .systemGroup(SystemMessageGroup(messages: run + [message], isMe: isMe, locale: locale))
+                )
+                previous = message
+                continue
             }
 
             rows.append(ChatRow(

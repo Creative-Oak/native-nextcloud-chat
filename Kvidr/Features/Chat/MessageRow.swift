@@ -440,6 +440,58 @@ private struct SystemMessageRow: View {
     }
 }
 
+/// A run of system events on one line — "Anna, Bo and Carl joined and left the call" —
+/// that opens to the events themselves.
+struct SystemMessageGroupRow: View {
+    let group: SystemMessageGroup
+    let content: (Message) -> MessageContent
+
+    @State private var isExpanded = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Button {
+                withAnimation(reduceMotion ? nil : .snappy(duration: 0.2)) { isExpanded.toggle() }
+            } label: {
+                HStack(spacing: 4) {
+                    Text(group.summary)
+                        .multilineTextAlignment(.center)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 8, weight: .semibold))
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                }
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help(timeRange)
+            .accessibilityValue(isExpanded ? Text("Expanded") : Text("Collapsed"))
+            .accessibilityHint(isExpanded ? Text("Hides the events") : Text("Shows each event"))
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 4)
+
+            if isExpanded {
+                ForEach(group.messages, id: \.localID) { message in
+                    SystemMessageRow(message: message, content: content(message))
+                        .padding(.vertical, -2)
+                }
+                .transition(.opacity)
+            }
+        }
+    }
+
+    /// When the first and the last of them happened.
+    private var timeRange: String {
+        guard let first = group.messages.first?.timestamp, let last = group.messages.last?.timestamp else { return "" }
+        let from = first.formatted(date: .abbreviated, time: .shortened)
+        let to = last.formatted(date: .omitted, time: .shortened)
+        return from.hasSuffix(to) ? from : "\(from) – \(to)"
+    }
+}
+
 /// The compact quote shown above a reply.
 struct QuotedMessageView: View {
     let parent: ParentMessage

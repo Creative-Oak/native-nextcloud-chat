@@ -121,6 +121,151 @@ struct TranscriptLayoutTests {
         #expect(ids == [1, 4, 5])
     }
 
+    // MARK: - Collapsed system events
+
+    private func systemGroups(_ rows: [ChatRow]) -> [SystemMessageGroup] {
+        rows.compactMap { if case .systemGroup(let group) = $0.kind { group } else { nil } }
+    }
+
+    @Test("A call's joins and leaves collapse into one line between the messages")
+    func collapsesCallEvents() throws {
+        let rows = ChatRow.build(
+            messages: [
+                message(1),
+                message(2, actor: "carol", at: 10, system: "call_started"),
+                message(3, actor: "carol", at: 11, system: "call_joined"),
+                message(4, actor: "dave", at: 20, system: "call_joined"),
+                message(5, actor: "carol", at: 30, system: "call_left"),
+                message(6, actor: "dave", at: 40, system: "call_left"),
+                message(7, actor: "dave", at: 41, system: "call_ended"),
+                message(8, at: 50)
+            ],
+            firstUnreadMessageID: nil, locale: enUS
+        )
+
+        #expect(rows.count == 6)   // day, 1, call_started, the run, call_ended, 8
+        let group = try #require(systemGroups(rows).first)
+        #expect(group.messages.map(\.messageID) == [3, 4, 5, 6])
+        #expect(group.summary == "Carol and Dave joined and left the call")
+        // Still a system line: the message after it starts a fresh group.
+        if case .message(_, let context) = rows[5].kind { #expect(context.showsHeader) } else { Issue.record("expected message") }
+    }
+
+    @Test("A single join stays an ordinary system line")
+    func singleEventIsNotGrouped() {
+        let rows = ChatRow.build(
+            messages: [message(1), message(2, actor: "carol", at: 10, system: "call_joined"), message(3, at: 20)],
+            firstUnreadMessageID: nil, locale: enUS
+        )
+        #expect(systemGroups(rows).isEmpty)
+        #expect(rows.compactMap { $0.message?.messageID } == [1, 2, 3])
+    }
+
+    @Test("The run keeps its first event's identity as it grows")
+    func groupIdentityIsStable() throws {
+        let joined = message(2, actor: "carol", at: 10, system: "call_joined")
+        let alone = ChatRow.build(messages: [message(1), joined], firstUnreadMessageID: nil, locale: enUS)
+        let grown = ChatRow.build(
+            messages: [message(1), joined, message(3, actor: "dave", at: 20, system: "call_joined")],
+            firstUnreadMessageID: nil, locale: enUS
+        )
+        #expect(alone.last?.id == joined.localID)
+        #expect(grown.last?.id == joined.localID)
+        #expect(try #require(systemGroups(grown).first).summary == "Carol and Dave joined the call")
+    }
+
+    @Test("Only joins or only leaves say so, each person once, and a long list is cut short")
+    func callSummaries() {
+        let left = SystemMessageGroup(messages: [
+            message(1, actor: "carol", system: "call_left"),
+            message(2, actor: "carol", at: 5, system: "call_left")
+        ], locale: enUS)
+        #expect(left.summary == "Carol left the call")
+
+        let many = SystemMessageGroup(messages: ["anna", "bo", "carl", "dora", "emil"].enumerated().map {
+            message($0.offset + 1, actor: $0.element, at: TimeInterval($0.offset), system: "call_joined")
+        }, locale: enUS)
+        #expect(many.summary == "Anna, Bo and 3 others joined the call")
+    }
+
+    @Test("You come first, as “You”")
+    func summaryNamesYou() {
+        let group = SystemMessageGroup(
+            messages: [
+                message(1, actor: "carol", system: "call_joined"),
+                message(2, actor: "alice", at: 5, system: "call_joined")
+            ],
+            isMe: { $0.id == "alice" },
+            locale: enUS
+        )
+        #expect(group.summary == "You and Carol joined the call")
+    }
+
+    @Test("One person adding several people is one line; someone else adding starts another")
+    func collapsesUserAdded() throws {
+        func added(_ id: Int, by actor: String, _ user: String) -> Message {
+            var added = message(id, actor: actor, at: TimeInterval(id), system: "user_added")
+            added.parameters = ["user": RichObject(type: .user, id: user, name: user.capitalized)]
+            return added
+        }
+        let rows = ChatRow.build(
+            messages: [added(1, by: "carol", "dave"), added(2, by: "carol", "erin"), added(3, by: "bob", "frank")],
+            firstUnreadMessageID: nil, locale: enUS
+        )
+
+        #expect(rows.count == 3)   // day, Carol's two, Bob's one
+        #expect(try #require(systemGroups(rows).first).summary == "Carol added Dave and Erin")
+        #expect(rows.last?.message?.messageID == 3)
+    }
+
+    @Test("Different kinds of event don't share a line")
+    func differentEventsDontCollapse() {
+        let rows = ChatRow.build(
+            messages: [
+                message(1, actor: "carol", system: "call_joined"),
+                message(2, actor: "carol", at: 5, system: "user_added"),
+                message(3, actor: "carol", at: 10, system: "call_left")
+            ],
+            firstUnreadMessageID: nil, locale: enUS
+        )
+        #expect(systemGroups(rows).isEmpty)
+    }
+
+    @Test("The unread marker and a day break split a run")
+    func separatorsSplitRuns() {
+        let unread = ChatRow.build(
+            messages: [
+                message(1, actor: "carol", system: "call_joined"),
+                message(2, actor: "dave", at: 5, system: "call_joined")
+            ],
+            firstUnreadMessageID: 2, locale: enUS
+        )
+        #expect(systemGroups(unread).isEmpty)
+        #expect(unread.contains { $0.isUnreadSeparator })
+
+        let overnight = ChatRow.build(
+            messages: [
+                message(1, actor: "carol", system: "call_joined"),
+                message(2, actor: "dave", at: 24 * 3600, system: "call_left")
+            ],
+            firstUnreadMessageID: nil, locale: enUS
+        )
+        #expect(systemGroups(overnight).isEmpty)
+    }
+
+    @Test("Hidden events inside a run don't break it")
+    func invisibleEventsDontSplitRuns() throws {
+        let rows = ChatRow.build(
+            messages: [
+                message(1, actor: "carol", system: "call_joined"),
+                message(2, actor: "carol", at: 5, system: "reaction"),
+                message(3, actor: "dave", at: 10, system: "call_joined")
+            ],
+            firstUnreadMessageID: nil, locale: enUS
+        )
+        #expect(try #require(systemGroups(rows).first).messages.map(\.messageID) == [1, 3])
+    }
+
     @Test("Row identities are stable, so SwiftUI doesn't rebuild the transcript")
     func stableIdentities() {
         let messages = [message(1), message(2, at: 10)]

@@ -318,6 +318,29 @@ where it was (and paste the string) so the catalog can be fixed.
 - [ ] Switch kvidr to English: everything is back to English as before (nothing lost or
       changed), including the plurals ("1 person", "2 people").
 
+### Call joins and leaves on one line
+
+Consecutive "joined the call" / "left the call" events now share one line, like Talk's web
+client: "Anna and Bo joined and left the call". The same goes for one person adding (or
+removing) several people in a row: "Anna added Bo and Carl".
+
+- [ ] A group conversation with a finished call of 2+ people: between "started a call" and
+      the call-ended line there is one grey line with a chevron, not one per join and leave.
+- [ ] Click it: the chevron turns and the single events appear under it, each with its time
+      on hover. Click again and they fold away. Hovering the summary shows the time span.
+- [ ] You were in the call: the line starts with "You" ("Du" in Danish), never your own name.
+- [ ] A call with 4+ people: "Anna, Bo and 3 others joined and left the call".
+- [ ] One join alone (someone joined, then someone wrote a message) stays an ordinary line.
+- [ ] During a live call, watch the transcript as people join: the line updates in place
+      without the transcript jumping, and an opened line stays open.
+- [ ] Add two people to a group in one go: "You added Bo and Carl". Someone else adding a
+      third right after gets their own line.
+- [ ] The "New messages" marker in the middle of a call's joins splits the line in two,
+      with the marker between them.
+- [ ] VoiceOver: the line reads the summary, then "collapsed" or "expanded", and says what
+      pressing it does.
+- [ ] In Danish: "Anna og Bo kom og gik i opkaldet", "Anna, Bo og 3 andre …".
+
 ---
 
 ## Passed

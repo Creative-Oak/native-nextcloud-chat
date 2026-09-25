@@ -576,6 +576,8 @@ struct ChatView: View {
             DaySeparator(day: day)
         case .unreadSeparator:
             UnreadSeparator()
+        case .systemGroup(let group):
+            SystemMessageGroupRow(group: group, content: model.content(for:))
         case .message(let message, let group):
             MessageRow(
                 message: message,
