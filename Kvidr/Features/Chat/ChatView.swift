@@ -55,6 +55,8 @@ struct ChatView: View {
     @State private var didInitialScroll = false
     @State private var highlightClearTask: Task<Void, Never>?
     @State private var viewingAttachment: RichObject?
+    /// How wide the transcript is; nil until it has been laid out.
+    @State private var transcriptWidth: CGFloat?
     /// One per conversation, so two cards for the same poll agree and fetch once.
     @State private var pollStore: PollStore?
     /// Suppresses per-row hover work while the transcript is moving.
@@ -436,6 +438,14 @@ struct ChatView: View {
                 guard didInitialScroll, model.isScrolledToLatest else { return }
                 scrollToBottom(proxy, animated: false)
             }
+            // A picture is sized before it arrives, so it has to be told how much room a
+            // row has. Beside a call the chat is a 360-point column, and a picture sized for
+            // the full transcript ran off its edge. Measured here rather than above because
+            // this reports the first width too, and the call's column never changes width.
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
+                transcriptWidth = width
+            }
+            .environment(\.inlineImageLimits, transcriptWidth.map { .transcript(fitting: $0 - MessageRow.chromeWidth) } ?? .transcript)
             // Rows sliding under a stationary pointer fire onHover continuously, which
             // flickers the action strip and re-lays out every row it touches. Nothing
             // hovers while the transcript is moving.

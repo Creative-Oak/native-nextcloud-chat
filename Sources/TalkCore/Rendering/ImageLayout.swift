@@ -22,6 +22,15 @@ enum ImageLayout {
         /// A picture should read as a message, not as the window; a tall panorama should
         /// not become a column to scroll past.
         static let transcript = Limits(maximumWidth: 420, maximumHeight: 520)
+
+        /// The transcript's limits in a column with only `available` points for a row's
+        /// content: the chat beside a call is 360 wide, and a picture sized for the full
+        /// transcript runs off its edge.
+        static func transcript(fitting available: CGFloat) -> Limits {
+            var limits = transcript
+            limits.maximumWidth = max(120, min(limits.maximumWidth, available.rounded(.down)))
+            return limits
+        }
     }
 
     /// For when there is nothing to go on: the server sent no dimensions and the picture

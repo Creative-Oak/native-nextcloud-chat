@@ -182,14 +182,6 @@ extension ButtonStyle where Self == LinkButtonStyle {
 }
 #endif
 
-extension ImageLayout.Limits {
-    /// The transcript's picture size for this device. A phone's bubble column is about 300
-    /// points, so the Mac's 420 ran pictures off the edge of the screen.
-    @MainActor static var onScreen: Self {
-        Platform.isPhone ? Self(maximumWidth: 264, maximumHeight: 352) : .transcript
-    }
-}
-
 extension Font {
     /// The Mac's small print, a step up on iPhone and iPad — where 12pt, fine on a desk, is
     /// squinting at arm's length. Bars and small rows use it; body text is the system's.

@@ -126,6 +126,10 @@ private struct PreviewLoaderKey: EnvironmentKey {
     static let defaultValue: PreviewLoader? = nil
 }
 
+private struct InlineImageLimitsKey: EnvironmentKey {
+    static let defaultValue = ImageLayout.Limits.transcript
+}
+
 private struct OpenAttachmentKey: EnvironmentKey {
     // `@MainActor` rather than a bare function type: a bare one is not `Sendable`, which
     // a `static let` has to be under Swift 6. Every caller is a view anyway.
@@ -136,6 +140,12 @@ extension EnvironmentValues {
     var previewLoader: PreviewLoader? {
         get { self[PreviewLoaderKey.self] }
         set { self[PreviewLoaderKey.self] = newValue }
+    }
+
+    /// How big a picture in the transcript may be. The chat view narrows it to its own width.
+    var inlineImageLimits: ImageLayout.Limits {
+        get { self[InlineImageLimitsKey.self] }
+        set { self[InlineImageLimitsKey.self] = newValue }
     }
 
     /// Opens an attachment in the in-app viewer. Set by the chat view.
@@ -151,13 +161,13 @@ extension EnvironmentValues {
 /// ``ImageLayout`` — so a picture loading doesn't move the transcript.
 struct InlineImageView: View {
     let object: RichObject
-    var limits: ImageLayout.Limits = .onScreen
     /// Rounder than a thumbnail in a row, because with no bubble around it the picture is
     /// the shape the eye reads.
     var cornerRadius: CGFloat = 16
 
     @Environment(\.previewLoader) private var loader
     @Environment(\.openAttachment) private var openAttachment
+    @Environment(\.inlineImageLimits) private var limits
     @State private var image: PlatformImage?
     @State private var didFail = false
 

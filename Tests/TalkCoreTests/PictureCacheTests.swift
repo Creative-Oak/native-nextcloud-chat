@@ -38,6 +38,16 @@ struct ImageLayoutTests {
         #expect(ImageLayout.frame(announced: CGSize(width: 1000, height: 5000), original: nil) == CGSize(width: 104, height: 520))
     }
 
+    @Test("In a narrow column, a picture fits the room a row has")
+    func narrowColumn() {
+        let photo = CGSize(width: 4000, height: 3000)
+        // Beside a call: a 360-point column, 236 of it for content.
+        #expect(ImageLayout.frame(announced: photo, original: nil, limits: .transcript(fitting: 236)) == CGSize(width: 236, height: 177))
+        // A wide transcript keeps the usual cap, and a tiny one still shows something.
+        #expect(ImageLayout.frame(announced: photo, original: nil, limits: .transcript(fitting: 900)) == CGSize(width: 420, height: 315))
+        #expect(ImageLayout.Limits.transcript(fitting: 40).maximumWidth == 120)
+    }
+
     private func jpeg(width: Int, height: Int, properties: [CFString: Any]) throws -> Data {
         let context = try #require(CGContext(
             data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,

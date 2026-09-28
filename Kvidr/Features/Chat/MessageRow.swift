@@ -60,6 +60,11 @@ struct MessageRow: View {
     var hidesSender = false
     var onShowTapback: (Message) -> Void
 
+    /// What a row spends on anything but its content, at the most: someone else's message,
+    /// with its side padding, the avatar and the gaps either side of the content, and the
+    /// room kept free on the far side. Keep in step with `messageBody`.
+    static let chromeWidth: CGFloat = 16 * 2 + 28 + 8 * 2 + 48
+
     @State private var isShowingReactionDetail = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.talkSession) private var session
