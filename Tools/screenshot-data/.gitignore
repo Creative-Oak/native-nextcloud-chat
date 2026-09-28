@@ -1,0 +1,10 @@
+# Downloaded stock photos (see media.json) and your own replacements stay on your Mac.
+media/*
+!media/avatars/
+media/avatars/*
+!media/.gitkeep
+!media/avatars/.gitkeep
+backdate.sql
+__pycache__/
+.seed-state.json
+.seed-cookies/

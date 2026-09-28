@@ -1,0 +1,26 @@
+{
+  "_about": "Stock photos seed.py downloads into media/ on first run. All are free for commercial use with no attribution required, under the Unsplash License (unsplash.com/license) or the Pexels License (pexels.com/license). Neither lets you imply that the people shown endorse the product.",
+
+  "avatars/freja.jpg": "https://images.unsplash.com/photo-1525134479668-1bee5c7c6845?w=512&h=512&fit=crop&crop=faces&q=85",
+  "avatars/sofia.jpg": "https://images.pexels.com/photos/1130626/pexels-photo-1130626.jpeg?auto=compress&cs=tinysrgb&w=512&h=512&fit=crop",
+  "avatars/jonas.jpg": "https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=512&h=512&fit=crop",
+  "avatars/amara.jpg": "https://images.unsplash.com/photo-1531123897727-8f129e1688ce?w=512&h=512&fit=crop&crop=faces&q=85",
+  "avatars/leo.jpg": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=512&h=512&fit=crop&crop=faces&q=85",
+  "avatars/ines.jpg": "https://images.pexels.com/photos/774909/pexels-photo-774909.jpeg?auto=compress&cs=tinysrgb&w=512&h=512&fit=crop",
+  "avatars/theo.jpg": "https://images.unsplash.com/photo-1599566150163-29194dcaad36?w=512&h=512&fit=crop&crop=faces&q=85",
+  "avatars/noah.jpg": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=512&h=512&fit=crop&crop=faces&q=85",
+  "avatars/priya.jpg": "https://images.unsplash.com/photo-1488426862026-3ee34a7d66df?w=512&h=512&fit=crop&crop=faces&q=85",
+  "avatars/kwame.jpg": "https://images.pexels.com/photos/1222271/pexels-photo-1222271.jpeg?auto=compress&cs=tinysrgb&w=512&h=512&fit=crop",
+  "avatars/elena.jpg": "https://images.pexels.com/photos/733872/pexels-photo-733872.jpeg?auto=compress&cs=tinysrgb&w=512&h=512&fit=crop",
+  "avatars/olivia.jpg": "https://images.unsplash.com/photo-1580489944761-15a19d654956?w=512&h=512&fit=crop&crop=faces&q=85",
+
+  "launch-artwork.jpg": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1600&q=80",
+  "onboarding-sketches.jpg": "https://images.unsplash.com/photo-1581291518857-4e27b48ff24e?w=1600&q=80",
+  "design-system.jpg": "https://images.unsplash.com/photo-1558655146-d09347e92766?w=1600&q=80",
+  "moodboard.jpg": "https://images.unsplash.com/photo-1561070791-2526d30994b5?w=1600&q=80",
+  "ramen.jpg": "https://images.unsplash.com/photo-1557872943-16a5ac26437e?w=1600&q=80",
+  "offsite.jpg": "https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=1600&q=80",
+  "dolomites.jpg": "https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=1600&q=80",
+  "cake.jpg": "https://images.unsplash.com/photo-1464349095431-e9a21285b5f3?w=1600&q=80",
+  "coffee.jpg": "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=1600&q=80"
+}
