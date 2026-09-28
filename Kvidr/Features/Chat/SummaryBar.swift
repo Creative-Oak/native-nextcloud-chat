@@ -80,16 +80,18 @@ struct SummaryBar: View {
     private var headline: String {
         switch summary.state {
         case .offered:
-            "\(summary.unreadCount) unread messages"
+            String(localized: "\(summary.unreadCount) unread messages", comment: "Summary bar, before summarizing")
         case .writing:
-            "Summarizing…"
+            String(localized: "Summarizing…")
         case .written, .failed:
-            if summary.isRecent {
-                "Summary of the latest \(summary.coveredCount) messages"
+            if let subject = summary.subject {
+                subject
+            } else if summary.isRecent {
+                String(localized: "Summary of the latest \(summary.coveredCount) messages")
             } else if summary.coveredCount > 0 && summary.coveredCount < summary.unreadCount {
-                "Summary of the latest \(summary.coveredCount) of \(summary.unreadCount) messages"
+                String(localized: "Summary of the latest \(summary.coveredCount) of \(summary.unreadCount) messages", comment: "The first number is how many of the unread messages were summarized")
             } else {
-                "Summary of \(summary.unreadCount) unread messages"
+                String(localized: "Summary of \(summary.unreadCount) unread messages")
             }
         }
     }

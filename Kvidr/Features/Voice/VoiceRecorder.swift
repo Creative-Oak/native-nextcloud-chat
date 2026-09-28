@@ -52,7 +52,7 @@ final class VoiceRecorder {
     func start() async {
         guard phase == .idle || phase.isFailure else { return }
         guard await AVAudioApplication.requestRecordPermission() else {
-            phase = .failed("kvidr isn’t allowed to use the microphone. You can allow it in System Settings ▸ Privacy & Security ▸ Microphone.")
+            phase = .failed(String(localized: "kvidr isn’t allowed to use the microphone. You can allow it in System Settings ▸ Privacy & Security ▸ Microphone.", comment: "Recording a voice message without microphone permission; use the System Settings names of this language"))
             return
         }
 
@@ -74,7 +74,7 @@ final class VoiceRecorder {
             let recorder = try AVAudioRecorder(url: url, settings: settings)
             recorder.isMeteringEnabled = true
             guard recorder.record() else {
-                phase = .failed("The recording couldn’t start.")
+                phase = .failed(String(localized: "The recording couldn’t start.", comment: "Voice message recording failed"))
                 return
             }
             self.recorder = recorder
@@ -84,7 +84,7 @@ final class VoiceRecorder {
             phase = .recording
             startMetering()
         } catch {
-            phase = .failed("The recording couldn’t start.")
+            phase = .failed(String(localized: "The recording couldn’t start.", comment: "Voice message recording failed"))
         }
     }
 
@@ -159,7 +159,7 @@ final class VoiceRecorder {
             // Read into memory and the file removed straight away: the upload doesn't need
             // it, and a voice message shouldn't sit in a temporary folder while it goes up.
             guard let data = try? Data(contentsOf: fileURL) else {
-                self?.phase = .failed("The recording couldn’t be read.")
+                self?.phase = .failed(String(localized: "The recording couldn’t be read.", comment: "Voice message recording failed"))
                 return
             }
             try? FileManager.default.removeItem(at: fileURL)
@@ -173,7 +173,7 @@ final class VoiceRecorder {
                 self?.elapsed = 0
                 self?.phase = .idle
             } catch {
-                self?.phase = .failed("The voice message wasn’t sent: \(error.userMessage)")
+                self?.phase = .failed(String(localized: "The voice message wasn’t sent: \(error.userMessage)", comment: "%@ is the reason"))
             }
         }
     }
@@ -222,13 +222,18 @@ final class VoiceRecorder {
         }
     }
 
-    /// The name Talk's own web app gives a recording, so it reads the same in Files.
+    /// The name Talk's own web app gives a recording, in the user's language, so it reads the
+    /// same in Files.
     private static func fileName(conversation: String, now: Date = Date()) -> String {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "yyyy-MM-dd HH-mm-ss"
         let safe = conversation.replacingOccurrences(of: "/", with: "-")
-        return "Talk recording from \(formatter.string(from: now)) (\(safe)).wav"
+        let name = String(
+            localized: "Talk recording from \(formatter.string(from: now)) (\(safe))",
+            comment: "File name of a voice message, as Talk's web app names it. %1$@ is the date and time, %2$@ the conversation"
+        )
+        return name + ".wav"
     }
 
     private static func sweepLeftovers() {

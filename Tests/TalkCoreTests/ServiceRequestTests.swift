@@ -80,6 +80,114 @@ struct ServiceRequestTests {
         #expect(Endpoint.redacted(Endpoint.archive("tok")) == "/ocs/v2.php/apps/spreed/api/v4/room/…/archive")
     }
 
+    @Test("The lobby is set with PUT webinar/lobby, with the opening time only when it's on")
+    func lobby() async throws {
+        let transport = StubTransport(json: ocsEnvelope("[]"))
+        let service = ConversationService(client: try client(transport))
+
+        try await service.setLobby(true, opensAt: Date(timeIntervalSince1970: 1_800_000_000), token: "tok")
+        #expect(transport.lastRequest?.method == .put)
+        #expect(transport.lastRequest?.url.path == "/ocs/v2.php/apps/spreed/api/v4/room/tok/webinar/lobby")
+        #expect(form(transport.lastRequest) == ["state": "1", "timer": "1800000000"])
+
+        try await service.setLobby(true, token: "tok")
+        #expect(form(transport.lastRequest) == ["state": "1"])
+
+        try await service.setLobby(false, opensAt: Date(), token: "tok")
+        #expect(form(transport.lastRequest) == ["state": "0"])
+    }
+
+    @Test("Breakout rooms: set up, start, stop, broadcast, help, switch — each on its path")
+    func breakoutRooms() async throws {
+        let transport = StubTransport(json: ocsEnvelope("[]"))
+        let service = BreakoutRoomService(client: try client(transport))
+        let base = "/ocs/v2.php/apps/spreed/api/v1/breakout-rooms/tok"
+
+        _ = try await service.setUp(token: "tok", mode: .manual, amount: 3, assignments: [12: 0, 15: 2])
+        #expect(transport.lastRequest?.method == .post)
+        #expect(transport.lastRequest?.url.path == base)
+        #expect(form(transport.lastRequest) == ["mode": "2", "amount": "3", "attendeeMap": #"{"12":0,"15":2}"#])
+
+        // Out of range is brought into it, and only the manual mode sends a map.
+        _ = try await service.setUp(token: "tok", mode: .automatic, amount: 40, assignments: [12: 0])
+        #expect(form(transport.lastRequest) == ["mode": "1", "amount": "20"])
+
+        _ = try await service.start(token: "tok")
+        #expect(transport.lastRequest?.method == .post)
+        #expect(transport.lastRequest?.url.path == base + "/rooms")
+        _ = try await service.stop(token: "tok")
+        #expect(transport.lastRequest?.method == .delete)
+        #expect(transport.lastRequest?.url.path == base + "/rooms")
+
+        try await service.broadcast("Five minutes left", token: "tok")
+        #expect(transport.lastRequest?.url.path == base + "/broadcast")
+        #expect(form(transport.lastRequest) == ["message": "Five minutes left"])
+
+        try await service.askForHelp(true, roomToken: "room2")
+        #expect(transport.lastRequest?.method == .post)
+        #expect(transport.lastRequest?.url.path == "/ocs/v2.php/apps/spreed/api/v1/breakout-rooms/room2/request-assistance")
+        try await service.askForHelp(false, roomToken: "room2")
+        #expect(transport.lastRequest?.method == .delete)
+
+        try await service.remove(token: "tok")
+        #expect(transport.lastRequest?.method == .delete)
+        #expect(transport.lastRequest?.url.path == base)
+
+        _ = try await service.rooms(token: "tok")
+        #expect(transport.lastRequest?.method == .get)
+        #expect(transport.lastRequest?.url.path == "/ocs/v2.php/apps/spreed/api/v4/room/tok/breakout-rooms")
+    }
+
+    @Test("Bots are listed per conversation and turned on with POST, off with DELETE")
+    func bots() async throws {
+        let list = #"[{"id":3,"name":"Call summary","description":"Posts a summary","state":1},{"id":1,"name":"Admin bot","state":2},{"id":2,"name":"Away","description":"","state":0},{"id":4,"name":"Gone","state":3}]"#
+        let transport = StubTransport(json: ocsEnvelope(list))
+        let service = BotService(client: try client(transport))
+
+        let bots = try await service.bots(token: "tok")
+        #expect(transport.lastRequest?.url.path == "/ocs/v2.php/apps/spreed/api/v1/bot/tok")
+        #expect(bots.map(\.name) == ["Admin bot", "Away", "Call summary", "Gone"])
+        #expect(bots.map(\.isOn) == [true, false, true, false])
+        #expect(bots.map(\.isAdjustable) == [false, true, true, false])
+
+        try await service.setEnabled(true, botID: 2, token: "tok")
+        #expect(transport.lastRequest?.method == .post)
+        #expect(transport.lastRequest?.url.path == "/ocs/v2.php/apps/spreed/api/v1/bot/tok/2")
+        try await service.setEnabled(false, botID: 2, token: "tok")
+        #expect(transport.lastRequest?.method == .delete)
+    }
+
+    @Test("Tags: ordered and assigned as JSON lists, the rest as forms")
+    func conversationTags() async throws {
+        let transport = StubTransport(json: ocsEnvelope(#"[{"id":"2","name":"Other","sortOrder":9,"collapsed":false,"type":"other"},{"id":"11","name":"Work","sortOrder":1,"collapsed":true,"type":"custom"}]"#))
+        let service = ConversationTagService(client: try client(transport))
+
+        let tags = try await service.tags()
+        #expect(transport.lastRequest?.url.path == "/ocs/v2.php/apps/spreed/api/v4/tags")
+        #expect(tags.map(\.name) == ["Work", "Other"])
+        #expect(tags.first?.isCollapsed == true)
+        #expect(tags.last?.kind == .other)
+
+        _ = try await service.reorder(["12", "11"])
+        #expect(transport.lastRequest?.method == .put)
+        #expect(transport.lastRequest?.url.path == "/ocs/v2.php/apps/spreed/api/v4/tags/reorder")
+        #expect(transport.lastRequest?.headers["Content-Type"] == "application/json")
+        #expect(transport.lastRequest?.body.map { String(decoding: $0, as: UTF8.self) } == #"{"orderedIds":["12","11"]}"#)
+
+        _ = try? await service.assign([], to: "tok")
+        #expect(transport.lastRequest?.method == .post)
+        #expect(transport.lastRequest?.url.path == "/ocs/v2.php/apps/spreed/api/v4/room/tok/tags")
+        #expect(transport.lastRequest?.body.map { String(decoding: $0, as: UTF8.self) } == #"{"tagIds":[]}"#)
+
+        _ = try? await service.setCollapsed(true, id: "11")
+        #expect(transport.lastRequest?.url.path == "/ocs/v2.php/apps/spreed/api/v4/tags/11/collapsed")
+        #expect(form(transport.lastRequest) == ["collapsed": "1"])
+
+        try await service.delete("11")
+        #expect(transport.lastRequest?.method == .delete)
+        #expect(transport.lastRequest?.url.path == "/ocs/v2.php/apps/spreed/api/v4/tags/11")
+    }
+
     @Test("Important and sensitive use POST to set and DELETE to clear")
     func importantAndSensitive() async throws {
         let transport = StubTransport(json: ocsEnvelope("[]"))

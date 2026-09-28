@@ -83,7 +83,7 @@ enum TypingSummary {
         guard !names.isEmpty else { return nil }
         let known = names.compactMap { $0 }
         guard known.count == names.count else {
-            return known.isEmpty || names.count == 1 ? "Someone is typing…" : text(known: known, others: names.count - known.count)
+            return known.isEmpty || names.count == 1 ? String(localized: "Someone is typing…") : text(known: known, others: names.count - known.count)
         }
         return text(known: known, others: 0)
     }
@@ -92,12 +92,16 @@ enum TypingSummary {
         let shown = Array(known.prefix(3))
         let hidden = known.count - shown.count + others
         switch (shown.count, hidden) {
-        case (1, 0): return "\(shown[0]) is typing…"
-        case (2, 0): return "\(shown[0]) and \(shown[1]) are typing…"
-        case (3, 0): return "\(shown[0]), \(shown[1]) and \(shown[2]) are typing…"
+        case (1, 0): return String(localized: "\(shown[0]) is typing…", comment: "%@ is a name")
+        case (2, 0): return String(localized: "\(shown[0]) and \(shown[1]) are typing…", comment: "Each %@ is a name")
+        case (3, 0): return String(localized: "\(shown[0]), \(shown[1]) and \(shown[2]) are typing…", comment: "Each %@ is a name")
         default:
             let list = shown.joined(separator: ", ")
-            return "\(list) and \(hidden) \(hidden == 1 ? "other" : "others") are typing…"
+            // Two whole sentences rather than a catalog plural, so the English stays right where
+            // there is no catalog to pick the form (swift test).
+            return hidden == 1
+                ? String(localized: "\(list) and 1 other are typing…", comment: "%@ is a comma-separated list of names")
+                : String(localized: "\(list) and \(hidden) others are typing…", comment: "%@ is a comma-separated list of names; the number is at least 2")
         }
     }
 }

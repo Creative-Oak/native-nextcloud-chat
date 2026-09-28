@@ -162,11 +162,11 @@ actor PollService {
 
     private static func reason(_ raw: String) -> String? {
         switch raw {
-        case "room": "Polls can only be created in group and public conversations."
-        case "question": "A poll needs a question, and it can't be longer than 32,000 characters."
-        case "options": "A poll needs at least two options."
-        case "draft": "Only moderators can save a poll as a draft."
-        case "poll": "That poll no longer exists."
+        case "room": String(localized: "Polls can only be created in group and public conversations.")
+        case "question": String(localized: "A poll needs a question, and it can't be longer than 32,000 characters.")
+        case "options": String(localized: "A poll needs at least two options.")
+        case "draft": String(localized: "Only moderators can save a poll as a draft.")
+        case "poll": String(localized: "That poll no longer exists.")
         default: nil
         }
     }

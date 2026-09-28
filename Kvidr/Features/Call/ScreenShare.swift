@@ -1,7 +1,7 @@
 import CoreGraphics
 import CoreMedia
 import Foundation
-@preconcurrency import WebRTC
+@preconcurrency import LiveKitWebRTC
 
 #if os(macOS)
 import ScreenCaptureKit
@@ -18,12 +18,12 @@ final class ScreenShare: NSObject {
     /// Sharing ended — stopped here, from the system's own sharing menu, or the window went.
     var onStop: () -> Void = {}
 
-    private let source: RTCVideoSource
+    private let source: LKRTCVideoSource
     private let feeder: FrameFeeder
     private var stream: SCStream?
     private var isPicking = false
 
-    init(source: RTCVideoSource) {
+    init(source: LKRTCVideoSource) {
         self.source = source
         self.feeder = FrameFeeder(source: source)
         super.init()
@@ -156,12 +156,12 @@ extension ScreenShare: SCStreamDelegate {
 /// Hands each finished frame to WebRTC, off the main thread.
 private final class FrameFeeder: NSObject, SCStreamOutput, @unchecked Sendable {
     let queue = DispatchQueue(label: "app.kvidr.screen-frames")
-    private let source: RTCVideoSource
-    private let capturer: RTCVideoCapturer
+    private let source: LKRTCVideoSource
+    private let capturer: LKRTCVideoCapturer
 
-    init(source: RTCVideoSource) {
+    init(source: LKRTCVideoSource) {
         self.source = source
-        self.capturer = RTCVideoCapturer(delegate: source)
+        self.capturer = LKRTCVideoCapturer(delegate: source)
     }
 
     func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of type: SCStreamOutputType) {
@@ -173,7 +173,7 @@ private final class FrameFeeder: NSObject, SCStreamOutput, @unchecked Sendable {
         else { return }
         let time = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
         let nanoseconds = Int64(CMTimeGetSeconds(time) * 1_000_000_000)
-        let frame = RTCVideoFrame(buffer: RTCCVPixelBuffer(pixelBuffer: pixelBuffer), rotation: ._0, timeStampNs: nanoseconds)
+        let frame = LKRTCVideoFrame(buffer: LKRTCCVPixelBuffer(pixelBuffer: pixelBuffer), rotation: ._0, timeStampNs: nanoseconds)
         source.capturer(capturer, didCapture: frame)
     }
 }

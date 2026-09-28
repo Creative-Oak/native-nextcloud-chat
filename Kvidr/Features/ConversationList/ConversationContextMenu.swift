@@ -5,10 +5,10 @@ import SwiftUI
 
 /// The right-click menu on a conversation, wherever a conversation is drawn in the sidebar.
 ///
-/// Described once, as entries, and drawn two ways: as SwiftUI menu content for the rows,
-/// where the list's own context menu is right, and as an `NSMenu` for the favourite faces.
-/// The faces all sit in one list row, and a SwiftUI context menu there outlines the whole
-/// row — every face — rather than the one that was clicked.
+/// Described once, as entries, and drawn as an `NSMenu` made at the click — for the rows and
+/// the favourite faces alike. Not SwiftUI's context menu: that is rebuilt with every redraw of
+/// the sidebar, even while open, and its submenus blinked; and on the faces, which all sit in
+/// one list row, it outlined the whole row rather than the face that was clicked.
 ///
 /// The entries read the conversation from the model by token when the menu opens rather
 /// than trusting a copy captured with the row: a List row's menu can outlive the row's
@@ -25,22 +25,36 @@ enum ConversationMenuEntry {
         var entries: [ConversationMenuEntry] = []
 
         if conversation.hasCall {
-            entries.append(.action("Join Call in Browser") { model.openInBrowser(conversation) })
+            entries.append(.action(String(localized: "Join Call in Browser")) { model.openInBrowser(conversation) })
             entries.append(.divider)
         }
 
-        entries.append(.action(conversation.isFavorite ? "Remove from Favourites" : "Add to Favourites") {
+        entries.append(.action(conversation.isFavorite ? String(localized: "Remove from Favourites") : String(localized: "Add to Favourites")) {
             model.toggleFavorite(conversation)
         })
         if model.hasArchive {
-            entries.append(.action(conversation.isArchived ? "Unarchive" : "Archive") {
+            let title = conversation.isArchived
+                ? String(localized: "Unarchive", comment: "Menu item: take the conversation out of the archive")
+                : String(localized: "Archive", comment: "Menu item (verb): archive the conversation")
+            entries.append(.action(title) {
                 model.toggleArchived(conversation)
             })
         }
         if model.hasMarkUnread {
-            entries.append(.action("Mark as Unread", isEnabled: conversation.unreadMessages == 0) {
+            entries.append(.action(String(localized: "Mark as Unread"), isEnabled: conversation.unreadMessages == 0) {
                 model.markUnread(conversation)
             })
+        }
+
+        if model.hasTags, !conversation.isBreakoutRoom {
+            var tags: [ConversationMenuEntry] = model.customTags.map { tag in
+                .action(tag.name, isChecked: conversation.tagIDs.contains(tag.id)) {
+                    model.setTag(tag, !conversation.tagIDs.contains(tag.id), for: conversation)
+                }
+            }
+            if !tags.isEmpty { tags.append(.divider) }
+            tags.append(.action(String(localized: "New Tag…", comment: "Menu item: make a new sidebar tag")) { model.beginNewTag(for: conversation) })
+            entries.append(.submenu(String(localized: "Tags", comment: "Submenu: the conversation's sidebar tags"), tags))
         }
 
         entries.append(.divider)
@@ -55,19 +69,21 @@ enum ConversationMenuEntry {
         }
         if model.hasImportant {
             notifications.append(.action(
-                "Important", subtitle: "Notifies you even on Do Not Disturb", isChecked: conversation.isImportant
+                String(localized: "Important", comment: "Menu item: mark the conversation important"),
+                subtitle: String(localized: "Notifies you even on Do Not Disturb"), isChecked: conversation.isImportant
             ) { model.toggleImportant(conversation) })
         }
         if model.hasSensitive {
             notifications.append(.action(
-                "Sensitive", subtitle: "Hides messages from the sidebar and notifications", isChecked: conversation.isSensitive
+                String(localized: "Sensitive", comment: "Menu item: mark the conversation sensitive"),
+                subtitle: String(localized: "Hides messages from the sidebar and notifications"), isChecked: conversation.isSensitive
             ) { model.toggleSensitive(conversation) })
         }
-        entries.append(.submenu("Notifications", notifications))
+        entries.append(.submenu(String(localized: "Notifications"), notifications))
 
         entries.append(.divider)
-        entries.append(.action("Copy Link") { model.copyLink(to: conversation) })
-        entries.append(.action("Open in Nextcloud") { model.openInBrowser(conversation) })
+        entries.append(.action(String(localized: "Copy Link")) { model.copyLink(to: conversation) })
+        entries.append(.action(String(localized: "Open in Nextcloud")) { model.openInBrowser(conversation) })
         return entries
     }
 
@@ -98,70 +114,36 @@ enum ConversationMenuEntry {
     #endif
 }
 
-/// The menu as SwiftUI content, for a row's `.contextMenu`.
-struct ConversationContextMenu: View {
-    let model: ConversationListModel
-    let token: String
-
-    init(model: ConversationListModel, conversation: Conversation) {
-        self.model = model
-        self.token = conversation.token
-    }
-
-    var body: some View {
-        ConversationMenuEntriesView(entries: ConversationMenuEntry.entries(model: model, token: token))
-    }
-}
-
-/// Just the Notifications submenu's entries — for the details, which offer the same choice.
-struct ConversationNotificationsMenu: View {
-    let model: ConversationListModel
-    let token: String
-
-    var body: some View {
-        let entries = ConversationMenuEntry.entries(model: model, token: token)
-        ForEach(entries.indices, id: \.self) { index in
-            if case let .submenu(title, children) = entries[index], title == "Notifications" {
-                ConversationMenuEntriesView(entries: children)
-            }
-        }
-    }
-}
-
-/// A nominal view, so a submenu can draw its entries with the same view.
-private struct ConversationMenuEntriesView: View {
-    let entries: [ConversationMenuEntry]
-
-    var body: some View {
-        ForEach(entries.indices, id: \.self) { index in
-            switch entries[index] {
-            case let .action(title, subtitle, isChecked, isEnabled, perform):
-                // A checkable entry is a Toggle, which a menu draws with the system's
-                // checkmark. A checkmark *icon* on a Button is not shown: macOS 26 leaves
-                // images out of these menus.
-                if let isChecked {
-                    Toggle(isOn: Binding(get: { isChecked }, set: { _ in perform() })) {
-                        Text(title)
-                        if let subtitle { Text(subtitle) }
-                    }
-                    .disabled(!isEnabled)
-                } else {
-                    Button(action: perform) {
-                        Text(title)
-                        if let subtitle { Text(subtitle) }
-                    }
-                    .disabled(!isEnabled)
-                }
-            case let .submenu(title, children):
-                Menu(title) { ConversationMenuEntriesView(entries: children) }
-            case .divider:
-                Divider()
-            }
-        }
-    }
-}
-
 #if os(macOS)
+/// A row's right-click menu, built by AppKit at the click. A SwiftUI context menu is rebuilt
+/// with every redraw of the sidebar — and it redraws with each refresh — which made the Tags
+/// and Notifications submenus blink while open. The list doesn't see the click, so the row
+/// draws the outline the list would have.
+struct ConversationRowMenu: ViewModifier {
+    let model: ConversationListModel
+    let token: String
+    @Binding var menuToken: String?
+
+    func body(content: Content) -> some View {
+        content
+            .overlay {
+                if menuToken == token {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .strokeBorder(Color.accentColor, lineWidth: 2)
+                        .padding(-4)
+                        .allowsHitTesting(false)
+                }
+            }
+            .overlay {
+                ConversationMenuHost(
+                    model: model,
+                    token: token,
+                    isOpen: Binding(get: { menuToken == token }, set: { menuToken = $0 ? token : nil })
+                )
+            }
+    }
+}
+
 /// Opens the conversation menu from a view of its own on a right click or a control-click,
 /// so the list underneath never sees the click and draws no outline around its row. Hit-test
 /// transparent for every other click, so a plain click still goes to the face's button.
@@ -203,6 +185,84 @@ struct ConversationMenuHost: NSViewRepresentable {
             // Returns once the menu has closed.
             NSMenu.popUpContextMenu(menu, with: event, for: self)
             setOpen?(false)
+        }
+    }
+}
+#else
+/// A row's press-and-hold menu, drawn by the system from the same entries.
+struct ConversationRowMenu: ViewModifier {
+    let model: ConversationListModel
+    let token: String
+    @Binding var menuToken: String?
+
+    func body(content: Content) -> some View {
+        content.contextMenu {
+            if let conversation = model[token] {
+                ConversationContextMenu(model: model, conversation: conversation)
+            }
+        }
+    }
+}
+
+/// The menu as SwiftUI content, for a row's `.contextMenu`.
+struct ConversationContextMenu: View {
+    let model: ConversationListModel
+    let token: String
+
+    init(model: ConversationListModel, conversation: Conversation) {
+        self.model = model
+        self.token = conversation.token
+    }
+
+    var body: some View {
+        ConversationMenuEntriesView(entries: ConversationMenuEntry.entries(model: model, token: token))
+    }
+}
+
+/// Just the Notifications submenu's entries — for the details, which offer the same choice.
+struct ConversationNotificationsMenu: View {
+    let model: ConversationListModel
+    let token: String
+
+    var body: some View {
+        let entries = ConversationMenuEntry.entries(model: model, token: token)
+        ForEach(entries.indices, id: \.self) { index in
+            if case let .submenu(title, children) = entries[index], title == String(localized: "Notifications") {
+                ConversationMenuEntriesView(entries: children)
+            }
+        }
+    }
+}
+
+/// A nominal view, so a submenu can draw its entries with the same view.
+private struct ConversationMenuEntriesView: View {
+    let entries: [ConversationMenuEntry]
+
+    var body: some View {
+        ForEach(entries.indices, id: \.self) { index in
+            switch entries[index] {
+            case let .action(title, subtitle, isChecked, isEnabled, perform):
+                // A checkable entry is a Toggle, which a menu draws with the system's
+                // checkmark. A checkmark *icon* on a Button is not shown: macOS 26 leaves
+                // images out of these menus.
+                if let isChecked {
+                    Toggle(isOn: Binding(get: { isChecked }, set: { _ in perform() })) {
+                        Text(title)
+                        if let subtitle { Text(subtitle) }
+                    }
+                    .disabled(!isEnabled)
+                } else {
+                    Button(action: perform) {
+                        Text(title)
+                        if let subtitle { Text(subtitle) }
+                    }
+                    .disabled(!isEnabled)
+                }
+            case let .submenu(title, children):
+                Menu(title) { ConversationMenuEntriesView(entries: children) }
+            case .divider:
+                Divider()
+            }
         }
     }
 }

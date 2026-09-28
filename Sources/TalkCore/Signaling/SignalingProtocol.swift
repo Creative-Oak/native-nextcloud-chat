@@ -22,6 +22,9 @@ enum SignalingOutbound: Sendable, Equatable {
     case roomCallSignal(CallSignal)
     /// This client's microphone or camera went on or off, told to one session.
     case mediaStatus(toSession: String, MediaStatus)
+    /// A hand raised, a reaction, a moderator muting someone — to one session in the call;
+    /// Talk's clients send these to each in turn.
+    case callMessage(toSession: String, CallMessage)
 
     func encoded() -> Data {
         let object: [String: Any]
@@ -51,6 +54,17 @@ enum SignalingOutbound: Sendable, Equatable {
             object = ["type": "message", "message": ["recipient": ["type": "session", "sessionid": session], "data": status.signalingData(to: session) ?? [:]] as [String: Any]]
         case let .message(session, data):
             object = ["type": "message", "message": ["recipient": ["type": "session", "sessionid": session], "data": data] as [String: Any]]
+        case let .callMessage(session, .forceMute(target)):
+            // Not a message but a control, which the signaling server lets only moderators send.
+            // The data has to suit both of Talk's other apps: the web app reads `action` and
+            // `peerId` straight off it (as it sends them), and Talk for iOS does too — but
+            // drops anything whose data has no `type`, which the web app's own leave out.
+            object = ["type": "control", "control": [
+                "recipient": ["type": "session", "sessionid": session],
+                "data": ["type": "control", "action": "forceMute", "peerId": target],
+            ] as [String: Any]]
+        case let .callMessage(session, message):
+            object = ["type": "message", "message": ["recipient": ["type": "session", "sessionid": session], "data": message.data(to: session)] as [String: Any]]
         }
         return (try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])) ?? Data()
     }
@@ -81,6 +95,15 @@ enum SignalingInbound: Sendable, Equatable {
     case sessionsLeft([String])
     /// Someone in the open conversation started or stopped typing.
     case typing(fromSession: String, isTyping: Bool)
+    /// Someone in the call raised or lowered their hand.
+    case raisedHand(fromSession: String, isRaised: Bool)
+    /// Someone in the call sent an emoji reaction.
+    case callReaction(fromSession: String, emoji: String)
+    /// A moderator muted `target` — this session, or someone else in the call.
+    case forceMute(target: String, fromSession: String)
+    /// The server moves this session to another conversation — into a breakout room when
+    /// they start, back to the main one when they stop — and a client in the call goes along.
+    case switchTo(token: String)
     /// Everything this step doesn't act on yet — room events, chat relays, control messages —
     /// kept whole for the ones that will.
     case other(type: String, json: Data)
@@ -106,12 +129,29 @@ enum SignalingInbound: Sendable, Equatable {
             return .room(roomID: body["roomid"] as? String ?? "")
         case "event":
             return decodeEvent(body, data: data)
+        case "control":
+            // A moderator's forced mute, the way Talk's apps send it.
+            let sender = (body["sender"] as? [String: Any])?["sessionid"] as? String ?? ""
+            let payload = body["data"] as? [String: Any] ?? [:]
+            let control = payload["payload"] as? [String: Any] ?? payload
+            guard control["action"] as? String == "forceMute", let target = control["peerId"] as? String else { return .other(type: type, json: data) }
+            return .forceMute(target: target, fromSession: sender)
         case "message":
             let payload = body["data"] as? [String: Any] ?? [:]
             let sender = (body["sender"] as? [String: Any])?["sessionid"] as? String ?? ""
             switch payload["type"] as? String {
             case "startedTyping" where !sender.isEmpty: return .typing(fromSession: sender, isTyping: true)
             case "stoppedTyping" where !sender.isEmpty: return .typing(fromSession: sender, isTyping: false)
+            case "raiseHand" where !sender.isEmpty:
+                let state = (payload["payload"] as? [String: Any])?["state"] as? Bool ?? false
+                return .raisedHand(fromSession: sender, isRaised: state)
+            case "reaction" where !sender.isEmpty:
+                guard let emoji = (payload["payload"] as? [String: Any])?["reaction"] as? String, !emoji.isEmpty else { return .other(type: type, json: data) }
+                return .callReaction(fromSession: sender, emoji: emoji)
+            case "control":
+                let control = payload["payload"] as? [String: Any] ?? [:]
+                guard control["action"] as? String == "forceMute", let target = control["peerId"] as? String else { return .other(type: type, json: data) }
+                return .forceMute(target: target, fromSession: sender)
             case "mute", "unmute":
                 guard !sender.isEmpty, let status = MediaStatus(signalingData: payload) else { return .other(type: type, json: data) }
                 return .mediaStatus(fromSession: sender, status)
@@ -146,6 +186,7 @@ enum SignalingInbound: Sendable, Equatable {
             let everyone = (body["all"] as? Bool == true) ? CallFlags(rawValue: (body["incall"] as? NSNumber)?.intValue ?? 0) : nil
             return .participantsChanged(token: token, users: users, everyone: everyone)
         case ("room", "message") where !token.isEmpty: return .roomMessage(token: token)
+        case ("room", "switchto") where !token.isEmpty: return .switchTo(token: token)
         default: return .other(type: "event", json: data)
         }
     }

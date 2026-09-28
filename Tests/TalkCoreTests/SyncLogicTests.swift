@@ -252,7 +252,7 @@ struct SidebarSectionTests {
         #expect(sections[2].items.map(\.token) == ["old"])
         // Identifiable, because SwiftUI's ForEach needs a key path and Swift has none into
         // tuple elements — which is the bug this struct exists to prevent.
-        #expect(sections[0].id == .favorites)
+        #expect(sections[0].id == "favorites")
     }
 
     @Test("Empty sections don't get a heading")

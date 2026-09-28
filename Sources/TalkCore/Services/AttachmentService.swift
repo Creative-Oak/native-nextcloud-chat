@@ -266,7 +266,7 @@ actor AttachmentService {
             }
         }
 
-        throw .conflict(message: "Couldn’t find a free name for \(fileName)")
+        throw .conflict(message: String(localized: "Couldn’t find a free name for \(fileName)", comment: "Upload failed: %@ is a file name"))
     }
 
     private static let maximumNameAttempts = 20

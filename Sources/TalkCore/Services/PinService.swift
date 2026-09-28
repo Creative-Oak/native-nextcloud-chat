@@ -23,10 +23,10 @@ enum PinDuration: CaseIterable, Sendable, Identifiable {
 
     var title: String {
         switch self {
-        case .day: "For 24 Hours"
-        case .week: "For 7 Days"
-        case .month: "For 30 Days"
-        case .untilUnpinned: "Until Unpinned"
+        case .day: String(localized: "For 24 Hours", comment: "How long to pin a message")
+        case .week: String(localized: "For 7 Days", comment: "How long to pin a message")
+        case .month: String(localized: "For 30 Days", comment: "How long to pin a message")
+        case .untilUnpinned: String(localized: "Until Unpinned", comment: "How long to pin a message: until someone unpins it")
         }
     }
 

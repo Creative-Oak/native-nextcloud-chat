@@ -89,7 +89,7 @@ final class ConversationDraft {
 
     /// What the sidebar row and the window title call it.
     var title: String {
-        recipients.isEmpty ? "New Message" : NewConversation.name(for: recipients)
+        recipients.isEmpty ? String(localized: "New Message", comment: "Title of a draft with no recipients yet") : NewConversation.name(for: recipients)
     }
 
     var canSend: Bool {

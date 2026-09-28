@@ -3,7 +3,7 @@ import CoreImage
 import Foundation
 import ReplayKit
 import UIKit
-@preconcurrency import WebRTC
+@preconcurrency import LiveKitWebRTC
 
 /// This iPhone's or iPad's screen going into a call.
 ///
@@ -24,7 +24,7 @@ final class ScreenShare: NSObject {
 
     private let receiver: BroadcastReceiver
 
-    init(source: RTCVideoSource) {
+    init(source: LKRTCVideoSource) {
         self.receiver = BroadcastReceiver(source: source)
         super.init()
     }
@@ -87,8 +87,8 @@ private final class BroadcastReceiver: @unchecked Sendable {
     var onConnect: (@Sendable () -> Void)?
     var onDisconnect: (@Sendable () -> Void)?
 
-    private let source: RTCVideoSource
-    private let capturer: RTCVideoCapturer
+    private let source: LKRTCVideoSource
+    private let capturer: LKRTCVideoCapturer
     private let context = CIContext(options: [.cacheIntermediates: false])
     private let lock = NSLock()
     private var listener: Int32 = -1
@@ -96,9 +96,9 @@ private final class BroadcastReceiver: @unchecked Sendable {
     private var pool: CVPixelBufferPool?
     private var poolSize: CGSize = .zero
 
-    init(source: RTCVideoSource) {
+    init(source: LKRTCVideoSource) {
         self.source = source
-        self.capturer = RTCVideoCapturer(delegate: source)
+        self.capturer = LKRTCVideoCapturer(delegate: source)
     }
 
     func listen(at path: String) -> Bool {
@@ -188,7 +188,7 @@ private final class BroadcastReceiver: @unchecked Sendable {
         guard let buffer = pixelBuffer(size: size) else { return }
         context.render(image, to: buffer)
         let nanoseconds = Int64(CACurrentMediaTime() * 1_000_000_000)
-        let frame = RTCVideoFrame(buffer: RTCCVPixelBuffer(pixelBuffer: buffer), rotation: ._0, timeStampNs: nanoseconds)
+        let frame = LKRTCVideoFrame(buffer: LKRTCCVPixelBuffer(pixelBuffer: buffer), rotation: ._0, timeStampNs: nanoseconds)
         source.capturer(capturer, didCapture: frame)
     }
 

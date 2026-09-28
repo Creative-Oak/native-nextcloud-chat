@@ -201,3 +201,14 @@ extension Font {
         #endif
     }
 }
+
+extension View {
+    /// The Mac's typed-in date field; iOS's compact picker in its place.
+    func fieldDatePicker() -> some View {
+        #if os(macOS)
+        datePickerStyle(.field)
+        #else
+        datePickerStyle(.compact)
+        #endif
+    }
+}

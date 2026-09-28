@@ -25,10 +25,10 @@ enum ThreadNotificationLevel: Int, Sendable, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .default: "Same as Conversation"
-        case .always: "All Messages"
-        case .mentions: "Mentions Only"
-        case .never: "Off"
+        case .default: String(localized: "Same as Conversation", comment: "Thread notification level")
+        case .always: String(localized: "All Messages", comment: "Thread notification level")
+        case .mentions: String(localized: "Mentions Only", comment: "Thread notification level")
+        case .never: String(localized: "Off", comment: "Thread notification level: no notifications")
         }
     }
 }

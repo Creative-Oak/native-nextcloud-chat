@@ -39,18 +39,21 @@ struct ScheduledMessageRow: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 3)
         .contentShape(.rect)
-        .contextMenu {
-            Button("Send Now") { model.sendNow(message) }
-            Menu("Change Time") {
-                ForEach(ReminderPreset.presets()) { preset in
-                    Button("\(preset.title) — \(ReminderTime.text(preset.date))") { model.reschedule(message, to: preset.date) }
-                }
-                Divider()
-                Button("Other Time…") { model.editScheduled(message) }
+        // AppKit's, made at the click: the row redraws every few seconds for its caption,
+        // and a SwiftUI menu redrawn with it blinked its Change Time submenu.
+        .popUpContextMenu {
+            var times: [PopUpMenuItem] = ReminderPreset.presets().map { preset in
+                .action(String(localized: "\(preset.title) — \(ReminderTime.text(preset.date))", comment: "A quick time: its name, then when it is")) { model.reschedule(message, to: preset.date) }
             }
-            Button("Edit…") { model.editScheduled(message) }
-            Divider()
-            Button("Delete", role: .destructive) { model.deleteScheduled(message) }
+            times.append(.divider)
+            times.append(.action(String(localized: "Other Time…", comment: "Scheduled message menu: pick a time of your own")) { model.editScheduled(message) })
+            return [
+                .action(String(localized: "Send Now", comment: "Scheduled message menu")) { model.sendNow(message) },
+                .submenu(String(localized: "Change Time", comment: "Scheduled message menu"), times),
+                .action(String(localized: "Edit…", comment: "Scheduled message menu: edit the message")) { model.editScheduled(message) },
+                .divider,
+                .action(String(localized: "Delete", comment: "Scheduled message menu: delete the scheduled message")) { model.deleteScheduled(message) },
+            ]
         }
         .accessibilityElement(children: .combine)
     }
@@ -59,9 +62,19 @@ struct ScheduledMessageRow: View {
     /// background job, which runs only as often as the server's cron does — often every five
     /// minutes. "Sending…" says that honestly, where a time already gone would look stuck.
     private func caption(at now: Date) -> String {
-        if message.hasFailed { return "Couldn’t be sent — right-click to try again" }
-        if message.sendAt <= now { return "Sending…" }
-        return "Sends \(ReminderTime.text(message.sendAt))"
+        if message.hasFailed { return String(localized: "Couldn’t be sent — right-click to try again", comment: "Under a scheduled message that failed") }
+        if message.sendAt <= now { return String(localized: "Sending…", comment: "Under a scheduled message whose time has come") }
+        // Whole sentences for today and tomorrow rather than "Sends" in front of
+        // `ReminderTime`'s "Today 18:00": other languages lowercase the day mid-sentence.
+        let calendar = Calendar.current
+        let time = message.sendAt.formatted(date: .omitted, time: .shortened)
+        if calendar.isDateInToday(message.sendAt) {
+            return String(localized: "Sends Today \(time)", comment: "Under a scheduled message; %@ is a time of day")
+        }
+        if calendar.isDateInTomorrow(message.sendAt) {
+            return String(localized: "Sends Tomorrow \(time)", comment: "Under a scheduled message; %@ is a time of day")
+        }
+        return String(localized: "Sends \(ReminderTime.text(message.sendAt))", comment: "Under a scheduled message; %@ is a weekday, date and time")
     }
 
     private func parentMessage(_ parent: ParentMessage) -> Message {
@@ -92,11 +105,7 @@ struct SendLaterPill: View {
                 in: Date().addingTimeInterval(60)...,
                 displayedComponents: [.date, .hourAndMinute]
             )
-            #if os(macOS)
-            .datePickerStyle(.field)
-            #else
-            .datePickerStyle(.compact)
-            #endif
+            .fieldDatePicker()
             .labelsHidden()
             .fixedSize()
 

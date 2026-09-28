@@ -87,71 +87,71 @@ enum TalkError: Error, Sendable, Equatable {
     var userMessage: String {
         switch self {
         case .invalidServerURL(let input):
-            "“\(input)” doesn’t look like a Nextcloud address."
+            String(localized: "“\(input)” doesn’t look like a Nextcloud address.", comment: "%@ is what the user typed as the server address")
         case .insecureServer(let host):
-            "\(host) doesn’t use HTTPS. kvidr requires a secure connection."
+            String(localized: "\(host) doesn’t use HTTPS. kvidr requires a secure connection.", comment: "%@ is a server’s host name")
         case .missingCapability(let name):
-            "This server’s Talk version doesn’t support \(name)."
+            String(localized: "This server’s Talk version doesn’t support \(name).", comment: "%@ is a feature, e.g. “Nextcloud Talk” or “a supported Talk version (chat-v2)”")
         case .notAuthenticated:
-            "You’re not signed in."
+            String(localized: "You’re not signed in.")
         case .offline:
-            "No internet connection."
+            String(localized: "No internet connection.")
         case .timedOut:
-            "The server took too long to respond."
+            String(localized: "The server took too long to respond.")
         case .cancelled:
-            "Cancelled."
+            String(localized: "Cancelled.", comment: "Error text: the operation was cancelled")
         case .transport(_, let description):
             description
         case .untrustedCertificate(let host):
-            "The certificate for \(host) couldn’t be verified."
+            String(localized: "The certificate for \(host) couldn’t be verified.", comment: "%@ is a server’s host name")
         case .responseTooLarge:
-            "The server sent far more data than that should need."
+            String(localized: "The server sent far more data than that should need.")
         case .redirectRefused(let host):
-            "\(host) tried to send this request somewhere else. kvidr only talks to your own server."
+            String(localized: "\(host) tried to send this request somewhere else. kvidr only talks to your own server.", comment: "%@ is a server’s host name")
         case .keychainUnavailable:
-            "kvidr couldn’t use your Keychain, so your sign-in couldn’t be saved."
+            String(localized: "kvidr couldn’t use your Keychain, so your sign-in couldn’t be saved.")
         case .fileNotAttachable:
-            "Only files on this Mac can be attached."
+            String(localized: "Only files on this Mac can be attached.")
         case .fileTooLarge:
-            "That file is too big."
+            String(localized: "That file is too big.")
         case .fileNotAPicture:
-            "That file isn’t a picture kvidr can read."
+            String(localized: "That file isn’t a picture kvidr can read.")
         case .fileMissing:
-            "That file isn’t there anymore."
+            String(localized: "That file isn’t there anymore.")
         case .fileNotAnswering:
-            "The disk that file is on isn’t answering."
+            String(localized: "The disk that file is on isn’t answering.")
         case .unauthorized:
-            "Your session has expired. Sign in again to continue."
+            String(localized: "Your session has expired. Sign in again to continue.")
         case .forbidden(let message):
-            Self.quoting(message) ?? "You don’t have permission to do that."
+            Self.quoting(message) ?? String(localized: "You don’t have permission to do that.")
         case .notFound:
-            "That conversation or message no longer exists."
+            String(localized: "That conversation or message no longer exists.")
         case .conflict(let message):
-            Self.quoting(message) ?? "That conflicted with a change on the server."
+            Self.quoting(message) ?? String(localized: "That conflicted with a change on the server.")
         case .sessionExpired:
-            "Reconnecting…"
+            String(localized: "Reconnecting…")
         case .payloadTooLarge:
-            "That message is too long for this server."
+            String(localized: "That message is too long for this server.")
         case .federationUnsupported:
-            "This action isn’t available in federated conversations."
+            String(localized: "This action isn’t available in federated conversations.")
         case .federationUnreachable:
-            "The remote server isn’t reachable right now."
+            String(localized: "The remote server isn’t reachable right now.")
         case .clientTooOld(let minimum):
             if let minimum {
-                "This server requires a newer client (\(minimum) or later)."
+                String(localized: "This server requires a newer client (\(minimum) or later).", comment: "%@ is a version number")
             } else {
-                "This server requires a newer client."
+                String(localized: "This server requires a newer client.")
             }
         case .rateLimited:
-            "Too many requests — slowing down."
+            String(localized: "Too many requests — slowing down.")
         case .maintenanceMode:
-            "The server is in maintenance mode."
+            String(localized: "The server is in maintenance mode.")
         case .serverError(let status, _):
-            "The server reported an error (\(status))."
+            String(localized: "The server reported an error (\(status)).", comment: "%lld is an HTTP status code")
         case .ocs(_, let message):
-            Self.quoting(message) ?? "The server rejected that request."
+            Self.quoting(message) ?? String(localized: "The server rejected that request.")
         case .decoding, .unexpectedResponse:
-            "The server sent something unexpected."
+            String(localized: "The server sent something unexpected.")
         }
     }
 
@@ -164,7 +164,7 @@ enum TalkError: Error, Sendable, Equatable {
     /// The length cap is a second job: a multi-kilobyte line is a layout weapon.
     static func quoting(_ message: String?) -> String? {
         guard let message = sanitizedServerText(message) else { return nil }
-        return "The server says: “\(message)”"
+        return String(localized: "The server says: “\(message)”", comment: "%@ is a message the server wrote, shown verbatim")
     }
 
     /// One line, no control characters, at most ``serverTextLimit`` characters.

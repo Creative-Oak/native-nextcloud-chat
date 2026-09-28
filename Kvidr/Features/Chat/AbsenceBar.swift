@@ -25,7 +25,9 @@ struct AbsenceBar: View {
                 Spacer(minLength: 6)
 
                 if hasMore {
-                    Button(isExpanded ? "Less" : "More") {
+                    Button(isExpanded
+                           ? String(localized: "Less", comment: "Out-of-office bar: show less of the absence message")
+                           : String(localized: "absence.more", defaultValue: "More", comment: "Out-of-office bar: show all of the absence message")) {
                         withAnimation(.smooth(duration: 0.2)) { isExpanded.toggle() }
                     }
                     .buttonStyle(.link)
@@ -35,7 +37,8 @@ struct AbsenceBar: View {
                     Button("Message \(replacementFirstName)", action: onMessageReplacement)
                         .buttonStyle(.link)
                         .fixedSize()
-                        .help("Ask \(absence.replacementDisplayName ?? "their stand-in") instead")
+                        .help(absence.replacementDisplayName.map { String(localized: "Ask \($0) instead", comment: "Tooltip: message the absent person's stand-in; %@ is the stand-in's name") }
+                            ?? String(localized: "Ask their stand-in instead", comment: "Tooltip: message the absent person's stand-in, whose name isn't known"))
                 }
 
                 Button(action: onDismiss) {
@@ -76,7 +79,7 @@ struct AbsenceBar: View {
     }
 
     private var replacementFirstName: String {
-        let full = absence.replacementDisplayName ?? absence.replacementUserID ?? "stand-in"
+        let full = absence.replacementDisplayName ?? absence.replacementUserID ?? String(localized: "stand-in", comment: "Stands in for the name of an absent person's replacement, in “Message stand-in”")
         return full.split(separator: " ").first.map(String.init) ?? full
     }
 }

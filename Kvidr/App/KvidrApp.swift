@@ -30,7 +30,18 @@ struct KvidrApp: App {
                 .environment(\.voicePlayer, app.voicePlayer)
                 .environment(\.linkPreviewLoader, linkPreviews)
                 .environment(\.talkSession, app.session)
-                .onAppear { appDelegate.app = app }
+                .onAppear {
+                    appDelegate.app = app
+                    IntentBridge.shared.app = app
+                }
+                // Raycast, scripts, other apps: kvidr://open?conversation=…
+                .onOpenURL { url in
+                    if let link = KvidrLink(url) { app.handle(link) }
+                }
+                // A conversation picked in Spotlight.
+                .onContinueUserActivity(SpotlightIndex.activityType) { activity in
+                    if let token = SpotlightIndex.token(from: activity) { app.selectedToken = token }
+                }
                 #if os(macOS)
                 .frame(minWidth: 720, minHeight: 460)
                 #endif

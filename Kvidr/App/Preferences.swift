@@ -17,6 +17,12 @@ private enum Key {
     static let sidebarMode = "sidebar.mode"
     static let transcribeVoiceMessages = "voice.transcribe"
     static let transcriptionLanguage = "voice.transcriptionLanguage"
+    static let callCaptions = "call.captions"
+    static let captionLanguage = "call.captionLanguage"
+    static let translationLanguage = "translation.language"
+    static let autoTranslatedConversations = "translation.automaticConversations"
+    static let outgoingTranslations = "translation.outgoing"
+    static let suggestsReplies = "composer.suggestReplies"
 }
 
 /// User preferences.
@@ -82,6 +88,39 @@ final class Preferences {
         didSet { defaults.set(transcriptionLanguage, forKey: Key.transcriptionLanguage) }
     }
 
+    /// Live Captions in a call: what everyone says, written out as they say it, on this Mac.
+    /// Remembered from one call to the next.
+    var showsCallCaptions: Bool {
+        didSet { defaults.set(showsCallCaptions, forKey: Key.callCaptions) }
+    }
+
+    /// The language calls are captioned in, as a locale identifier. Nil follows the Mac's own
+    /// languages.
+    var captionLanguage: String? {
+        didSet { defaults.set(captionLanguage, forKey: Key.captionLanguage) }
+    }
+
+    /// The language messages are translated into, as a language identifier. Nil follows the
+    /// Mac's own.
+    var translationLanguage: String? {
+        didSet { defaults.set(translationLanguage, forKey: Key.translationLanguage) }
+    }
+
+    /// The conversations whose messages are translated as they come on screen, by token.
+    var autoTranslatedConversations: Set<String> {
+        didSet { defaults.set(autoTranslatedConversations.sorted(), forKey: Key.autoTranslatedConversations) }
+    }
+
+    /// Replies suggested over the field, by Apple Intelligence on this Mac.
+    var suggestsReplies: Bool {
+        didSet { defaults.set(suggestsReplies, forKey: Key.suggestsReplies) }
+    }
+
+    /// Conversations whose messages are translated before they're sent: token to language.
+    var outgoingTranslations: [String: String] {
+        didSet { defaults.set(outgoingTranslations, forKey: Key.outgoingTranslations) }
+    }
+
     var allowsInsecureLocalServers: Bool {
         didSet { defaults.set(allowsInsecureLocalServers, forKey: Key.allowInsecureLocalServers) }
     }
@@ -117,6 +156,7 @@ final class Preferences {
             Key.sendOnReturn: true,
             Key.browseContacts: true,
             Key.transcribeVoiceMessages: true,
+            Key.suggestsReplies: true,
             Key.allowInsecureLocalServers: false,
             Key.developerMode: false
         ])
@@ -129,6 +169,12 @@ final class Preferences {
         browsesContacts = defaults.bool(forKey: Key.browseContacts)
         transcribesVoiceMessages = defaults.bool(forKey: Key.transcribeVoiceMessages)
         transcriptionLanguage = defaults.string(forKey: Key.transcriptionLanguage)
+        showsCallCaptions = defaults.bool(forKey: Key.callCaptions)
+        captionLanguage = defaults.string(forKey: Key.captionLanguage)
+        translationLanguage = defaults.string(forKey: Key.translationLanguage)
+        autoTranslatedConversations = Set(defaults.stringArray(forKey: Key.autoTranslatedConversations) ?? [])
+        suggestsReplies = defaults.bool(forKey: Key.suggestsReplies)
+        outgoingTranslations = defaults.dictionary(forKey: Key.outgoingTranslations) as? [String: String] ?? [:]
         allowsInsecureLocalServers = defaults.bool(forKey: Key.allowInsecureLocalServers)
         isDeveloperModeEnabled = defaults.bool(forKey: Key.developerMode)
         lastSelectedToken = defaults.string(forKey: Key.lastSelectedToken)

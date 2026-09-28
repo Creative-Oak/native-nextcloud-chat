@@ -39,9 +39,9 @@ struct MessageActor: Sendable, Hashable, Codable, Identifiable {
     var resolvedDisplayName: String {
         if !displayName.isEmpty { return displayName }
         switch kind {
-        case .guests: return "Guest"
-        case .deletedUsers: return "Deleted user"
-        case .bots, .bridged: return id.isEmpty ? "Bot" : id
+        case .guests: return String(localized: "Guest", comment: "Name shown for a guest who gave no name")
+        case .deletedUsers: return String(localized: "Deleted user", comment: "Name shown for someone whose account was deleted")
+        case .bots, .bridged: return id.isEmpty ? String(localized: "Bot", comment: "Name shown for a bot with no name") : id
         default: return id
         }
     }

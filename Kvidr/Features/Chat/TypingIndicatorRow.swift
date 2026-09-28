@@ -9,7 +9,7 @@ struct TypingIndicatorRow: View {
 
     private var summary: String {
         TypingSummary.text(names: typists.map { $0.displayName ?? (conversation.isOneToOne ? conversation.displayName : nil) })
-            ?? "Someone is typing…"
+            ?? String(localized: "Someone is typing…")
     }
 
     var body: some View {

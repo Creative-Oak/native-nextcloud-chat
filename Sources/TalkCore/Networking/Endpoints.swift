@@ -33,6 +33,18 @@ enum Endpoint {
         "\(spreedV1)/room/\(segment(token))/avatar" + (dark ? "/dark" : "")
     }
 
+    // Breakout rooms (v1, and the list under the conversation, v4)
+    static func breakoutRooms(_ token: String) -> String { "\(spreedV1)/breakout-rooms/\(segment(token))" }
+    static func breakoutRoomList(_ token: String) -> String { "\(spreedV4)/room/\(segment(token))/breakout-rooms" }
+
+    // Conversation tags (v4) — the user's own groups in the sidebar
+    static let tags = "\(spreedV4)/tags"
+    static func tag(_ id: String) -> String { "\(spreedV4)/tags/\(segment(id))" }
+    static func conversationTags(_ token: String) -> String { "\(spreedV4)/room/\(segment(token))/tags" }
+
+    // Bots (v1)
+    static func bots(_ token: String) -> String { "\(spreedV1)/bot/\(segment(token))" }
+
     // Chat (v1)
     static func chat(_ token: String) -> String { "\(spreedV1)/chat/\(segment(token))" }
     static func chatMessage(_ token: String, _ messageID: Int) -> String { "\(spreedV1)/chat/\(segment(token))/\(messageID)" }

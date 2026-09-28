@@ -26,6 +26,8 @@ xcodebuild build \
     -destination 'generic/platform=iOS Simulator' \
     -quiet \
     CODE_SIGNING_ALLOWED=NO
+echo "==> Every string in the catalog, and translated"
+./Tools/check_translations.sh
 
 echo
 echo "All checks have passed, including the macOS and iOS builds of the app."

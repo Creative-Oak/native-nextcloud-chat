@@ -38,4 +38,26 @@ struct SummaryInputTests {
         #expect(text == "A: message 3\nA: message 4\nA: message 5")
         #expect(SummaryInput.transcript(lines, budget: 5).included == 1)
     }
+
+    @Test("A long stretch is cut into chunks that each fit, in order, keeping the newest")
+    func chunks() {
+        let lines = (1...10).map { SummaryInput.Line(author: "A", text: String(repeating: "x", count: 20) + "\($0)") }
+        // Each rendered line is 3 + 21 or 22 characters, plus a newline: three to a 80-character chunk.
+        let chunks = SummaryInput.chunks(lines, budget: 80)
+        #expect(chunks.count == 4)
+        #expect(chunks.first?.hasPrefix("A: ") == true)
+        #expect(chunks.joined(separator: "\n").components(separatedBy: "\n").count == 10)
+        #expect(chunks.last?.hasSuffix("x10") == true)
+
+        let capped = SummaryInput.chunks(lines, budget: 80, maximum: 2)
+        #expect(capped.count == 2)
+        #expect(capped.last?.hasSuffix("x10") == true)
+        #expect(capped.first?.contains("x7") == true)
+    }
+
+    @Test("One line longer than a chunk still gets a chunk of its own")
+    func oversizedLine() {
+        let lines = [SummaryInput.Line(author: "A", text: String(repeating: "y", count: 200)), SummaryInput.Line(author: "B", text: "short")]
+        #expect(SummaryInput.chunks(lines, budget: 50).count == 2)
+    }
 }

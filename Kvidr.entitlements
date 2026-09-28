@@ -18,6 +18,9 @@
 	<!-- Calls, and recording a voice message from the record button in a conversation. -->
 	<key>com.apple.security.device.audio-input</key>
 	<true/>
+	<!-- A message's meeting into Calendar, or its to-do into Reminders, when the user asks. -->
+	<key>com.apple.security.personal-information.calendars</key>
+	<true/>
 	<!-- The camera, in a video call once the user turns it on. -->
 	<key>com.apple.security.device.camera</key>
 	<true/>

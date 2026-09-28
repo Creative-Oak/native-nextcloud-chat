@@ -66,13 +66,19 @@ in-app viewer, shared-file browser, participants inspector, conversation creatio
 moderator settings, per-conversation notification settings, find in conversation, and
 server-side message search across the whole history.
 
-**Phase 7, still open:** pins, reminders, voice messages, interactive polls, user-status
-editing, typing indicators. The last two need Talk's signaling API; polls and voice
-messages are shown but not yet answered or played.
+**Since 1.0:** the rest of Phase 7 — pins, reminders, voice messages played, recorded
+and written out, interactive polls, user-status editing — and what went beyond it:
+archive, important and sensitive conversations, private replies, scheduled messages,
+forwarding, out-of-office, the live connection to Talk's High Performance Backend with
+typing indicators, threads, on-device summaries, and calls with audio, video, screen
+sharing and incoming ringing.
 
-**Explicitly out of scope for v1:** calls, audio, video, screen sharing, signaling.
-The architecture leaves room for them (see `ARCHITECTURE.md` § Room for calls) but
-nothing in the MVP depends on the signaling stack.
+**Built, waiting for their test run** (see `docs/MANUAL_TESTS.md`): talking indicators,
+Live Captions, group-call polish, raise hand and reactions, on-device translation, the
+lobby, breakout rooms, bots, conversation tags, custom reminder times.
+
+**Deferred:** notifications while kvidr isn't running, which waits for an Apple push key
+so it can be real push.
 
 ## Visual direction
 

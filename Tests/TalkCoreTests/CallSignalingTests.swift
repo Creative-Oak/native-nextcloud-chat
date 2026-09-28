@@ -129,4 +129,38 @@ struct CallSignalingTests {
         #expect(decode(#"{"type":"message","message":{"sender":{"type":"session","sessionid":"s1"},"data":{"type":"offer","roomType":"screen","sid":"z","payload":{"type":"offer","sdp":"v=0"}}}}"#)
             == .callSignal(fromSession: "s1", CallSignal(kind: .offer(sdp: "v=0"), sid: "z", roomType: "screen")))
     }
+
+    @Test("Raised hands, reactions and forced mutes go as Talk's web app sends them, and come back")
+    func callMessages() throws {
+        func sent(_ message: CallMessage) throws -> [String: Any] {
+            let object = try JSONSerialization.jsonObject(with: SignalingOutbound.callMessage(toSession: "s2", message).encoded()) as? [String: Any]
+            return ((object?["message"] as? [String: Any])?["data"] as? [String: Any]) ?? [:]
+        }
+        let hand = try sent(.raiseHand(true, at: Date(timeIntervalSince1970: 1_700_000_000)))
+        #expect(hand["type"] as? String == "raiseHand")
+        #expect(hand["to"] as? String == "s2")
+        #expect((hand["payload"] as? [String: Any])?["state"] as? Bool == true)
+        #expect((hand["payload"] as? [String: Any])?["timestamp"] as? Int == 1_700_000_000_000)
+        #expect(((try sent(.reaction("👏")))["payload"] as? [String: Any])?["reaction"] as? String == "👏")
+        // A forced mute goes as a control, not a message, the way the web app sends it.
+        let control = try JSONSerialization.jsonObject(with: SignalingOutbound.callMessage(toSession: "s2", .forceMute(target: "s9")).encoded()) as? [String: Any]
+        #expect(control?["type"] as? String == "control")
+        let body = control?["control"] as? [String: Any]
+        #expect((body?["recipient"] as? [String: Any])?["sessionid"] as? String == "s2")
+        #expect((body?["data"] as? [String: Any])?["action"] as? String == "forceMute")
+        // A type too, or Talk for iOS drops it before reading the action.
+        #expect((body?["data"] as? [String: Any])?["type"] as? String == "control")
+        #expect((body?["data"] as? [String: Any])?["peerId"] as? String == "s9")
+
+        func received(_ data: String) -> SignalingInbound? {
+            SignalingInbound.decode(Data(#"{"type":"message","message":{"sender":{"type":"session","sessionid":"s1"},"data":\#(data)}}"#.utf8))
+        }
+        #expect(received(#"{"type":"raiseHand","payload":{"state":true,"timestamp":1}}"#) == .raisedHand(fromSession: "s1", isRaised: true))
+        #expect(received(#"{"type":"raiseHand","payload":{"state":false}}"#) == .raisedHand(fromSession: "s1", isRaised: false))
+        #expect(received(#"{"type":"reaction","payload":{"reaction":"🎉"}}"#) == .callReaction(fromSession: "s1", emoji: "🎉"))
+        #expect(received(#"{"type":"control","payload":{"action":"forceMute","peerId":"me"}}"#) == .forceMute(target: "me", fromSession: "s1"))
+        // And as Talk's apps send it: a control of its own.
+        let fromWeb = SignalingInbound.decode(Data(#"{"type":"control","control":{"sender":{"type":"session","sessionid":"s1"},"data":{"action":"forceMute","peerId":"me"}}}"#.utf8))
+        #expect(fromWeb == .forceMute(target: "me", fromSession: "s1"))
+    }
 }

@@ -130,10 +130,13 @@ final class AttachmentQueue {
     /// An image pasted from the clipboard — written to a temporary file first, because the
     /// upload path takes a file, and named after the moment it was pasted so it doesn't
     /// arrive as "image.png" for the fiftieth time.
-    func enqueuePastedImage(_ image: PlatformImage) {
+    /// `named`: what the file is called — a Genmoji's description, say. Without it, "Pasted
+    /// image" and when.
+    func enqueuePastedImage(_ image: PlatformImage, named: String? = nil) {
         guard let png = image.pngData else { return }
 
-        let name = "Pasted image \(Self.timestampFormatter.string(from: .now)).png"
+        let base = named.map(Self.fileSafe).flatMap { $0.isEmpty ? nil : $0 } ?? Self.pastedImageName(at: .now)
+        let name = "\(base).png"
         do {
             // Its own scratch directory, like a picked photo: the name carries a timestamp
             // only to the second, so two quick pastes would otherwise collide, and a
@@ -145,6 +148,15 @@ final class AttachmentQueue {
         } catch {
             Log.chat.warning("Couldn’t stage a pasted image for upload")
         }
+    }
+
+    /// A name that can be a file's: no path separators, no leading dot, not too long.
+    private static func fileSafe(_ name: String) -> String {
+        var cleaned = name
+        for separator in ["/", ":", "\\"] { cleaned = cleaned.replacingOccurrences(of: separator, with: "-") }
+        cleaned = cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
+        while cleaned.hasPrefix(".") { cleaned.removeFirst() }
+        return String(cleaned.prefix(80))
     }
 
     /// - Parameter temporaryItem: what the app made for this URL and must clear away again,
@@ -439,12 +451,27 @@ final class AttachmentQueue {
     /// Fixed format, so fixed locale: left to the user's own, this same pattern writes
     /// 2568 on a Buddhist calendar and Arabic-Indic digits in some locales — into a file
     /// name, which is the one place a date should be plain and sortable.
-    private static let timestampFormatter: DateFormatter = {
+    private static let dayFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "yyyy-MM-dd 'at' HH.mm.ss"
+        formatter.dateFormat = "yyyy-MM-dd"
         return formatter
     }()
+
+    private static let timeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "HH.mm.ss"
+        return formatter
+    }()
+
+    /// Named the way macOS names a screenshot, in the user's language.
+    private static func pastedImageName(at date: Date) -> String {
+        String(
+            localized: "Pasted image \(dayFormatter.string(from: date)) at \(timeFormatter.string(from: date))",
+            comment: "File name of a pasted image; like macOS's “Screenshot 2026-09-23 at 15.55.00”. %1$@ is the date, %2$@ the time"
+        )
+    }
 }
 
 /// Where the app puts files it makes for an upload: a pasted image, or a photo copied out of

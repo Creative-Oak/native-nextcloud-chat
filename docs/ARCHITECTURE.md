@@ -232,6 +232,50 @@ a name instead of sending a half-typed message.
 
 `@all` is filtered out when the server's `mentionPermissions` restricts it to moderators.
 
+## Localization
+
+English is the development language; Danish (`da`) is the first translation. Everything
+lives in string catalogs inside `Kvidr/` (a synchronized folder, so a catalog added there is
+in the target):
+
+| Catalog | Holds |
+| --- | --- |
+| `Kvidr/Resources/Localizable.xcstrings` | Every string kvidr shows, from the app and from the core |
+| `Kvidr/Resources/InfoPlist.xcstrings` | The privacy prompts (camera, microphone, …), keyed by Info.plist key |
+| `Kvidr/Integrations/AppShortcuts.xcstrings` | Siri and Shortcuts phrases |
+
+The keys are the English text itself. The compiler extracts them (`SWIFT_EMIT_LOC_STRINGS`)
+from every literal in a localized position: SwiftUI's `Text("…")`, `Button("…")`, `.help("…")`
+and the like, `LocalizedStringResource` (App Intents), and `String(localized:)`. A `String`
+*value* handed to SwiftUI is shown verbatim, so a title computed in code (a menu item, an enum's
+`title`, an error message) is written `String(localized: "…")` where it's made. Counts are one
+interpolated string (`"\(count) people"`) whose plural forms are variations in the catalog, never
+`count == 1 ? … : …`.
+
+One gap in the extraction: an App Intent's `ParameterSummary` ("Send ${message} to
+${conversation}") isn't extracted, so that string is kept by hand in `Localizable.xcstrings`,
+marked *manual*. A new or changed summary needs the same.
+
+**The core.** `Sources/TalkCore` stays Foundation-only and uses Foundation's
+`String(localized:comment:)` with the default bundle. The Xcode build compiles the core into the
+app (the one-module trick), so `Bundle.main` is kvidr's bundle and those strings are extracted into,
+and looked up in, the app's `Localizable.xcstrings` like any other. Under `swift test` there's no
+catalog and they come back as their English keys, which is what the tests assert. The core gets
+no catalog or resource bundle of its own.
+
+Not translated, on purpose: log messages, and the instructions given to the on-device language
+model (the features built on it answer in the language they're given).
+
+**Checking.** `./Tools/check_translations.sh` (run by preflight after the build) merges what the
+build extracted into a copy of the catalog and fails if a string is missing from
+`Localizable.xcstrings`, or is not translated into every language the catalog has. `--write`
+merges the new strings into the catalog itself, as Xcode does when it builds, ready to translate.
+
+**Another language:** add it in Xcode (Project → Info → Localizations, which adds it to
+`knownRegions`), or add its code to `knownRegions` in `project.pbxproj`. Then translate the three
+catalogs in Xcode's catalog editor, where the plural rules for that language appear on their own.
+Once one string has the new language, the check wants it for all of them.
+
 ## Verification
 
 `./Tools/preflight.sh` runs what CI runs: the layering check above, `swift test` over all of

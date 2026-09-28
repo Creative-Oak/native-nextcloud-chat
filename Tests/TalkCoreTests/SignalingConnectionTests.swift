@@ -223,6 +223,8 @@ struct SignalingConnectionTests {
         #expect(decode(#"{"type":"event","event":{"target":"participants","type":"update","update":{"roomid":"abc","users":[]}}}"#) == .participantsChanged(token: "abc", users: [], everyone: nil))
         #expect(decode(#"{"type":"event","event":{"target":"room","type":"message","message":{"roomid":"abc","data":{"type":"chat","chat":{"refresh":true}}}}}"#) == .roomMessage(token: "abc"))
         #expect(decode(#"{"type":"room","room":{"roomid":"abc","properties":{}}}"#) == .room(roomID: "abc"))
+        // Breakout rooms starting or stopping move the session.
+        #expect(decode(#"{"type":"event","event":{"target":"room","type":"switchto","switchto":{"roomid":"room2"}}}"#) == .switchTo(token: "room2"))
     }
 
     @Test("The conversation it should be in is joined on sign-in, and again after a fresh one")

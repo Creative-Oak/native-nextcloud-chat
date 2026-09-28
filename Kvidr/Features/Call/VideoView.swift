@@ -4,7 +4,7 @@ import AppKit
 import UIKit
 #endif
 import SwiftUI
-@preconcurrency import WebRTC
+@preconcurrency import LiveKitWebRTC
 
 /// A WebRTC video track, filling its space the way FaceTime's tiles do: scaled until there
 /// are no bars, the overflow cut off. WebRTC's own Mac view only stretches to its bounds, so
@@ -44,9 +44,9 @@ private struct TrackView: NSViewRepresentable {
         view.attach(nil)
     }
 
-    final class FillingVideoView: NSView, RTCVideoViewDelegate {
-        private let renderer = RTCMTLNSVideoView(frame: .zero)
-        private var track: RTCVideoTrack?
+    final class FillingVideoView: NSView, LKRTCVideoViewDelegate {
+        private let renderer = LKRTCMTLVideoView(frame: .zero)
+        private var track: LKRTCVideoTrack?
         private var videoSize = CGSize(width: 16, height: 9)
         var fits = false {
             didSet { if fits != oldValue { needsLayout = true } }
@@ -63,7 +63,12 @@ private struct TrackView: NSViewRepresentable {
         @available(*, unavailable)
         required init?(coder: NSCoder) { fatalError("not supported") }
 
-        func attach(_ newTrack: RTCVideoTrack?) {
+        /// Never the target of a click: LiveKit's renderer is an AppKit Metal view, which took
+        /// the mouse for itself — so a tile couldn't be dragged, nor the mini call moved by its
+        /// picture. Clicks go to whatever the video is in.
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+        func attach(_ newTrack: LKRTCVideoTrack?) {
             guard newTrack !== track else { return }
             track?.remove(renderer)
             track = newTrack
@@ -80,7 +85,7 @@ private struct TrackView: NSViewRepresentable {
             renderer.frame = CGRect(x: (bounds.width - size.width) / 2, y: (bounds.height - size.height) / 2, width: size.width, height: size.height)
         }
 
-        nonisolated func videoView(_ videoView: any RTCVideoRenderer, didChangeVideoSize size: CGSize) {
+        nonisolated func videoView(_ videoView: any LKRTCVideoRenderer, didChangeVideoSize size: CGSize) {
             Task { @MainActor in
                 guard size.width > 0, size.height > 0 else { return }
                 self.videoSize = size
@@ -112,9 +117,9 @@ private struct TrackView: UIViewRepresentable {
 
     /// The same clipping arrangement as the Mac's: WebRTC's Metal view stretched to the
     /// video's proportions inside a view that cuts off the overflow.
-    final class FillingVideoView: UIView, RTCVideoViewDelegate {
-        private let renderer = RTCMTLVideoView(frame: .zero)
-        private var track: RTCVideoTrack?
+    final class FillingVideoView: UIView, LKRTCVideoViewDelegate {
+        private let renderer = LKRTCMTLVideoView(frame: .zero)
+        private var track: LKRTCVideoTrack?
         private var videoSize = CGSize(width: 16, height: 9)
         var fits = false {
             didSet { if fits != oldValue { setNeedsLayout() } }
@@ -131,7 +136,7 @@ private struct TrackView: UIViewRepresentable {
         @available(*, unavailable)
         required init?(coder: NSCoder) { fatalError("not supported") }
 
-        func attach(_ newTrack: RTCVideoTrack?) {
+        func attach(_ newTrack: LKRTCVideoTrack?) {
             guard newTrack !== track else { return }
             track?.remove(renderer)
             track = newTrack
@@ -147,7 +152,7 @@ private struct TrackView: UIViewRepresentable {
             renderer.frame = CGRect(x: (bounds.width - size.width) / 2, y: (bounds.height - size.height) / 2, width: size.width, height: size.height)
         }
 
-        nonisolated func videoView(_ videoView: any RTCVideoRenderer, didChangeVideoSize size: CGSize) {
+        nonisolated func videoView(_ videoView: any LKRTCVideoRenderer, didChangeVideoSize size: CGSize) {
             Task { @MainActor in
                 guard size.width > 0, size.height > 0 else { return }
                 self.videoSize = size

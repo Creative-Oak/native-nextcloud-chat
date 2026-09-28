@@ -69,8 +69,8 @@ struct ChatSearchBar: View {
 
     private var countLabel: String {
         model.searchMatches.isEmpty
-            ? "No matches"
-            : "\(model.currentMatch + 1) of \(model.searchMatches.count)"
+            ? String(localized: "No matches", comment: "Find in conversation: nothing found")
+            : String(localized: "\(model.currentMatch + 1) of \(model.searchMatches.count)", comment: "Find in conversation: which match is shown, of how many")
     }
 
     private var results: some View {

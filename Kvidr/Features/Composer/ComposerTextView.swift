@@ -42,6 +42,10 @@ struct ComposerTextView: NSViewRepresentable {
     var onPasteImage: (PlatformImage) -> Void
     /// Files copied in Finder.
     var onPasteFiles: ([URL]) -> Void
+    /// A Genmoji from the emoji picker: its picture, and what it shows.
+    var onGenmoji: (NSImage, String) -> Void = { _, _ in }
+    /// What's selected, in UTF-16 — for translating only that.
+    var onSelectionChange: (NSRange) -> Void = { _ in }
 
     /// One line, and the ceiling before it starts scrolling instead of growing.
     static let minimumHeight: CGFloat = 22
@@ -53,6 +57,7 @@ struct ComposerTextView: NSViewRepresentable {
         // for that is the text view's own.
         let scrollView = NSScrollView()
         scrollView.drawsBackground = false
+        scrollView.backgroundColor = .clear
         scrollView.hasVerticalScroller = false
         scrollView.autohidesScrollers = true
         scrollView.verticalScrollElasticity = .none
@@ -68,6 +73,10 @@ struct ComposerTextView: NSViewRepresentable {
 
         textView.delegate = context.coordinator
         textView.drawsBackground = false
+        // Clear as well as not drawn: Writing Tools paints the text view's background colour —
+        // white, unless told otherwise — behind the words it's working on, and on the glass
+        // capsule that shows as a white slab.
+        textView.backgroundColor = .clear
         textView.isRichText = false
         textView.allowsUndo = true
         textView.font = .preferredFont(forTextStyle: .body)
@@ -78,6 +87,11 @@ struct ComposerTextView: NSViewRepresentable {
         textView.isAutomaticLinkDetectionEnabled = false
         textView.isContinuousSpellCheckingEnabled = true
         textView.isGrammarCheckingEnabled = false
+        // Apple Intelligence's Writing Tools — proofread, rewrite, make friendlier — in full,
+        // right in the field. Plain text back: a Talk message is Markdown text, and a list or a
+        // table Writing Tools made would arrive as attributes the send would drop.
+        textView.writingToolsBehavior = .complete
+        textView.allowedWritingToolsResultOptions = [.plainText]
         textView.textContainer?.widthTracksTextView = true
         // NSTextContainer pads line fragments by 5pt unless told not to, which puts the
         // text and the caret 5pt right of where the placeholder overlay draws — so an
@@ -90,6 +104,7 @@ struct ComposerTextView: NSViewRepresentable {
         coordinator.textView = textView
         textView.onPasteImage = { [weak coordinator] image in coordinator?.parent.onPasteImage(image) }
         textView.onPasteFiles = { [weak coordinator] urls in coordinator?.parent.onPasteFiles(urls) }
+        textView.onGenmoji = { [weak coordinator] image, description in coordinator?.parent.onGenmoji(image, description) }
         Task { @MainActor in coordinator.updateHeight() }
         return scrollView
     }
@@ -141,6 +156,7 @@ struct ComposerTextView: NSViewRepresentable {
             guard let textView = notification.object as? NSTextView else { return }
             let location = textView.string.characterOffset(forUTF16Offset: textView.selectedRange().location)
             if parent.caret != location { parent.caret = location }
+            parent.onSelectionChange(textView.selectedRange())
         }
 
         func textDidBeginEditing(_ notification: Notification) {
@@ -151,7 +167,20 @@ struct ComposerTextView: NSViewRepresentable {
             parent.isFocused = false
         }
 
+        /// Writing Tools is rewriting the field: Return belongs to it, not to sending.
+        private var isWritingTools = false
+
+        func textViewWritingToolsWillBegin(_ textView: NSTextView) {
+            isWritingTools = true
+        }
+
+        func textViewWritingToolsDidEnd(_ textView: NSTextView) {
+            isWritingTools = false
+        }
+
         func textView(_ textView: NSTextView, doCommandBy selector: Selector) -> Bool {
+            // Mid-rewrite, a Return would send words that are still changing.
+            if isWritingTools || textView.isWritingToolsActive { return false }
             // While the mention list is open it owns these keys — Return picks a name
             // rather than sending a half-typed message.
             if parent.isSuggesting {
@@ -237,6 +266,31 @@ struct ComposerTextView: NSViewRepresentable {
 private final class ComposerNSTextView: NSTextView {
     var onPasteImage: ((NSImage) -> Void)?
     var onPasteFiles: (([URL]) -> Void)?
+    var onGenmoji: ((NSImage, String) -> Void)?
+
+    /// Genmoji: the emoji picker offers to make one only to a field that says it takes them.
+    override var supportsAdaptiveImageGlyph: Bool { true }
+
+    /// A Talk message is plain text, with no room for a picture in a line. So a Genmoji isn't
+    /// put in the words: it goes with the message as a picture of its own, the way a pasted
+    /// one does — which every Talk app can show.
+    override func insert(_ adaptiveImageGlyph: NSAdaptiveImageGlyph, replacementRange: NSRange) {
+        guard let image = Self.largestImage(adaptiveImageGlyph.imageContent) else { return }
+        onGenmoji?(image, adaptiveImageGlyph.contentDescription)
+    }
+
+    /// A Genmoji comes in several sizes, for several text sizes; the biggest makes the best
+    /// picture.
+    private static func largestImage(_ data: Data) -> NSImage? {
+        guard let image = NSImage(data: data) else { return nil }
+        let biggest = image.representations
+            .compactMap { $0 as? NSBitmapImageRep }
+            .max { $0.pixelsWide < $1.pixelsWide }
+        guard let biggest else { return image }
+        let single = NSImage(size: NSSize(width: biggest.pixelsWide, height: biggest.pixelsHigh))
+        single.addRepresentation(biggest)
+        return single
+    }
 
     /// Ours first, because the text system takes the first flavour it recognises. A
     /// screenshot's pasteboard carries nothing else, but an image copied from a browser
@@ -300,6 +354,10 @@ struct ComposerTextView: UIViewRepresentable {
     var onAcceptSuggestion: () -> Void
     var onPasteImage: (PlatformImage) -> Void
     var onPasteFiles: ([URL]) -> Void
+    /// A Genmoji from the emoji keyboard: its picture, and what it shows.
+    var onGenmoji: (PlatformImage, String) -> Void = { _, _ in }
+    /// What's selected, in UTF-16 — for translating only that.
+    var onSelectionChange: (NSRange) -> Void = { _ in }
 
     static let minimumHeight: CGFloat = 24
     static let maximumHeight: CGFloat = 140
@@ -318,6 +376,11 @@ struct ComposerTextView: UIViewRepresentable {
         textView.dataDetectorTypes = []
         textView.spellCheckingType = .yes
         textView.isScrollEnabled = false
+        // Writing Tools in full, right in the field — plain text back, as on the Mac.
+        textView.writingToolsBehavior = .complete
+        textView.allowedWritingToolsResultOptions = [.plainText]
+        // The emoji keyboard offers Genmoji only to a field that says it takes them.
+        textView.supportsAdaptiveImageGlyph = true
         textView.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         textView.text = text
 
@@ -326,6 +389,7 @@ struct ComposerTextView: UIViewRepresentable {
         textView.coordinator = coordinator
         textView.onPasteImage = { [weak coordinator] image in coordinator?.parent.onPasteImage(image) }
         textView.onPasteFiles = { [weak coordinator] urls in coordinator?.parent.onPasteFiles(urls) }
+        textView.onGenmoji = { [weak coordinator] image, description in coordinator?.parent.onGenmoji(image, description) }
         Task { @MainActor in coordinator.updateHeight() }
         return textView
     }
@@ -371,6 +435,7 @@ struct ComposerTextView: UIViewRepresentable {
         }
 
         func textViewDidChange(_ textView: UITextView) {
+            (textView as? ComposerUITextView)?.takeGenmoji()
             parent.text = textView.text
             parent.caret = textView.text.characterOffset(forUTF16Offset: textView.selectedRange.location)
             updateHeight()
@@ -379,6 +444,7 @@ struct ComposerTextView: UIViewRepresentable {
         func textViewDidChangeSelection(_ textView: UITextView) {
             let location = textView.text.characterOffset(forUTF16Offset: textView.selectedRange.location)
             if parent.caret != location { parent.caret = location }
+            parent.onSelectionChange(textView.selectedRange)
         }
 
         func textViewDidBeginEditing(_ textView: UITextView) {
@@ -454,7 +520,26 @@ struct ComposerTextView: UIViewRepresentable {
 final class ComposerUITextView: UITextView {
     var onPasteImage: ((PlatformImage) -> Void)?
     var onPasteFiles: (([URL]) -> Void)?
+    var onGenmoji: ((PlatformImage, String) -> Void)?
     weak var coordinator: ComposerTextView.Coordinator?
+
+    /// A Talk message is plain text: a Genmoji goes with the message as a picture of its
+    /// own, as on the Mac, rather than into the words. Taken back out of the text as soon as
+    /// the keyboard has put it in.
+    func takeGenmoji() {
+        guard let text = attributedText, text.length > 0 else { return }
+        var found: [(NSRange, NSAdaptiveImageGlyph)] = []
+        text.enumerateAttribute(.adaptiveImageGlyph, in: NSRange(location: 0, length: text.length)) { value, range, _ in
+            if let glyph = value as? NSAdaptiveImageGlyph { found.append((range, glyph)) }
+        }
+        guard !found.isEmpty else { return }
+        let stripped = NSMutableAttributedString(attributedString: text)
+        for (range, _) in found.reversed() { stripped.deleteCharacters(in: range) }
+        attributedText = stripped
+        for (_, glyph) in found {
+            if let image = UIImage(data: glyph.imageContent) { onGenmoji?(image, glyph.contentDescription) }
+        }
+    }
 
     private var lastLaidOutWidth: CGFloat = 0
 

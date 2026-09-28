@@ -1,58 +1,51 @@
 import SwiftUI
 
 /// The sidebar's Reminders row, at the top of the list while there are any — where Mail
-/// keeps Remind Me. A quiet line rather than a conversation-sized row: a symbol in the
-/// avatars' column, so it lines up with the faces under it, the name, and the count.
+/// keeps Remind Me. A quiet line rather than a conversation-sized row: the alarm at the
+/// faces' left edge, the name beside it, and the count where a sidebar keeps its counts. The
+/// alarm stays orange when the row is selected, as Reminders' own lists keep their colour.
 struct RemindersSidebarRow: View {
     let count: Int
-    var isSelected = false
-
-    /// `ConversationRow`'s unread gutter and avatar column.
-    private static let gutter: CGFloat = 8
-    private static let avatar: CGFloat = Platform.isPhone ? 44 : 40
 
     var body: some View {
-        HStack(spacing: 5) {
-            Color.clear
-                .frame(width: Self.gutter, height: 1)
-                .accessibilityHidden(true)
-
-            HStack(spacing: 10) {
-                Image(systemName: "alarm")
-                    .font(.scaled(13, weight: .medium))
-                    .foregroundStyle(isSelected ? .white : .orange)
-                    .frame(width: Self.avatar, height: Platform.isPhone ? Self.avatar : nil)
-                    // On a phone it stands where a conversation's face would, in a disc.
-                    .background {
-                        if Platform.isPhone { Circle().fill(.orange.opacity(0.15)) }
-                    }
-
-                Text("Reminders")
-                    .font(.scaled(13, weight: Platform.isPhone ? .semibold : .medium))
-                    .lineLimit(1)
-
-                Spacer(minLength: 4)
-
-                Text("\(count)")
-                    .font(.scaled(12))
-                    .monospacedDigit()
-                    .foregroundStyle(isSelected ? .primary : .secondary)
-                if Platform.isPhone {
-                    Image(systemName: "chevron.forward")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.tertiary)
-                }
-            }
-        }
-        .padding(.vertical, 3)
-        .contentShape(.rect)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Reminders, \(count) upcoming")
+        SidebarShortcutRow(title: String(localized: "Reminders", comment: "Sidebar row and page title"), systemImage: "alarm", iconStyle: AnyShapeStyle(Color.orange), count: count)
+            .accessibilityLabel("Reminders, \(count) upcoming")
     }
 }
 
-/// Every upcoming reminder, soonest first, in the messages column. A click opens the message
-/// in its conversation.
+/// A line at the top of the sidebar that isn't a conversation — Reminders, Catch Up: its
+/// symbol lined up with the avatars' left edge under it, and a count.
+struct SidebarShortcutRow: View {
+    let title: String
+    let systemImage: String
+    let iconStyle: AnyShapeStyle
+    let count: Int
+
+    /// `ConversationRow`'s unread gutter and the space after it: where the avatars start.
+    private static let leading: CGFloat = 13
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: systemImage)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(iconStyle)
+                .frame(width: 20)
+            Text(title)
+                .font(.system(size: 13, weight: .medium))
+                .lineLimit(1)
+            Spacer(minLength: 4)
+        }
+        .padding(.leading, Self.leading - 2)
+        .padding(.vertical, 3)
+        .badge(count)
+        .contentShape(.rect)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// Every upcoming reminder in the messages column, the way the Reminders app lists them: the
+/// title large in the list's colour with the count opposite, then the reminders by day,
+/// soonest first. A click opens the message in its conversation.
 struct RemindersPage: View {
     #if os(macOS)
     static let hint = "Right-click a message and choose Remind Me to be reminded about it later."
@@ -73,24 +66,79 @@ struct RemindersPage: View {
                 }
             } else {
                 List {
-                    ForEach(store.reminders) { reminder in
-                        ReminderRow(
-                            reminder: reminder,
-                            conversation: app.conversationList?[reminder.token],
-                            onOpen: { app.openMessage(token: reminder.token, messageID: reminder.messageID) },
-                            onRemove: { store.remove(reminder) }
-                        )
+                    header
+                        .listRowSeparator(.hidden)
+                    ForEach(days, id: \.day) { group in
+                        Section {
+                            ForEach(group.reminders) { reminder in
+                                ReminderRow(
+                                    reminder: reminder,
+                                    conversation: app.conversationList?[reminder.token],
+                                    onOpen: { app.openMessage(token: reminder.token, messageID: reminder.messageID) },
+                                    onRemove: { store.remove(reminder) }
+                                )
+                            }
+                        } header: {
+                            Text(Self.title(of: group.day))
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                                .padding(.top, 8)
+                        }
                     }
                 }
                 .listStyle(.inset)
                 .scrollContentBackground(.hidden)
-                .frame(maxWidth: 560)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.textBackground)
         .navigationTitle("Reminders")
         .task { await store.load() }
+    }
+
+    private var header: some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text("Reminders")
+                .foregroundStyle(.orange)
+            Spacer()
+            Text("\(store.reminders.count)")
+                .monospacedDigit()
+                .foregroundStyle(.orange)
+        }
+        .font(.system(size: 26, weight: .bold))
+        .padding(.top, 6)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isHeader)
+    }
+
+    private struct Day {
+        let day: Date
+        let reminders: [Reminder]
+    }
+
+    /// The reminders by the day they're due, in order.
+    private var days: [Day] {
+        let calendar = Calendar.current
+        var result: [Day] = []
+        for reminder in store.reminders.sorted(by: { $0.date < $1.date }) {
+            let day = calendar.startOfDay(for: reminder.date)
+            if result.last?.day == day {
+                result[result.count - 1] = Day(day: day, reminders: result[result.count - 1].reminders + [reminder])
+            } else {
+                result.append(Day(day: day, reminders: [reminder]))
+            }
+        }
+        return result
+    }
+
+    /// "Today", "Tomorrow", "Monday 28 September" — with the year only when it isn't this one.
+    private static func title(of day: Date, calendar: Calendar = .current) -> String {
+        if calendar.isDateInToday(day) { return String(localized: "Today", comment: "Reminders page: heading over today's reminders") }
+        if calendar.isDateInTomorrow(day) { return String(localized: "Tomorrow", comment: "Reminders page: heading over tomorrow's reminders") }
+        if calendar.isDate(day, equalTo: .now, toGranularity: .year) {
+            return day.formatted(.dateTime.weekday(.wide).day().month(.wide))
+        }
+        return day.formatted(.dateTime.weekday(.wide).day().month(.wide).year())
     }
 }
 
@@ -103,54 +151,63 @@ private struct ReminderRow: View {
     @State private var isHovering = false
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            ActorAvatarView(actor: reminder.actor, size: Platform.isPhone ? 40 : 28)
+        HStack(alignment: .center, spacing: 12) {
+            avatar
 
-            VStack(alignment: .leading, spacing: 1) {
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text(conversation?.displayName ?? reminder.actor.resolvedDisplayName)
-                        .font(.scaled(13, weight: .semibold))
-                        .lineLimit(1)
-                    Spacer(minLength: 8)
-                    // Where the hover's remove button isn't: the two take turns.
-                    if isHovering {
-                        Button(action: onRemove) {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.scaled(12))
-                        }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(.secondary)
-                        .help("Remove Reminder")
-                        .accessibilityLabel("Remove Reminder")
-                    } else {
-                        HStack(spacing: 3) {
-                            Image(systemName: "alarm")
-                                .foregroundStyle(.orange)
-                            Text(ReminderTime.text(reminder.date))
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                                .fixedSize()
-                        }
-                        .font(.scaled(11))
-                    }
-                }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(conversation?.displayName ?? reminder.actor.resolvedDisplayName)
+                    .font(.system(size: 13, weight: .semibold))
+                    .lineLimit(1)
                 Text(preview)
                     .font(.scaled(12))
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
             }
+
+            Spacer(minLength: 12)
+
+            Label(reminder.date.formatted(date: .omitted, time: .shortened), systemImage: "alarm")
+                .labelStyle(ReminderTimeLabelStyle())
+                .font(.system(size: 12))
+                .monospacedDigit()
+
+            // Kept in the layout while hidden, so the time doesn't shift when the pointer comes.
+            Button(action: onRemove) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 13))
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.tertiary)
+            .opacity(isHovering ? 1 : 0)
+            .help("Remove Reminder")
+            .accessibilityLabel("Remove Reminder")
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 6)
+        .padding(.horizontal, 8)
+        .background(isHovering ? AnyShapeStyle(.quaternary.opacity(0.5)) : AnyShapeStyle(.clear), in: .rect(cornerRadius: 8))
         .contentShape(.rect)
         .onTapGesture(perform: onOpen)
         .onHover { isHovering = $0 }
-        // No hover on a touch screen: the remove button's job goes to a swipe.
-        .swipeActions {
-            Button("Remove", systemImage: "trash", role: .destructive, action: onRemove)
-        }
         .contextMenu {
             Button("Show Message", action: onOpen)
-            Button("Remove Reminder", action: onRemove)
+            Divider()
+            Button("Remove Reminder", role: .destructive, action: onRemove)
+        }
+        .swipeActions(edge: .trailing) {
+            Button("Remove", systemImage: "trash", role: .destructive, action: onRemove)
+        }
+        .listRowSeparator(.visible)
+        .accessibilityElement(children: .combine)
+        .accessibilityAction(named: "Remove Reminder", onRemove)
+        .accessibilityAddTraits(.isButton)
+    }
+
+    @ViewBuilder
+    private var avatar: some View {
+        if let conversation {
+            AvatarView(conversation: conversation, size: 32)
+        } else {
+            ActorAvatarView(actor: reminder.actor, size: 32)
         }
     }
 
@@ -162,7 +219,17 @@ private struct ReminderRow: View {
         )
         let text = MessageContentParser(currentUserID: "", markdownEnabled: false).parse(message).previewWithoutMarkdown
         let isGroup = conversation.map { !$0.isOneToOne } ?? true
-        return isGroup ? "\(reminder.actor.resolvedDisplayName): \(text)" : text
+        return isGroup ? String(localized: "\(reminder.actor.resolvedDisplayName): \(text)", comment: "Message preview: the author's name, then the message") : text
+    }
+}
+
+/// The alarm in orange, the time beside it in grey.
+private struct ReminderTimeLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 4) {
+            configuration.icon.foregroundStyle(.orange)
+            configuration.title.foregroundStyle(.secondary)
+        }
     }
 }
 
@@ -170,8 +237,75 @@ private struct ReminderRow: View {
 enum ReminderTime {
     static func text(_ date: Date, calendar: Calendar = .current) -> String {
         let time = date.formatted(date: .omitted, time: .shortened)
-        if calendar.isDateInToday(date) { return "Today \(time)" }
-        if calendar.isDateInTomorrow(date) { return "Tomorrow \(time)" }
+        if calendar.isDateInToday(date) { return String(localized: "Today \(time)", comment: "When a reminder or scheduled message is due; %@ is a time of day") }
+        if calendar.isDateInTomorrow(date) { return String(localized: "Tomorrow \(time)", comment: "When a reminder or scheduled message is due; %@ is a time of day") }
         return date.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated).hour().minute())
+    }
+}
+
+/// Remind Me → Custom…: a day and a time of your own, from a minute from now on. Starts at
+/// the next full hour, the likeliest one to want.
+struct CustomReminderSheet: View {
+    var onSet: (Date) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var date = Calendar.current.nextDate(after: .now, matching: DateComponents(minute: 0), matchingPolicy: .nextTime) ?? .now.addingTimeInterval(3600)
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Remind Me")
+                .font(.headline)
+            // The day on a calendar and the time typed beside it, rather than the clock face a
+            // graphical picker puts there: a time is quicker typed than dragged.
+            HStack(alignment: .top, spacing: 16) {
+                DatePicker("Day", selection: day, in: Calendar.current.startOfDay(for: .now)..., displayedComponents: .date)
+                    .datePickerStyle(.graphical)
+                    .labelsHidden()
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Time")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.secondary)
+                    DatePicker("Time", selection: time, displayedComponents: .hourAndMinute)
+                        .fieldDatePicker()
+                        .labelsHidden()
+                        .fixedSize()
+                    Spacer(minLength: 0)
+                    Text(ReminderTime.text(date))
+                        .font(.system(size: 12))
+                        .foregroundStyle(date <= .now ? AnyShapeStyle(Color.red) : AnyShapeStyle(.secondary))
+                }
+            }
+            HStack {
+                Spacer()
+                Button("Cancel") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                Button("Set Reminder") {
+                    onSet(date)
+                    dismiss()
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(date <= .now)
+            }
+        }
+        .padding(18)
+        .fixedSize()
+    }
+
+    /// The day picked on the calendar, keeping the time.
+    private var day: Binding<Date> {
+        Binding(get: { date }, set: { date = Self.combine(day: $0, time: date) })
+    }
+
+    /// The time typed, keeping the day.
+    private var time: Binding<Date> {
+        Binding(get: { date }, set: { date = Self.combine(day: date, time: $0) })
+    }
+
+    private static func combine(day: Date, time: Date, calendar: Calendar = .current) -> Date {
+        var parts = calendar.dateComponents([.year, .month, .day], from: day)
+        let clock = calendar.dateComponents([.hour, .minute], from: time)
+        parts.hour = clock.hour
+        parts.minute = clock.minute
+        return calendar.date(from: parts) ?? day
     }
 }

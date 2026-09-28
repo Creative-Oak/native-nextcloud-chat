@@ -16,6 +16,8 @@ struct SidebarColumn: View {
     var onDiscardDraft: () -> Void
     var profile: ProfileModel?
     var reminderCount = 0
+    /// Conversations with something unread, for the Catch Up row.
+    var catchUpCount = 0
     var onOpenSettings: () -> Void = {}
     /// iOS: the list is a screen of its own, so it carries what the Mac keeps in the toolbar
     /// and the menu bar.
@@ -27,7 +29,9 @@ struct SidebarColumn: View {
     var body: some View {
         #if os(macOS)
         lists
-            .safeAreaInset(edge: .bottom, spacing: 0) {
+            // A bar rather than an inset, as the chat's header is: the list scrolls under it
+            // behind the system's edge effect, hard so no row shows through the name.
+            .safeAreaBar(edge: .bottom, spacing: 0) {
                 if let profile {
                     SidebarAccountRow(
                         profile: profile,
@@ -37,6 +41,7 @@ struct SidebarColumn: View {
                     )
                 }
             }
+            .scrollEdgeEffectStyle(.hard, for: .bottom)
         #else
         // Messages' list screen: a centred title between two glass buttons, and the search
         // field and compose button floating at the foot of the screen.
@@ -98,7 +103,8 @@ struct SidebarColumn: View {
                 CompactConversationListView(
                     model: list,
                     selection: $selection,
-                    composerFocused: $composerFocused
+                    composerFocused: $composerFocused,
+                    reminderCount: reminderCount
                 )
             } else {
                 ConversationListView(
@@ -109,7 +115,8 @@ struct SidebarColumn: View {
                     onSearchFocusHandled: onSearchFocusHandled,
                     draft: draft,
                     onDiscardDraft: onDiscardDraft,
-                    reminderCount: reminderCount
+                    reminderCount: reminderCount,
+                    catchUpCount: catchUpCount
                 )
             }
         } else {

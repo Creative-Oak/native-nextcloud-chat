@@ -116,7 +116,7 @@ final class AudioDevices {
 }
 #else
 @preconcurrency import AVFoundation
-@preconcurrency import WebRTC
+@preconcurrency import LiveKitWebRTC
 
 typealias AudioDeviceID = String
 
@@ -180,8 +180,8 @@ final class AudioDevices {
     }
 
     /// Through WebRTC's session wrapper, which is holding the audio session for the call.
-    private func configure(_ change: (RTCAudioSession) throws -> Void) {
-        let session = RTCAudioSession.sharedInstance()
+    private func configure(_ change: (LKRTCAudioSession) throws -> Void) {
+        let session = LKRTCAudioSession.sharedInstance()
         session.lockForConfiguration()
         defer { session.unlockForConfiguration() }
         do {
