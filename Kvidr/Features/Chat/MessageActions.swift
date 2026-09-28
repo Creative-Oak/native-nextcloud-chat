@@ -1,4 +1,3 @@
-import AppKit
 import SwiftUI
 
 /// Reactions on a message, the way Messages shows tapbacks: a badge hanging off the
@@ -54,7 +53,7 @@ struct ReactionBadges: View {
             .background(fill(for: emoji), in: .capsule)
             // A hairline in the page colour, so overlapping badges and the bubble
             // underneath read as separate objects.
-            .overlay { Capsule().strokeBorder(Color(nsColor: .textBackgroundColor), lineWidth: 1.5) }
+            .overlay { Capsule().strokeBorder(Color.textBackground, lineWidth: 1.5) }
             .contentShape(.capsule)
         }
         .buttonStyle(.plain)

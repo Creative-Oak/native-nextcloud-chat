@@ -1,4 +1,6 @@
+#if os(macOS)
 import AppKit
+#endif
 import SwiftUI
 
 /// The menu bar, rendered from the command registry — see `AppCommand`.
@@ -16,10 +18,12 @@ struct TalkCommands: Commands {
         // works with it closed, when there is no focused registry to ask.
         CommandGroup(replacing: .appSettings) {
             Button("Settings…") {
+                #if os(macOS)
                 if let window = NSApp.windows.first(where: { $0.frameAutosaveName == "KvidrMain" }) {
                     window.makeKeyAndOrderFront(nil)
                 }
                 NSApp.activate()
+                #endif
                 app.showSettings()
             }
             .keyboardShortcut(",", modifiers: .command)

@@ -83,7 +83,7 @@ struct SendLaterPill: View {
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: "clock.fill")
-                .font(.system(size: 13))
+                .font(.scaled(13))
                 .foregroundStyle(Color.accentColor)
 
             DatePicker(
@@ -92,7 +92,11 @@ struct SendLaterPill: View {
                 in: Date().addingTimeInterval(60)...,
                 displayedComponents: [.date, .hourAndMinute]
             )
+            #if os(macOS)
             .datePickerStyle(.field)
+            #else
+            .datePickerStyle(.compact)
+            #endif
             .labelsHidden()
             .fixedSize()
 
@@ -101,7 +105,7 @@ struct SendLaterPill: View {
                 SendLaterPresets(model: model)
             } label: {
                 Image(systemName: "chevron.down")
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.scaled(10, weight: .semibold))
                     .foregroundStyle(Color.accentColor)
             }
             .menuStyle(.borderlessButton)
@@ -124,7 +128,7 @@ struct SendLaterPill: View {
 
             Button { model.cancelSendLater() } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.scaled(12, weight: .semibold))
                     .foregroundStyle(Color.accentColor)
                     .frame(width: 22, height: 22)
                     .contentShape(.rect)

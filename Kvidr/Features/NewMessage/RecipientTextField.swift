@@ -1,5 +1,11 @@
-import AppKit
 import SwiftUI
+#if os(macOS)
+import AppKit
+#else
+import UIKit
+#endif
+
+#if os(macOS)
 
 /// The text field inside the To: band.
 ///
@@ -84,3 +90,94 @@ struct RecipientTextField: NSViewRepresentable {
         }
     }
 }
+#else
+
+/// The text field inside the To: band — the iPhone and iPad half.
+///
+/// `UITextField` for the same reason the Mac uses `NSTextField`: Backspace in an empty field
+/// has to reach the chips, and on a hardware keyboard the arrows, Return and Escape have to
+/// walk and pick the matches. `deleteBackward` and key commands are where UIKit offers them.
+struct RecipientTextField: UIViewRepresentable {
+    @Binding var text: String
+    @Binding var isFocused: Bool
+    var prompt: String
+
+    var onBackspaceIntoChips: () -> Bool
+    var onMove: (Int) -> Bool
+    var onAccept: () -> Bool
+    var onCancel: () -> Bool
+
+    func makeUIView(context: Context) -> RecipientUITextField {
+        let field = RecipientUITextField()
+        field.delegate = context.coordinator
+        field.coordinator = context.coordinator
+        field.font = .preferredFont(forTextStyle: .body)
+        field.adjustsFontForContentSizeCategory = true
+        field.placeholder = prompt
+        field.autocorrectionType = .no
+        field.autocapitalizationType = .none
+        field.returnKeyType = .done
+        field.text = text
+        field.addTarget(context.coordinator, action: #selector(Coordinator.textChanged(_:)), for: .editingChanged)
+        field.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        return field
+    }
+
+    func updateUIView(_ field: RecipientUITextField, context: Context) {
+        context.coordinator.parent = self
+        if field.text != text { field.text = text }
+        if field.placeholder != prompt { field.placeholder = prompt }
+        if isFocused, !field.isFirstResponder {
+            Task { @MainActor in field.becomeFirstResponder() }
+        }
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    @MainActor
+    final class Coordinator: NSObject, UITextFieldDelegate {
+        var parent: RecipientTextField
+
+        init(_ parent: RecipientTextField) {
+            self.parent = parent
+        }
+
+        @objc func textChanged(_ field: UITextField) {
+            parent.text = field.text ?? ""
+        }
+
+        func textFieldDidBeginEditing(_ textField: UITextField) {
+            if !parent.isFocused { parent.isFocused = true }
+        }
+
+        func textFieldShouldReturn(_ textField: UITextField) -> Bool {
+            _ = parent.onAccept()
+            return false
+        }
+    }
+}
+
+final class RecipientUITextField: UITextField {
+    weak var coordinator: RecipientTextField.Coordinator?
+
+    override func deleteBackward() {
+        // Only when there is nothing left to delete: otherwise Backspace is Backspace.
+        if (text ?? "").isEmpty, coordinator?.parent.onBackspaceIntoChips() == true { return }
+        super.deleteBackward()
+    }
+
+    override var keyCommands: [UIKeyCommand]? {
+        let commands = [
+            UIKeyCommand(input: UIKeyCommand.inputUpArrow, modifierFlags: [], action: #selector(moveUp)),
+            UIKeyCommand(input: UIKeyCommand.inputDownArrow, modifierFlags: [], action: #selector(moveDown)),
+            UIKeyCommand(input: UIKeyCommand.inputEscape, modifierFlags: [], action: #selector(cancel)),
+        ]
+        for command in commands { command.wantsPriorityOverSystemBehavior = true }
+        return commands
+    }
+
+    @objc private func moveUp() { _ = coordinator?.parent.onMove(-1) }
+    @objc private func moveDown() { _ = coordinator?.parent.onMove(1) }
+    @objc private func cancel() { _ = coordinator?.parent.onCancel() }
+}
+#endif

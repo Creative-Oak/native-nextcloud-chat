@@ -1,4 +1,3 @@
-import AppKit
 import SwiftUI
 
 /// A call running in a conversation: the marker for it, and the way in — here, or in the
@@ -26,13 +25,13 @@ struct CallBadge: View {
 
     var body: some View {
         Image(systemName: conversation.isVideoCall ? "video.fill" : "phone.fill")
-            .font(.system(size: 8, weight: .semibold))
+            .font(.scaled(8, weight: .semibold))
             .foregroundStyle(.white)
             .frame(width: 18, height: 18)
             .background(.green, in: .circle)
             .overlay {
                 Circle().stroke(
-                    isSelected ? Color(nsColor: .selectedContentBackgroundColor) : Color(nsColor: .windowBackgroundColor),
+                    isSelected ? Color.selectedContentBackground : Color.windowBackground,
                     lineWidth: 2
                 )
             }

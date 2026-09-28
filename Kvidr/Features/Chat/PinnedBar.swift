@@ -12,7 +12,7 @@ struct PinnedBar: View {
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: "pin.fill")
-                .font(.system(size: 11))
+                .font(.scaled(11))
                 .foregroundStyle(.orange)
                 .rotationEffect(.degrees(45))
 
@@ -46,7 +46,7 @@ struct PinnedBar: View {
             if model.canPin {
                 Button { model.unpin(messageID: pin.id) } label: {
                     Image(systemName: "pin.slash")
-                        .font(.system(size: 11))
+                        .font(.scaled(11))
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
@@ -56,7 +56,7 @@ struct PinnedBar: View {
 
             Button(action: model.hidePinnedBar) {
                 Image(systemName: "eye.slash")
-                    .font(.system(size: 11))
+                    .font(.scaled(11))
             }
             .buttonStyle(.plain)
             .foregroundStyle(.secondary)

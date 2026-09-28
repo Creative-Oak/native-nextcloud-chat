@@ -1,4 +1,6 @@
+#if os(macOS)
 import AppKit
+#endif
 import AVFoundation
 import Foundation
 
@@ -114,8 +116,10 @@ final class IncomingCalls {
         let ring = Ringing(token: conversation.token, conversation: conversation, since: Date())
         ringing = ring
         playRingtone()
-        if !NSApp.isActive {
+        if !Platform.isActive {
+            #if os(macOS)
             NSApp.requestUserAttention(.criticalRequest)
+            #endif
             notifications.announceIncomingCall(conversation)
         }
         let calls = session.calls

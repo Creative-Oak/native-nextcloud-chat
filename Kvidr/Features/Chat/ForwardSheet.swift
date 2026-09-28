@@ -53,7 +53,9 @@ struct ForwardSheet: View {
             }
         }
         .padding(20)
+        #if os(macOS)
         .frame(width: 420)
+        #endif
         .onAppear { isSearchFocused = true }
     }
 

@@ -453,6 +453,14 @@ struct MessageContentParser: Sendable {
                 continue
             }
 
+            // A heading: a line of its own, in bold. Chat has no use for six sizes of title,
+            // and "## Welcome" with its hashes showing is the one outcome that is wrong.
+            if let heading = trimmed.firstMatch(of: /^#{1,6}\s+(.+?)\s*#*$/) {
+                flushParagraph()
+                blocks.append(.paragraph("**\(heading.1)**"))
+                continue
+            }
+
             if let item = listItem(trimmed) {
                 flushParagraph()
                 var items = [item.text]

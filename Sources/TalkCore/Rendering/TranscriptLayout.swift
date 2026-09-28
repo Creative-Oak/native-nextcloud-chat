@@ -109,7 +109,7 @@ enum ConversationPreview {
 
         let body = MessageContentParser(currentUserID: "", markdownEnabled: false)
             .parse(message)
-            .preview
+            .previewWithoutMarkdown
 
         guard !message.isSystem, !conversation.isOneToOne else { return body }
         let sender = message.actor.resolvedDisplayName

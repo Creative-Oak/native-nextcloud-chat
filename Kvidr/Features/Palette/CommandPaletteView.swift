@@ -1,4 +1,6 @@
+#if os(macOS)
 import AppKit
+#endif
 import SwiftUI
 
 /// ⌘P — Spotlight's shape over the window: a glass capsule to type into and a glass
@@ -23,7 +25,10 @@ struct CommandPaletteView: View {
                 panel
             }
         }
-        .frame(width: 640)
+        .frame(maxWidth: 640)
+        #if os(iOS)
+        .padding(.horizontal, 12)
+        #endif
         // The field takes focus as the palette appears, and is asked again once the
         // scale-and-fade has settled: a request made while the view is still coming in
         // is dropped.
@@ -55,6 +60,7 @@ struct CommandPaletteView: View {
     // sees every key-down in the window while the palette is up, keeps the ones that
     // steer it, and lets the rest — ⌘P among them, which is the menu's — go through.
 
+    #if os(macOS)
     private static let escape: UInt16 = 53
     private static let upArrow: UInt16 = 126
     private static let downArrow: UInt16 = 125
@@ -95,6 +101,27 @@ struct CommandPaletteView: View {
         }
         keyMonitor = nil
     }
+    #else
+    // iOS: a hardware keyboard's keys reach the field's `onKeyPress`, and the on-screen
+    // keyboard's Return is the field's submit.
+    private func installKeys() {}
+    private func removeKeys() {}
+
+    private func handle(_ press: KeyPress) -> KeyPress.Result {
+        let command = press.modifiers.contains(.command)
+        switch press.key {
+        case .downArrow:
+            if command { model.moveSection(1) } else { model.move(1) }
+        case .upArrow:
+            if command { model.moveSection(-1) } else { model.move(-1) }
+        case .escape:
+            if model.query.isEmpty { onDismiss() } else { model.query = "" }
+        default:
+            return .ignored
+        }
+        return .handled
+    }
+    #endif
 
     // MARK: - The field
 
@@ -107,6 +134,13 @@ struct CommandPaletteView: View {
                 .textFieldStyle(.plain)
                 .font(.system(size: 20))
                 .focused($isFieldFocused)
+                #if os(iOS)
+                .onKeyPress(keys: [.upArrow, .downArrow, .escape], action: handle)
+                .onSubmit(choose)
+                .submitLabel(.go)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+                #endif
             if model.isCreating {
                 ProgressView().controlSize(.small)
             }

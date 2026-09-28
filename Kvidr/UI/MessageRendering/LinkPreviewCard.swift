@@ -1,4 +1,3 @@
-import AppKit
 import SwiftUI
 
 /// A link's preview under its message, the way Messages shows one: the page's image, then
@@ -12,8 +11,8 @@ struct LinkPreviewCard: View {
     @State private var preview: LinkPreview?
 
     /// Narrower than a text bubble may be: a preview is a glance, not a read.
-    private static let width: CGFloat = 300
-    private static let imageHeight: CGFloat = 170
+    private static let width: CGFloat = Platform.isPhone ? 264 : 300
+    private static let imageHeight: CGFloat = Platform.isPhone ? 150 : 170
 
     var body: some View {
         Group {
@@ -31,7 +30,7 @@ struct LinkPreviewCard: View {
         } label: {
             VStack(alignment: .leading, spacing: 0) {
                 if let image = preview.image {
-                    Image(nsImage: image)
+                    Image(platformImage: image)
                         .resizable()
                         .aspectRatio(contentMode: .fill)
                         .frame(width: Self.width, height: Self.imageHeight)
@@ -66,8 +65,7 @@ struct LinkPreviewCard: View {
         .contextMenu {
             Button("Open Link") { MessageLink.open(preview.url) }
             Button("Copy Link") {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(preview.url.absoluteString, forType: .string)
+                Pasteboard.copy(preview.url.absoluteString)
             }
         }
         .accessibilityLabel("Link preview: \(preview.title ?? preview.host)")

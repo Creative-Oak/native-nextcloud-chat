@@ -1,5 +1,8 @@
-import AppKit
 import SwiftUI
+
+#if os(macOS)
+import AppKit
+
 
 /// Turns a drag of the sidebar's divider into a choice between the two sidebar widths,
 /// and a double-click on it into the other width.
@@ -169,3 +172,11 @@ private struct SidebarItemPinner: NSViewRepresentable {
         }
     }
 }
+#else
+/// iOS: the sidebar has one width, chosen by the system, and no divider to drag.
+struct SidebarDividerTracker: View {
+    @Binding var mode: SidebarMode
+
+    var body: some View { Color.clear }
+}
+#endif

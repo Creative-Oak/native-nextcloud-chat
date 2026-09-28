@@ -1,4 +1,6 @@
+#if os(macOS)
 import AppKit
+#endif
 import PhotosUI
 import SwiftUI
 
@@ -40,7 +42,7 @@ struct SettingsPage: View {
             // The inspector's page: recessed so the cards read as cards, with a wash of the
             // accent behind the face.
             ZStack {
-                Color(nsColor: .textBackgroundColor)
+                Color.textBackground
                 if colorScheme == .light { Color.primary.opacity(0.045) }
                 LinearGradient(
                     colors: [Color.accentColor.opacity(colorScheme == .dark ? 0.16 : 0.10), .clear],
@@ -51,7 +53,7 @@ struct SettingsPage: View {
             .ignoresSafeArea()
         }
         .task { await profile.load() }
-        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: Platform.didBecomeActive)) { _ in
             // The way back from "Edit in Nextcloud": whatever changed in the browser shows up
             // the moment kvidr is in front again.
             Task { await profile.load() }
@@ -86,15 +88,15 @@ struct SettingsPage: View {
     private var actions: some View {
         HStack(spacing: 16) {
             InspectorAction(symbol: "safari", label: "Edit Profile in Nextcloud") {
-                NSWorkspace.shared.open(profile.links.personalInfo)
+                Platform.open(profile.links.personalInfo)
             }
             if profile.profile?.isProfileEnabled == true {
                 InspectorAction(symbol: "person.crop.circle", label: "View Public Profile") {
-                    NSWorkspace.shared.open(profile.links.publicProfile)
+                    Platform.open(profile.links.publicProfile)
                 }
             }
             InspectorAction(symbol: "lock.shield", label: "Security and Devices in Nextcloud") {
-                NSWorkspace.shared.open(profile.links.security)
+                Platform.open(profile.links.security)
             }
         }
     }
@@ -122,7 +124,7 @@ struct SettingsPage: View {
                 value: "Nextcloud \(account.capabilities.serverVersion.string) · Talk \(account.capabilities.talkVersion ?? "unknown")"
             )
             InspectorActionRow(title: "Manage Devices in Nextcloud…") {
-                NSWorkspace.shared.open(profile.links.security)
+                Platform.open(profile.links.security)
             }
             InspectorActionRow(title: "Remove Account…", role: .destructive) {
                 isConfirmingRemoval = true
@@ -141,6 +143,7 @@ private struct PictureControl: View {
     @State private var isPreparing = false
     @State private var isShowingPhotos = false
     @State private var pickedPhoto: PhotosPickerItem?
+    @State private var isShowingFiles = false
 
     var body: some View {
         Menu {
@@ -168,7 +171,7 @@ private struct PictureControl: View {
         .menuStyle(.button)
         .buttonStyle(.plain)
         .menuIndicator(.hidden)
-        .pointerStyle(.link)
+        .linkPointer()
         .fixedSize()
         .help("Change your picture")
         .photosPicker(isPresented: $isShowingPhotos, selection: $pickedPhoto, matching: .images)
@@ -192,8 +195,23 @@ private struct PictureControl: View {
         .sheet(item: $pending) { picture in
             PictureConfirmation(profile: profile, picture: picture) { pending = nil }
         }
+        #if os(iOS)
+        .fileImporter(isPresented: $isShowingFiles, allowedContentTypes: [.image]) { result in
+            guard case .success(let url) = result else { return }
+            prepare { () async throws(TalkError) -> Data in
+                let isScoped = url.startAccessingSecurityScopedResource()
+                defer { if isScoped { url.stopAccessingSecurityScopedResource() } }
+                return try await ProfileModel.preparePicture(from: url)
+            }
+        }
+        #endif
     }
 
+    #if os(iOS)
+    private func chooseFile() {
+        isShowingFiles = true
+    }
+    #else
     private func chooseFile() {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.image]
@@ -204,6 +222,7 @@ private struct PictureControl: View {
         guard panel.runModal() == .OK, let url = panel.url else { return }
         prepare { () async throws(TalkError) -> Data in try await ProfileModel.preparePicture(from: url) }
     }
+    #endif
 
     private func prepare(_ work: @escaping () async throws(TalkError) -> Data) {
         profile.resetPictureSave()
@@ -239,13 +258,13 @@ private struct PictureConfirmation: View {
             Text(picture.png == nil ? "Couldn’t Use That Picture" : "New Picture")
                 .font(.headline)
 
-            if let png = picture.png, let image = NSImage(data: png) {
-                Image(nsImage: image)
+            if let png = picture.png, let image = PlatformImage(data: png) {
+                Image(platformImage: image)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
                     .frame(width: 160, height: 160)
                     .clipShape(.circle)
-                    .overlay { Circle().strokeBorder(Color(nsColor: .separatorColor), lineWidth: 0.5) }
+                    .overlay { Circle().strokeBorder(Color.separatorLine, lineWidth: 0.5) }
                     .overlay {
                         if isUploading {
                             Circle().fill(.black.opacity(0.4))
@@ -357,7 +376,7 @@ private struct StatusCard: View {
                             .foregroundStyle(.tertiary)
                     }
                     .buttonStyle(.plain)
-                    .pointerStyle(.link)
+                    .linkPointer()
                     .help("Clear status message")
                 }
             }
@@ -409,7 +428,7 @@ private struct StatusCard: View {
                     .contentShape(.rect)
                 }
                 .buttonStyle(.plain)
-                .pointerStyle(.link)
+                .linkPointer()
             }
         }
         .onAppear(perform: syncFromServer)
@@ -470,7 +489,10 @@ private struct EmojiPickerButton: View {
 
             Button {
                 isCatching = true
+                // On iOS the field's keyboard is the palette: its emoji key is one tap away.
+                #if os(macOS)
                 Task { @MainActor in NSApplication.shared.orderFrontCharacterPalette(nil) }
+                #endif
             } label: {
                 Group {
                     if emoji.isEmpty {
@@ -486,7 +508,7 @@ private struct EmojiPickerButton: View {
                 .contentShape(.circle)
             }
             .buttonStyle(.plain)
-            .pointerStyle(.link)
+            .linkPointer()
             .help("Choose an emoji")
             .accessibilityLabel(emoji.isEmpty ? "Choose an emoji" : "Emoji \(emoji)")
         }
@@ -552,7 +574,7 @@ private struct ProfileCard: View {
                 }
             }
             InspectorActionRow(title: "Edit in Nextcloud…") {
-                NSWorkspace.shared.open(profile.links.personalInfo)
+                Platform.open(profile.links.personalInfo)
             }
         }
     }
@@ -592,7 +614,7 @@ private struct ProfileFieldRow: View {
         // A website only becomes a link through the same check message links go through.
         if field.kind == .website, let url = URL(string: field.value), url.isOpenableLink {
             Link(field.value, destination: url)
-                .pointerStyle(.link)
+                .linkPointer()
         } else {
             Text(field.value)
         }

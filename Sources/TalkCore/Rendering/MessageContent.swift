@@ -114,6 +114,21 @@ struct MessageContent: Sendable, Hashable {
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    /// ``preview``, with the Markdown taken out: for a message parsed with Markdown off, whose
+    /// text still carries its `##` headings, `**` and `>`. A list row shows the words, not
+    /// the syntax — a bot's welcome message read "## ⚙️ Manage conversation settings".
+    var previewWithoutMarkdown: String {
+        blocks
+            .map(\.plainText)
+            .joined(separator: " ")
+            .split(separator: "\n", omittingEmptySubsequences: true)
+            .map { MarkdownPreview.strip(String($0)) }
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+            .withoutInvisibleMarks
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     var isEmpty: Bool { blocks.isEmpty }
 
     /// True when the whole message is a single attachment card with no words around it.
@@ -326,5 +341,21 @@ extension String {
     private static func joinsPictographs(_ scalars: [Unicode.Scalar], at offset: Int) -> Bool {
         guard offset > 0, offset + 1 < scalars.count else { return false }
         return scalars[offset - 1].properties.isEmoji && scalars[offset + 1].properties.isEmoji
+    }
+}
+
+/// One line of Markdown, as the words it says.
+enum MarkdownPreview {
+    static func strip(_ line: String) -> String {
+        // Block markers at the start of a line: a heading, a quote, a list bullet.
+        let blockMarker = /^\s{0,3}(?:#{1,6}\s+|>\s?|[-*+]\s+|\d{1,3}[.)]\s+)/
+        let unblocked = line.replacing(blockMarker, with: "")
+        // Emphasis, code spans and links, the way Markdown itself reads them — so an
+        // underscore in the middle of a word is left alone.
+        let options = AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+        guard let parsed = try? AttributedString(markdown: unblocked, options: options) else {
+            return unblocked.trimmingCharacters(in: .whitespaces)
+        }
+        return String(parsed.characters).trimmingCharacters(in: .whitespaces)
     }
 }

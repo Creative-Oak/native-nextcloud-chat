@@ -1,4 +1,3 @@
-import AppKit
 import SwiftUI
 
 /// The third column: who's here, what's been shared, and what this conversation is.
@@ -39,18 +38,22 @@ struct InspectorView: View {
         // The seam between transcript and panel, the full height of the window. A
         // `Divider` beside the panel stopped at the toolbar band and left its top end
         // showing as a stray dot.
+        #if os(macOS)
         .overlay(alignment: .leading) {
             Rectangle()
-                .fill(Color(nsColor: .separatorColor))
+                .fill(Color.separatorLine)
                 .frame(width: 1)
                 .ignoresSafeArea()
         }
+        #endif
         .overlay {
             if model.isLoading && model.participants.isEmpty && model.sharedItems.isEmpty {
                 ProgressView().controlSize(.small)
             }
         }
+        #if os(macOS)
         .frame(minWidth: 240, idealWidth: 300, maxWidth: 380)
+        #endif
         // Cards only read as cards when they sit on something recessed — white rows on
         // a white panel are just text. windowBackgroundColor comes out white here, so
         // the tint is explicit: the page colour with a few percent of `primary` over it
@@ -59,13 +62,26 @@ struct InspectorView: View {
         // the top of the panel from being a flat grey field.
         .background {
             ZStack {
-                Color(nsColor: .textBackgroundColor)
+                Color.textBackground
                 if colorScheme == .light { Color.primary.opacity(0.045) }
+                #if os(macOS)
                 LinearGradient(
                     colors: [Color.accentColor.opacity(colorScheme == .dark ? 0.16 : 0.10), .clear],
                     startPoint: .top,
                     endPoint: UnitPoint(x: 0.5, y: 0.32)
                 )
+                #else
+                // Messages' contact card: their picture, blown up and blurred to a wash of
+                // its colours behind the top of the card, so the glass above it has
+                // something to catch.
+                VStack {
+                    AvatarView(conversation: model.conversation, size: 360)
+                        .blur(radius: 70)
+                        .opacity(colorScheme == .dark ? 0.55 : 0.45)
+                        .offset(y: -120)
+                    Spacer()
+                }
+                #endif
             }
             .ignoresSafeArea()
         }
@@ -75,7 +91,7 @@ struct InspectorView: View {
     /// The card's face: big avatar, the name at title weight, status underneath.
     private var identity: some View {
         VStack(spacing: 8) {
-            AvatarView(conversation: model.conversation, size: 72)
+            AvatarView(conversation: model.conversation, size: Platform.isPhone ? 96 : 72)
                 .padding(.bottom, 2)
             Text(model.conversation.displayName)
                 .font(.system(size: 24, weight: .bold))
@@ -98,12 +114,11 @@ struct InspectorView: View {
             InspectorAction(symbol: "magnifyingglass", label: "Search in Conversation", action: onSearch)
             InspectorAction(symbol: "link", label: "Copy Link") {
                 guard let url = webURL else { return }
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(url.absoluteString, forType: .string)
+                Pasteboard.copy(url.absoluteString)
             }
             InspectorAction(symbol: "safari", label: "Open in Nextcloud") {
                 guard let url = webURL else { return }
-                NSWorkspace.shared.open(url)
+                Platform.open(url)
             }
         }
     }
@@ -139,7 +154,7 @@ struct InspectorAction: View {
         }
         .buttonStyle(.plain)
         .glassCircle()
-        .pointerStyle(.link)
+        .linkPointer()
         .help(label)
         .accessibilityLabel(label)
     }
@@ -207,21 +222,40 @@ struct InspectorCard<Content: View>: View {
                     ForEach(rows) { row in
                         row
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 9)
+                            .padding(.horizontal, InspectorMetrics.isTouch ? 18 : 14)
+                            .padding(.vertical, InspectorMetrics.isTouch ? 12 : 9)
                         if row.id != rows.last?.id {
-                            Divider().padding(.leading, 14)
+                            Divider().padding(.leading, InspectorMetrics.isTouch ? 18 : 14)
                         }
                     }
                 }
             }
+            #if os(macOS)
             .background {
                 // White on the light panel; on the dark one, a lift over the page colour.
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(colorScheme == .dark ? AnyShapeStyle(Color.primary.opacity(0.07)) : AnyShapeStyle(Color(nsColor: .textBackgroundColor)))
+                    .fill(colorScheme == .dark ? AnyShapeStyle(Color.primary.opacity(0.07)) : AnyShapeStyle(Color.textBackground))
             }
+            #else
+            // iOS 26's contact card: every group a slab of glass over the blurred picture.
+            .glassEffect(.regular, in: .rect(cornerRadius: 24, style: .continuous))
+            #endif
         }
     }
+}
+
+/// The card's type sizes: the Mac's panel is small print; iOS sets it at body size, as
+/// Messages' contact card does.
+enum InspectorMetrics {
+    static var isTouch: Bool {
+        #if os(iOS)
+        true
+        #else
+        false
+        #endif
+    }
+    static let label: CGFloat = isTouch ? 13 : 12
+    static let value: CGFloat = isTouch ? 17 : 13
 }
 
 /// A small grey label over its value.
@@ -232,10 +266,10 @@ struct InspectorRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(label)
-                .font(.system(size: 12))
+                .font(.system(size: InspectorMetrics.label))
                 .foregroundStyle(.secondary)
             Text(value)
-                .font(.system(size: 13))
+                .font(.system(size: InspectorMetrics.value))
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -251,20 +285,23 @@ struct InspectorActionRow: View {
     var body: some View {
         Button(role: role, action: action) {
             Text(title)
-                .font(.system(size: 13))
+                .font(.system(size: InspectorMetrics.value))
                 .foregroundStyle(role == .destructive ? Color.red : Color.accentColor)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(.rect)
         }
         .buttonStyle(.plain)
-        .pointerStyle(.link)
+        .linkPointer()
     }
 }
 
 // MARK: - Info
 
 private struct DetailsTab: View {
+    static let notificationHint = "Change this by right-clicking the conversation in the sidebar."
+
     @Bindable var model: InspectorModel
+    @Environment(AppModel.self) private var app
 
     /// A property rather than a `let` at the top of `body`, so `body` can be a plain run
     /// of cards for the stack to lay out.
@@ -273,10 +310,9 @@ private struct DetailsTab: View {
     var body: some View {
         if !conversation.description.isEmpty {
             InspectorCard {
-                Text(conversation.description)
-                    .font(.system(size: 13))
+                SimpleMarkdownView(source: conversation.description)
+                    .font(.system(size: InspectorMetrics.isTouch ? 15 : 13))
                     .textSelection(.enabled)
-                    .fixedSize(horizontal: false, vertical: true)
             }
         }
 
@@ -299,18 +335,40 @@ private struct DetailsTab: View {
 
         if model.capabilities.supportsNotificationLevels {
             InspectorCard(title: "Notifications") {
+                #if os(iOS)
+                // The same choices as the conversation's press-and-hold menu, from here too:
+                // the details are where people look for them.
+                if let list = app.conversationList {
+                    Menu {
+                        ConversationNotificationsMenu(model: list, token: conversation.token)
+                    } label: {
+                        HStack {
+                            InspectorRow(
+                                label: "Level",
+                                value: (list[conversation.token] ?? conversation).effectiveNotificationLevel.title
+                            )
+                            Spacer()
+                            Image(systemName: "chevron.up.chevron.down")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                        }
+                        .contentShape(.rect)
+                    }
+                    .buttonStyle(.plain)
+                }
+                #else
                 InspectorRow(label: "Level", value: conversation.notificationLevel.title)
-                Text("Change this by right-clicking the conversation in the sidebar.")
+                Text(Self.notificationHint)
                     .font(.system(size: 11))
                     .foregroundStyle(.tertiary)
                     .fixedSize(horizontal: false, vertical: true)
+                #endif
             }
         }
 
         InspectorCard {
             InspectorActionRow(title: "Copy Conversation Token") {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(conversation.token, forType: .string)
+                Pasteboard.copy(conversation.token)
             }
         }
     }
@@ -472,8 +530,7 @@ private struct ParticipantRow: View {
                 Button("Remove from Conversation", role: .destructive, action: onRemove)
             }
             Button("Copy User ID") {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(participant.actor.id, forType: .string)
+                Pasteboard.copy(participant.actor.id)
             }
         }
     }
@@ -546,8 +603,7 @@ private struct SharedItemRow: View {
             if let link = object?.link {
                 Button("Open in Nextcloud") { MessageLink.open(link) }
                 Button("Copy Link") {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(link.absoluteString, forType: .string)
+                    Pasteboard.copy(link.absoluteString)
                 }
             }
             Button("Show in Conversation", action: onOpen)

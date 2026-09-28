@@ -15,7 +15,7 @@ struct AbsenceBar: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
                 Image(systemName: "airplane")
-                    .font(.system(size: 10))
+                    .font(.scaled(10))
                     .foregroundStyle(.orange)
 
                 Text("\(Text("\(firstName) is away until \(until)").fontWeight(.medium))\(Text(absence.shortMessage.isEmpty ? "" : " · \(absence.shortMessage)").foregroundStyle(.secondary))")
@@ -40,7 +40,7 @@ struct AbsenceBar: View {
 
                 Button(action: onDismiss) {
                     Image(systemName: "xmark")
-                        .font(.system(size: 8, weight: .bold))
+                        .font(.scaled(8, weight: .bold))
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
@@ -56,7 +56,7 @@ struct AbsenceBar: View {
                     .padding(.leading, 16)
             }
         }
-        .font(.system(size: 12))
+        .font(.scaled(12))
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
         .frame(maxWidth: 460, alignment: .leading)

@@ -1,4 +1,3 @@
-import AppKit
 import SwiftUI
 
 /// The app's own preferences, on this Mac — what the Settings window's General,
@@ -43,7 +42,7 @@ struct PreferencesCards: View {
                 .fixedSize(horizontal: false, vertical: true)
             InspectorActionRow(title: "Open macOS Notification Settings…") {
                 if let url = URL(string: "x-apple.systempreferences:com.apple.preference.notifications") {
-                    NSWorkspace.shared.open(url)
+                    Platform.open(url)
                 }
             }
         }

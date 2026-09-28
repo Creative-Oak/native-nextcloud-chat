@@ -1,4 +1,3 @@
-import AppKit
 import SwiftUI
 
 /// The transcript.
@@ -35,6 +34,8 @@ struct ChatView: View {
     /// A call going on in another conversation, and the way back to it.
     var callElsewhere: CallController?
     var onReturnToCall: () -> Void = {}
+    /// Opens the conversation's details — the name under their face is the way in.
+    var onShowDetails: () -> Void = {}
     /// This Mac is in this conversation's call: the stage beside it says so.
     var isInCall = false
 
@@ -78,6 +79,7 @@ struct ChatView: View {
                             // Built by AppKit when it opens, like a message's: a SwiftUI context
                             // menu is rebuilt with every redraw of this view, and its submenu
                             // blinked each time the conversation refreshed underneath it.
+                            #if os(macOS)
                             .overlay {
                                 ThreadBarMenuHost { [model] in
                                     ThreadBarMenu.make(
@@ -87,6 +89,15 @@ struct ChatView: View {
                                     )
                                 }
                             }
+                            #else
+                            .contextMenu {
+                                ThreadBarMenuItems(
+                                    level: model.notificationLevel(ofThread: thread.id),
+                                    onRename: model.canRenameThread(thread) ? { beginRenaming(thread) } : nil,
+                                    onSetLevel: { model.setNotificationLevel($0, forThread: thread.id) }
+                                )
+                            }
+                            #endif
                             .transition(.move(edge: .top).combined(with: .opacity))
                         }
                         if let error = model.lastError, error != .cancelled {
@@ -95,7 +106,7 @@ struct ChatView: View {
                         } else if let messageID = model.unreachableMessageID {
                             UnreachableMessageBar(
                                 onOpenInBrowser: {
-                                    NSWorkspace.shared.open(model.webURL(forMessage: messageID))
+                                    Platform.open(model.webURL(forMessage: messageID))
                                     model.dismissUnreachableMessage()
                                 },
                                 onDismiss: { model.dismissUnreachableMessage() }
@@ -112,7 +123,7 @@ struct ChatView: View {
                             .transition(.move(edge: .top).combined(with: .opacity))
                         } else if !isInCall, let live = liveConversation, live.hasCall {
                             CallInProgressBar(conversation: live, onJoin: onJoinCall) {
-                                NSWorkspace.shared.open(model.webURL)
+                                Platform.open(model.webURL)
                             }
                             .transition(.move(edge: .top).combined(with: .opacity))
                         }
@@ -161,7 +172,7 @@ struct ChatView: View {
                     ComposerView(model: model, isFocused: $composerFocused)
                 }
         }
-        .background(Color(nsColor: .textBackgroundColor))
+        .background(Color.textBackground)
         .alert("Rename Thread", isPresented: Binding(get: { renamingThread != nil }, set: { if !$0 { renamingThread = nil } })) {
             TextField("Title", text: $threadTitleDraft)
             Button("Rename") {
@@ -191,6 +202,7 @@ struct ChatView: View {
         // it. Drawn here rather than as a toolbar item so it is centred on the
         // transcript — a toolbar item centres on the whole column, panel included. The
         // band takes the clicks; the capsule under it is the control.
+        #if os(macOS)
         .overlay(alignment: .top) {
             AvatarView(conversation: model.conversation, size: ConversationHeader.avatarSize)
                 .padding(.top, ConversationHeader.avatarTopInset)
@@ -198,6 +210,7 @@ struct ChatView: View {
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
         }
+        #endif
         .navigationTitle(model.conversation.displayName)
         .onChange(of: liveConversation?.hiddenPinnedID) { _, id in
             if let id { model.hiddenPinChangedElsewhere(id) }
@@ -296,7 +309,7 @@ struct ChatView: View {
             // toolbar comes up with the opaque, hairlined kind at launch and only
             // switches to the fade after the first scroll.
             .safeAreaBar(edge: .top, spacing: 0) {
-                ConversationHeader(conversation: model.conversation)
+                ConversationHeader(conversation: model.conversation, onShowDetails: onShowDetails)
             }
             // Messages' frosted band: the strip over the transcript — the toolbar and
             // the name capsule — is the soft edge fade until the pointer is up there,
@@ -528,6 +541,7 @@ struct ChatView: View {
                 onDiscard: { model.discard($0) },
                 onShowParent: { highlightedMessageID = $0 },
                 isTapbackTarget: tapbackMessageID == message.messageID,
+                hidesSender: Platform.isPhone && model.conversation.isOneToOne,
                 onShowTapback: { pressed in
                     withAnimation(reduceMotion ? nil : .snappy(duration: 0.25)) { tapbackMessageID = pressed.messageID }
                 }

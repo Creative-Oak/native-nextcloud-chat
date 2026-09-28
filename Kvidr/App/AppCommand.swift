@@ -1,4 +1,3 @@
-import AppKit
 import SwiftUI
 
 /// One thing the app can do on request: a menu item, a shortcut, and a row in the
@@ -39,6 +38,16 @@ struct AppCommand: Identifiable {
 
     /// The shortcut as the menu bar prints it: "⇧⌘F".
     var keys: String? { shortcut.map(Self.describe) }
+
+    /// ⌃⌘S is iPadOS's own Show Sidebar, and UIKit refuses a menu with the same shortcut
+    /// twice — so on iPad the compact sidebar is a ⇧ away.
+    static var sidebarShortcut: KeyboardShortcut {
+        #if os(macOS)
+        KeyboardShortcut("s", modifiers: [.command, .control])
+        #else
+        KeyboardShortcut("s", modifiers: [.command, .control, .shift])
+        #endif
+    }
 
     static func describe(_ shortcut: KeyboardShortcut) -> String {
         var text = ""
@@ -172,7 +181,7 @@ struct AppCommandRegistry {
             AppCommand(
                 id: "sidebar.toggle", title: c.isSidebarCompact ? "Use Full Sidebar" : "Use Compact Sidebar",
                 aliases: ["sidebar", "compact", "narrow", "wide", "faces", "column"],
-                symbolName: "sidebar.left", shortcut: KeyboardShortcut("s", modifiers: [.command, .control]), placement: .sidebar,
+                symbolName: "sidebar.left", shortcut: AppCommand.sidebarShortcut, placement: .sidebar,
                 isEnabled: session, disabledReason: noSession, perform: c.toggleSidebar
             ),
             AppCommand(

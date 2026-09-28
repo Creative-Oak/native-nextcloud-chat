@@ -1,4 +1,6 @@
+#if os(macOS)
 import AppKit
+#endif
 import SwiftUI
 
 /// Over the first message of a thread: what the thread is called.
@@ -7,7 +9,7 @@ struct ThreadTitle: View {
 
     var body: some View {
         Label(title, systemImage: "bubble.left.and.bubble.right.fill")
-            .font(.system(size: 13, weight: .semibold))
+            .font(.scaled(13, weight: .semibold))
             .labelStyle(.titleAndIcon)
             .imageScale(.small)
             .lineLimit(2)
@@ -26,9 +28,9 @@ struct ThreadRepliesButton: View {
             HStack(spacing: 3) {
                 Text(count == 0 ? "Reply in thread" : count == 1 ? "1 reply" : "\(count) replies")
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 9, weight: .semibold))
+                    .font(.scaled(9, weight: .semibold))
             }
-            .font(.system(size: 12, weight: .medium))
+            .font(.scaled(12, weight: .medium))
             .foregroundStyle(Color.accentColor)
             .contentShape(.rect)
         }
@@ -50,12 +52,12 @@ struct ThreadBar: View {
         Button(action: onClose) {
             HStack(spacing: 6) {
                 Image(systemName: "chevron.left")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.scaled(11, weight: .semibold))
                     .foregroundStyle(Color.accentColor)
                     .frame(width: 16, height: 16)
 
                 Image(systemName: "bubble.left.and.bubble.right.fill")
-                    .font(.system(size: 10))
+                    .font(.scaled(10))
                     .foregroundStyle(Color.accentColor)
 
                 Text("\(Text(thread.title.isEmpty ? "Thread" : thread.title).fontWeight(.medium))\(Text(" · \(replies == 1 ? "1 reply" : "\(replies) replies")").foregroundStyle(.secondary))")
@@ -68,7 +70,7 @@ struct ThreadBar: View {
                     ProgressView().controlSize(.mini)
                 }
             }
-            .font(.system(size: 12))
+            .font(.scaled(12))
             .padding(.leading, 8)
             .padding(.trailing, 12)
             .padding(.vertical, 6)
@@ -96,17 +98,17 @@ struct ThreadTitleField: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 6) {
                 Image(systemName: "bubble.left.and.bubble.right.fill")
-                    .font(.system(size: 10))
+                    .font(.scaled(10))
                     .foregroundStyle(Color.accentColor)
                 TextField("Thread Title", text: $title)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.scaled(13, weight: .semibold))
                     .focused(isFocused)
                     .onSubmit(onSubmit)
-                    .onExitCommand(perform: onCancel)
+                    .onEscape(perform: onCancel)
                 Button(action: onCancel) {
                     Image(systemName: "xmark")
-                        .font(.system(size: 8, weight: .bold))
+                        .font(.scaled(8, weight: .bold))
                         .frame(width: 16, height: 16)
                         .contentShape(.rect)
                 }
@@ -144,6 +146,7 @@ struct ThreadsMenu: View {
     }
 }
 
+#if os(macOS)
 /// The thread bar's right-click menu: renaming, and how much the thread notifies.
 enum ThreadBarMenu {
     @MainActor
@@ -207,3 +210,26 @@ struct ThreadBarMenuHost: NSViewRepresentable {
         }
     }
 }
+#else
+
+/// The thread bar's press-and-hold menu: renaming, and how much the thread notifies.
+struct ThreadBarMenuItems: View {
+    let level: ThreadNotificationLevel
+    var onRename: (() -> Void)?
+    var onSetLevel: (ThreadNotificationLevel) -> Void
+
+    var body: some View {
+        if let onRename {
+            Button("Rename Thread…", systemImage: "character.cursor.ibeam", action: onRename)
+        }
+        Picker(selection: Binding(get: { level }, set: onSetLevel)) {
+            ForEach(ThreadNotificationLevel.allCases) { option in
+                Text(option.title).tag(option)
+            }
+        } label: {
+            Label("Thread Notifications", systemImage: "bell")
+        }
+        .pickerStyle(.menu)
+    }
+}
+#endif

@@ -7,7 +7,7 @@ import PackageDescription
 // can be built and tested from the command line.
 let package = Package(
     name: "Kvidr",
-    platforms: [.macOS("26.0")],
+    platforms: [.macOS("26.0"), .iOS("26.0")],
     products: [
         .library(name: "TalkCore", targets: ["TalkCore"])
     ],

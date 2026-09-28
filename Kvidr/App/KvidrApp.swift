@@ -1,4 +1,8 @@
+#if os(macOS)
 import AppKit
+#else
+import UIKit
+#endif
 import SwiftUI
 
 enum TalkWindow {
@@ -7,7 +11,11 @@ enum TalkWindow {
 
 @main
 struct KvidrApp: App {
+    #if os(macOS)
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    #else
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    #endif
     @State private var app = AppModel()
     /// Link previews outlive any one account: a page is a page whoever posted it.
     @State private var linkPreviews = LinkPreviewLoader()
@@ -23,14 +31,20 @@ struct KvidrApp: App {
                 .environment(\.linkPreviewLoader, linkPreviews)
                 .environment(\.talkSession, app.session)
                 .onAppear { appDelegate.app = app }
+                #if os(macOS)
                 .frame(minWidth: 720, minHeight: 460)
+                #endif
         }
+        #if os(macOS)
         // Restores size and position across launches, which macOS handles for us as long as
         // the scene has a stable identity.
         .defaultSize(width: 1040, height: 700)
         .windowToolbarStyle(.unified)
+        #endif
+        // On iPad these are the menu bar and the ⌘-hold overlay of shortcuts.
         .commands { TalkCommands(app: app) }
 
+        #if os(macOS)
         // A plain utility window rather than a sheet: you want to be able to leave it open
         // beside the app while you learn the shortcuts.
         Window("Keyboard Shortcuts", id: TalkWindow.keyboardShortcuts) {
@@ -38,8 +52,11 @@ struct KvidrApp: App {
         }
         .windowResizability(.contentSize)
         .defaultPosition(.center)
+        #endif
     }
 }
+
+#if os(macOS)
 
 /// AppKit behaviour SwiftUI doesn't cover.
 @MainActor
@@ -81,3 +98,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return .terminateLater
     }
 }
+#else
+/// UIKit behaviour SwiftUI doesn't cover.
+@MainActor
+final class AppDelegate: NSObject, UIApplicationDelegate {
+    var app: AppModel?
+
+    /// Going to the background must not lose a half-typed message: the draft save is
+    /// debounced while typing, and a suspended app writes nothing.
+    func applicationDidEnterBackground(_ application: UIApplication) {
+        guard let chat = app?.chat else { return }
+        let task = application.beginBackgroundTask(withName: "Save draft")
+        Task {
+            await chat.flushDraft()
+            application.endBackgroundTask(task)
+        }
+    }
+}
+#endif

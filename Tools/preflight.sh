@@ -18,6 +18,15 @@ xcodebuild build \
     -quiet \
     CODE_SIGNING_ALLOWED=NO
 
+echo "==> Build of the app target for iPhone and iPad"
+xcodebuild build \
+    -project Kvidr.xcodeproj \
+    -scheme Kvidr \
+    -configuration Debug \
+    -destination 'generic/platform=iOS Simulator' \
+    -quiet \
+    CODE_SIGNING_ALLOWED=NO
+
 echo
-echo "All checks have passed, including the macOS build of the app."
+echo "All checks have passed, including the macOS and iOS builds of the app."
 echo "How Liquid Glass renders, and every interaction with a real server, still need your eyes."

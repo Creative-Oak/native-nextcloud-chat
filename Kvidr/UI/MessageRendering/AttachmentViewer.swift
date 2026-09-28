@@ -1,4 +1,6 @@
+#if os(macOS)
 import AppKit
+#endif
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -12,7 +14,7 @@ struct AttachmentViewer: View {
     var onDismiss: () -> Void
 
     @Environment(\.previewLoader) private var loader
-    @State private var image: NSImage?
+    @State private var image: PlatformImage?
     @State private var isSaving = false
 
     var body: some View {
@@ -24,7 +26,7 @@ struct AttachmentViewer: View {
 
             VStack(spacing: 12) {
                 if let image {
-                    Image(nsImage: image)
+                    Image(platformImage: image)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
                         .clipShape(.rect(cornerRadius: 12))
@@ -46,7 +48,7 @@ struct AttachmentViewer: View {
                 image = await loader?.fullSize(fileID: object.id)
             }
         }
-        .onExitCommand(perform: onDismiss)
+        .onEscape(perform: onDismiss)
         .transition(.opacity)
     }
 
@@ -67,6 +69,7 @@ struct AttachmentViewer: View {
 
                 Divider().frame(height: 20)
 
+                #if os(macOS)
                 Button {
                     save()
                 } label: {
@@ -76,6 +79,20 @@ struct AttachmentViewer: View {
                 .buttonStyle(.plain)
                 .disabled(image == nil || isSaving)
                 .help("Save a copy…")
+                #else
+                // iOS has no save panel; the share sheet is where "Save Image" and "Save to
+                // Files" live.
+                if let image {
+                    ShareLink(
+                        item: Image(platformImage: image),
+                        preview: SharePreview(object.displayName, image: Image(platformImage: image))
+                    ) {
+                        Label("Share…", systemImage: "square.and.arrow.up")
+                            .labelStyle(.iconOnly)
+                    }
+                    .buttonStyle(.plain)
+                }
+                #endif
 
                 if let link = object.link {
                     Button {
@@ -101,6 +118,7 @@ struct AttachmentViewer: View {
         }
     }
 
+    #if os(macOS)
     /// A save panel, so the copy lands wherever the user actually wants it — which a
     /// sandboxed app can't decide for them anyway.
     private func save() {
@@ -136,6 +154,7 @@ struct AttachmentViewer: View {
         else { return }
         try? data.write(to: destination)
     }
+    #endif
 
     /// What to put in the panel's name field, given a name the server chose.
     ///

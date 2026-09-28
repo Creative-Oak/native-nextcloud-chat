@@ -1,8 +1,11 @@
 import CoreGraphics
 import CoreMedia
 import Foundation
-import ScreenCaptureKit
 @preconcurrency import WebRTC
+
+#if os(macOS)
+import ScreenCaptureKit
+
 
 /// This Mac's screen, or one window of it, going into a call. What to share is chosen in the
 /// system's own picker — the same one every Mac app uses — and the frames go into a WebRTC
@@ -174,3 +177,5 @@ private final class FrameFeeder: NSObject, SCStreamOutput, @unchecked Sendable {
         source.capturer(capturer, didCapture: frame)
     }
 }
+#endif
+

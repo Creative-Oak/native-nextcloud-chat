@@ -1,4 +1,6 @@
+#if os(macOS)
 import AppKit
+#endif
 import SwiftUI
 
 /// The right-click menu on a conversation, wherever a conversation is drawn in the sidebar.
@@ -69,6 +71,7 @@ enum ConversationMenuEntry {
         return entries
     }
 
+    #if os(macOS)
     /// The same entries as an AppKit menu.
     @MainActor
     static func menu(_ entries: [ConversationMenuEntry]) -> NSMenu {
@@ -92,6 +95,7 @@ enum ConversationMenuEntry {
         }
         return menu
     }
+    #endif
 }
 
 /// The menu as SwiftUI content, for a row's `.contextMenu`.
@@ -106,6 +110,21 @@ struct ConversationContextMenu: View {
 
     var body: some View {
         ConversationMenuEntriesView(entries: ConversationMenuEntry.entries(model: model, token: token))
+    }
+}
+
+/// Just the Notifications submenu's entries — for the details, which offer the same choice.
+struct ConversationNotificationsMenu: View {
+    let model: ConversationListModel
+    let token: String
+
+    var body: some View {
+        let entries = ConversationMenuEntry.entries(model: model, token: token)
+        ForEach(entries.indices, id: \.self) { index in
+            if case let .submenu(title, children) = entries[index], title == "Notifications" {
+                ConversationMenuEntriesView(entries: children)
+            }
+        }
     }
 }
 
@@ -142,6 +161,7 @@ private struct ConversationMenuEntriesView: View {
     }
 }
 
+#if os(macOS)
 /// Opens the conversation menu from a view of its own on a right click or a control-click,
 /// so the list underneath never sees the click and draws no outline around its row. Hit-test
 /// transparent for every other click, so a plain click still goes to the face's button.
@@ -186,3 +206,4 @@ struct ConversationMenuHost: NSViewRepresentable {
         }
     }
 }
+#endif

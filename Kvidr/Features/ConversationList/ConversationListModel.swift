@@ -1,4 +1,4 @@
-import AppKit
+import SwiftUI
 import Foundation
 import Observation
 
@@ -354,11 +354,10 @@ extension ConversationListModel {
     }
 
     func copyLink(to conversation: Conversation) {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(webURL(for: conversation).absoluteString, forType: .string)
+        Pasteboard.copy(webURL(for: conversation).absoluteString)
     }
 
     func openInBrowser(_ conversation: Conversation) {
-        NSWorkspace.shared.open(webURL(for: conversation))
+        Platform.open(webURL(for: conversation))
     }
 }

@@ -1,4 +1,6 @@
+#if os(macOS)
 import AppKit
+#endif
 import SwiftUI
 import Synchronization
 
@@ -85,7 +87,9 @@ struct InlineText: View {
     /// pointer style does not get past. Only on the change, so a still pointer is not
     /// fought over on every move.
     private func setCursor(overLink: Bool) {
+        #if os(macOS)
         (overLink ? NSCursor.pointingHand : NSCursor.arrow).set()
+        #endif
     }
 
     /// A paragraph is a paragraph. Each run below wraps the whole accumulated result, so

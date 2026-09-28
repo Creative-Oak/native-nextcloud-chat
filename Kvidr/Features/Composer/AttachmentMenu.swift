@@ -1,4 +1,6 @@
+#if os(macOS)
 import AppKit
+#endif
 import PhotosUI
 import SwiftUI
 
@@ -15,6 +17,7 @@ struct AttachmentMenu: View {
 
     @State private var isShowingPhotos = false
     @State private var pickedPhotos: [PhotosPickerItem] = []
+    @State private var isShowingFiles = false
 
     init(
         queue: AttachmentQueue,
@@ -61,6 +64,12 @@ struct AttachmentMenu: View {
             pickedPhotos = []
             Task { await stage(picked) }
         }
+        #if os(iOS)
+        .fileImporter(isPresented: $isShowingFiles, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
+            guard case .success(let urls) = result else { return }
+            stage(files: urls)
+        }
+        #endif
     }
 
     /// Copies what Photos handed over into the queue. Originals, unconverted — HEIC included.
@@ -81,6 +90,7 @@ struct AttachmentMenu: View {
         queue.enqueue(scratchFiles: urls)
     }
 
+    #if os(macOS)
     /// An open panel rather than a custom picker, because the system one already knows about
     /// tags, recents, iCloud and everything else.
     private func chooseFiles() {
@@ -94,6 +104,33 @@ struct AttachmentMenu: View {
         guard panel.runModal() == .OK else { return }
         queue.enqueue(urls: panel.urls)
     }
+    #else
+    /// The Files browser, for the same reasons the Mac uses its open panel.
+    private func chooseFiles() {
+        isShowingFiles = true
+    }
+
+    /// A file chosen in Files is only readable while its security scope is open, and the
+    /// upload happens later — so it is copied out first, as a picked photo is, and goes in
+    /// as a scratch file the queue clears away once it is sent.
+    private func stage(files urls: [URL]) {
+        var copies: [URL] = []
+        for url in urls {
+            let isScoped = url.startAccessingSecurityScopedResource()
+            defer { if isScoped { url.stopAccessingSecurityScopedResource() } }
+            do {
+                let directory = try AttachmentScratch.makeItemDirectory()
+                let destination = directory.appending(path: url.lastPathComponent)
+                try FileManager.default.copyItem(at: url, to: destination)
+                copies.append(destination)
+            } catch {
+                Log.chat.warning("Couldn’t read a file from Files: \(error.localizedDescription)")
+            }
+        }
+        guard !copies.isEmpty else { return }
+        queue.enqueue(scratchFiles: copies)
+    }
+    #endif
 }
 
 /// A picked photo or video, copied to a file on the way out of Photos.

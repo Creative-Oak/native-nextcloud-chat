@@ -1,4 +1,6 @@
+#if os(macOS)
 import AppKit
+#endif
 import SwiftUI
 
 /// Over a conversation opened with a lot unread: the offer of a summary, then the summary as
@@ -11,7 +13,7 @@ struct SummaryBar: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
                 Image(systemName: "apple.intelligence")
-                    .font(.system(size: 11))
+                    .font(.scaled(11))
                     .foregroundStyle(.purple.gradient)
 
                 Text(headline)
@@ -33,7 +35,7 @@ struct SummaryBar: View {
 
                 Button(action: onDismiss) {
                     Image(systemName: "xmark")
-                        .font(.system(size: 8, weight: .bold))
+                        .font(.scaled(8, weight: .bold))
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
@@ -54,14 +56,16 @@ struct SummaryBar: View {
                 .padding(.leading, 17)
             }
         }
-        .font(.system(size: 12))
+        .font(.scaled(12))
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
         .frame(maxWidth: 460, alignment: .leading)
         .glass(.panel, cornerRadius: 10)
         // Read, it goes when you click anywhere else — the click still does what it was for.
         .background {
+            #if os(macOS)
             if isFinished { ClickOutsideWatcher(onClickOutside: onDismiss) }
+            #endif
         }
         .animation(.smooth(duration: 0.2), value: summary.state)
     }
@@ -105,6 +109,7 @@ struct SummaryBar: View {
     }
 }
 
+#if os(macOS)
 /// Calls back when the mouse goes down in this window outside the view it sits behind.
 /// Watches without taking the click, so whatever was clicked still gets it.
 private struct ClickOutsideWatcher: NSViewRepresentable {
@@ -151,3 +156,4 @@ private struct ClickOutsideWatcher: NSViewRepresentable {
         }
     }
 }
+#endif

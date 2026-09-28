@@ -1,4 +1,6 @@
+#if os(macOS)
 import AppKit
+#endif
 import SwiftUI
 
 // MARK: - The floating bar
@@ -163,8 +165,12 @@ struct MessageMenuActions {
     /// disagree, so copying the label is no way to find out where a link goes. See
     /// ``MessageContent/webLinks``.
     var links: [URL] = []
+
+    /// The menu's second row of reactions: a handful more, and the way to the rest.
+    static let moreReactions = ["🔥", "✅", "😊", "😍", "🤔"]
 }
 
+#if os(macOS)
 /// Right-click on a message: the reactions in two rows on top, then the actions — one
 /// menu, as in Messages. Built with AppKit's menu rather than SwiftUI's `contextMenu`,
 /// which can hold only buttons and submenus, not a row of reactions.
@@ -212,8 +218,6 @@ struct MessageMenuHost: NSViewRepresentable {
 }
 
 enum MessageMenu {
-    /// The second row: a handful more, and the way to the rest.
-    fileprivate static let moreReactions = ["🔥", "✅", "😊", "😍", "🤔"]
 
     /// A link as a menu item reads. The whole thing, up to the point where a menu stops
     /// being readable — it is shown to answer one question, and a truncated answer to
@@ -311,8 +315,7 @@ enum MessageMenu {
         for link in actions.links {
             let title = actions.links.count == 1 ? "Copy Link" : "Copy \(shortened(link))"
             menu.addItem(ClosureMenuItem(title, symbol: "link") {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(link.absoluteString, forType: .string)
+                Pasteboard.copy(link.absoluteString)
             })
         }
         if actions.canEdit {
@@ -357,7 +360,7 @@ private struct MenuReactionRows: View {
         VStack(spacing: 2) {
             row(ChatModel.quickReactions)
             HStack(spacing: 2) {
-                row(MessageMenu.moreReactions)
+                row(MessageMenuActions.moreReactions)
                 Button {
                     dismiss()
                     actions.onMoreReactions()
@@ -388,3 +391,113 @@ private struct MenuReactionRows: View {
         }
     }
 }
+#else
+
+/// Press and hold a message: the reactions in a row on top, then the actions — the same
+/// menu the Mac shows on a right click, drawn by the system's context menu.
+struct MessageMenuItems: View {
+    let actions: MessageMenuActions
+
+    var body: some View {
+        if actions.canReact {
+            ControlGroup {
+                ForEach(ChatModel.quickReactions + MessageMenuActions.moreReactions, id: \.self) { emoji in
+                    Button {
+                        actions.onReact(emoji)
+                    } label: {
+                        Text(emoji)
+                    }
+                    .accessibilityLabel(actions.myReactions.contains(emoji) ? "Remove \(emoji) reaction" : "React with \(emoji)")
+                }
+                Button(action: actions.onMoreReactions) {
+                    Label("Another Reaction", systemImage: "face.smiling")
+                }
+            }
+            .controlGroupStyle(.palette)
+        }
+
+        Section {
+            if actions.canReply {
+                Button("Reply", systemImage: "arrowshape.turn.up.left", action: actions.onReply)
+            }
+            if let onReplyPrivately = actions.onReplyPrivately {
+                Button("Reply Privately", systemImage: "person.fill", action: onReplyPrivately)
+            }
+            if let onOpenThread = actions.onOpenThread {
+                Button("Open Thread", systemImage: "bubble.left.and.bubble.right", action: onOpenThread)
+            }
+            if let onRenameThread = actions.onRenameThread {
+                Button("Rename Thread…", systemImage: "character.cursor.ibeam", action: onRenameThread)
+            }
+            if let current = actions.threadNotificationLevel, let onSet = actions.onSetThreadNotifications {
+                Menu("Thread Notifications", systemImage: "bell") {
+                    ForEach(ThreadNotificationLevel.allCases) { level in
+                        Button {
+                            onSet(level)
+                        } label: {
+                            if level == current {
+                                Label(level.title, systemImage: "checkmark")
+                            } else {
+                                Text(level.title)
+                            }
+                        }
+                    }
+                }
+            }
+            if let onRemind = actions.onRemind {
+                Menu(actions.reminder == nil ? "Remind Me" : "Change Reminder", systemImage: "alarm") {
+                    if let date = actions.reminder {
+                        Text("Reminder: \(ReminderTime.text(date))")
+                        if let remove = actions.onRemoveReminder {
+                            Button("Remove Reminder", role: .destructive, action: remove)
+                        }
+                        Divider()
+                    }
+                    ForEach(ReminderPreset.presets()) { preset in
+                        Button {
+                            onRemind(preset.date)
+                        } label: {
+                            Text(preset.title)
+                            Text(ReminderTime.text(preset.date))
+                        }
+                    }
+                }
+            }
+            if let onPin = actions.onPin {
+                if actions.isPinned {
+                    Button("Unpin", systemImage: "pin.slash", action: actions.onUnpin)
+                } else {
+                    Menu("Pin", systemImage: "pin") {
+                        ForEach(PinDuration.allCases) { duration in
+                            Button(duration.title) { onPin(duration) }
+                        }
+                    }
+                }
+            }
+            if let onForward = actions.onForward {
+                Button("Forward…", systemImage: "arrowshape.turn.up.right", action: onForward)
+            }
+            Button("Copy", systemImage: "doc.on.doc", action: actions.onCopy)
+            ForEach(actions.links, id: \.self) { link in
+                Button(actions.links.count == 1 ? "Copy Link" : "Copy \(Self.shortened(link))", systemImage: "link") {
+                    Pasteboard.copy(link.absoluteString)
+                }
+            }
+            if actions.canEdit {
+                Button("Edit…", systemImage: "pencil", action: actions.onEdit)
+            }
+        }
+        if actions.hasReactions {
+            Button("Show Who Reacted", systemImage: "person.2", action: actions.onShowReactions)
+        }
+        if actions.canDelete {
+            Button("Delete…", systemImage: "trash", role: .destructive, action: actions.onDelete)
+        }
+    }
+
+    private static func shortened(_ url: URL) -> String {
+        let text = url.absoluteString
+        return text.count > 60 ? String(text.prefix(60)) + "…" : text
+    }
+}
+#endif

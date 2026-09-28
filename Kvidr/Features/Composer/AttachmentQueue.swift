@@ -1,4 +1,4 @@
-import AppKit
+import SwiftUI
 import Foundation
 import Observation
 
@@ -130,11 +130,8 @@ final class AttachmentQueue {
     /// An image pasted from the clipboard — written to a temporary file first, because the
     /// upload path takes a file, and named after the moment it was pasted so it doesn't
     /// arrive as "image.png" for the fiftieth time.
-    func enqueuePastedImage(_ image: NSImage) {
-        guard let tiff = image.tiffRepresentation,
-              let bitmap = NSBitmapImageRep(data: tiff),
-              let png = bitmap.representation(using: .png, properties: [:])
-        else { return }
+    func enqueuePastedImage(_ image: PlatformImage) {
+        guard let png = image.pngData else { return }
 
         let name = "Pasted image \(Self.timestampFormatter.string(from: .now)).png"
         do {

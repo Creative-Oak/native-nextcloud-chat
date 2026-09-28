@@ -18,11 +18,11 @@ struct ChatSearchBar: View {
                 results
             }
         }
-        .frame(width: 380)
+        .frame(maxWidth: 380)
         .glass(.panel, cornerRadius: 12)
         .shadow(color: .black.opacity(0.14), radius: 14, y: 5)
         .onAppear { isFocused = true }
-        .onExitCommand { model.isSearching = false }
+        .onEscape { model.isSearching = false }
     }
 
     private var field: some View {

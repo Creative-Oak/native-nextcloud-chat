@@ -1,4 +1,3 @@
-import CoreAudio
 import SwiftUI
 
 /// The call, FaceTime-style: dark, edge to edge, the people in it large, you small in a
@@ -25,11 +24,17 @@ struct CallStage: View {
             case .ended(let reason):
                 ended(reason: reason)
             case .joining, .inCall:
+                #if os(iOS)
+                touchStage
+                #else
                 stage
+                #endif
             }
         }
         .environment(\.colorScheme, .dark)
+        #if os(macOS)
         .clipped()
+        #endif
     }
 
     // MARK: - Pieces
@@ -44,17 +49,24 @@ struct CallStage: View {
                 VideoView(video: video)
                     .transition(.opacity)
             } else {
-                Group {
-                    if let solo = soloParticipant {
-                        ActorAvatarView(actor: solo.actor, size: 900)
-                    } else {
-                        AvatarView(conversation: call.conversation, size: 900)
+                // In an overlay, so the picture's 900 points never size the stage: on a
+                // screen narrower than that, the whole call was laid out wider than the
+                // screen and centred off both edges.
+                Color.clear
+                    .overlay {
+                        Group {
+                            if let solo = soloParticipant {
+                                ActorAvatarView(actor: solo.actor, size: 900)
+                            } else {
+                                AvatarView(conversation: call.conversation, size: 900)
+                            }
+                        }
+                        .blur(radius: 140)
+                        .saturation(1.6)
+                        .opacity(0.9)
                     }
-                }
-                .blur(radius: 140)
-                .saturation(1.6)
-                .opacity(0.9)
-                .accessibilityHidden(true)
+                    .clipped()
+                    .accessibilityHidden(true)
                 LinearGradient(colors: [.black.opacity(0.05), .black.opacity(0.55)], startPoint: .top, endPoint: .bottom)
             }
         }
@@ -114,63 +126,7 @@ struct CallStage: View {
                 .padding(.top, 10)
             }
 
-            Group {
-                if let shared = call.sharedScreen {
-                    // Someone's screen: all of it, as large as the stage allows, with who.
-                    VStack(spacing: 8) {
-                        VideoView(video: shared.screen, fits: true)
-                        Label("\(shared.participant.name)’s screen", systemImage: "rectangle.on.rectangle")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.8))
-                    }
-                } else if let own = call.localScreen {
-                    // What this Mac is sharing, shown back while kvidr is in front.
-                    VStack(spacing: 8) {
-                        VideoView(video: own, fits: true)
-                        Label("Your screen", systemImage: "rectangle.inset.filled.and.person.filled")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.8))
-                    }
-                } else if call.participants.isEmpty {
-                    waiting
-                } else if soloVideo != nil {
-                    // Their video is the backdrop, and their name is already at the top.
-                    Color.clear
-                } else if let only = soloParticipant {
-                    // No video: their picture, large, as the iPhone shows whoever you're talking
-                    // to — still ringing until their audio arrives, then still, with a note
-                    // that it's their camera that's off, not the call that hasn't started.
-                    VStack(spacing: 18) {
-                        ZStack(alignment: .bottomTrailing) {
-                            ActorAvatarView(actor: only.actor, size: 200)
-                                .shadow(color: .black.opacity(0.25), radius: 24, y: 10)
-                                .opacity(only.isConnected ? 1 : 0.7)
-                                .background {
-                                    if !only.isConnected { RingingRings(diameter: 200) }
-                                }
-                            if !only.isAudioOn {
-                                Image(systemName: "mic.slash.fill")
-                                    .font(.system(size: 15, weight: .semibold))
-                                    .foregroundStyle(.white)
-                                    .frame(width: 40, height: 40)
-                                    .glassEffect(.regular, in: .circle)
-                            }
-                        }
-                        if only.isConnected {
-                            Label("Camera off", systemImage: "video.slash.fill")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(.white.opacity(0.85))
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 6)
-                                .glassEffect(.regular, in: .capsule)
-                                .transition(.opacity)
-                        }
-                    }
-                    .animation(.smooth(duration: 0.3), value: only.isConnected)
-                } else {
-                    tiles
-                }
-            }
+            centerContent
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(.horizontal, 24)
             .padding(.vertical, 16)
@@ -196,6 +152,131 @@ struct CallStage: View {
             MovableSelfTile(me: me, isMuted: call.isMuted, video: call.isCameraOn ? call.localVideo : nil)
         }
     }
+
+    /// What fills the middle of the stage: a shared screen, whoever is ringing, their
+    /// picture, or the grid of everyone.
+    @ViewBuilder
+    private var centerContent: some View {
+        Group {
+            if let shared = call.sharedScreen {
+                // Someone's screen: all of it, as large as the stage allows, with who.
+                VStack(spacing: 8) {
+                    VideoView(video: shared.screen, fits: true)
+                    Label("\(shared.participant.name)’s screen", systemImage: "rectangle.on.rectangle")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.8))
+                }
+            } else if let own = call.localScreen {
+                // What this Mac is sharing, shown back while kvidr is in front.
+                VStack(spacing: 8) {
+                    VideoView(video: own, fits: true)
+                    Label("Your screen", systemImage: "rectangle.inset.filled.and.person.filled")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.8))
+                }
+            } else if call.participants.isEmpty {
+                waiting
+            } else if soloVideo != nil {
+                // Their video is the backdrop, and their name is already at the top.
+                Color.clear
+            } else if let only = soloParticipant {
+                // No video: their picture, large, as the iPhone shows whoever you're talking
+                // to — still ringing until their audio arrives, then still, with a note
+                // that it's their camera that's off, not the call that hasn't started.
+                VStack(spacing: 18) {
+                    ZStack(alignment: .bottomTrailing) {
+                        ActorAvatarView(actor: only.actor, size: 200)
+                            .shadow(color: .black.opacity(0.25), radius: 24, y: 10)
+                            .opacity(only.isConnected ? 1 : 0.7)
+                            .background {
+                                if !only.isConnected { RingingRings(diameter: 200) }
+                            }
+                        if !only.isAudioOn {
+                            Image(systemName: "mic.slash.fill")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(.white)
+                                .frame(width: 40, height: 40)
+                                .glassEffect(.regular, in: .circle)
+                        }
+                    }
+                    if only.isConnected {
+                        Label("Camera off", systemImage: "video.slash.fill")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.85))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .glassEffect(.regular, in: .capsule)
+                            .transition(.opacity)
+                    }
+                }
+                .animation(.smooth(duration: 0.3), value: only.isConnected)
+            } else {
+                tiles
+            }
+        }
+    }
+
+    #if os(iOS)
+    /// FaceTime on the iPhone: everything you can do in one glass panel at the top — who,
+    /// how long, End, and a row of round buttons — and the call itself filling the screen
+    /// under it, your own camera in a corner you can move.
+    private var touchStage: some View {
+        VStack(spacing: 0) {
+            FaceTimePanel(
+                call: call,
+                title: soloParticipant?.name ?? call.conversation.displayName,
+                status: status,
+                onLeave: onLeave,
+                onLeaveTheOtherWay: onLeaveTheOtherWay,
+                onMinimize: onMinimize
+            )
+            .padding(.horizontal, 10)
+            .padding(.top, 4)
+
+            notices
+
+            centerContent
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 16)
+        }
+        .overlay {
+            MovableSelfTile(me: me, isMuted: call.isMuted, video: call.isCameraOn ? call.localVideo : nil)
+        }
+    }
+
+    /// Under the name: the timer once they've answered, or where the call has got to.
+    private var status: CallStatusText {
+        if let since = call.answeredAt, !call.participants.isEmpty { return .timer(since) }
+        if call.phase == .joining || !call.participants.isEmpty { return .text("Connecting…") }
+        return .text("Calling…")
+    }
+
+    @ViewBuilder
+    private var notices: some View {
+        if let problem = call.cameraProblem {
+            Label(problem, systemImage: "video.slash")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(.orange.opacity(0.35), in: .capsule)
+                .padding(.top, 10)
+        }
+        if call.isSharingScreen {
+            Button(action: call.stopSharingScreen) {
+                Label("You’re sharing your screen · Stop", systemImage: "rectangle.inset.filled.and.person.filled")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 7)
+                    .background(.green, in: .capsule)
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 10)
+        }
+    }
+    #endif
 
     /// The iPhone's order: how long, small, over who — large.
     private var header: some View {
@@ -376,6 +457,14 @@ private struct SelfTile: View {
     let isMuted: Bool
     let video: VideoTrack?
 
+    /// Landscape on the Mac, whose camera is; upright on a phone, whose camera is too.
+    static func size(hasVideo: Bool) -> CGSize {
+        if Platform.isPhone {
+            return hasVideo ? CGSize(width: 112, height: 168) : CGSize(width: 96, height: 96)
+        }
+        return hasVideo ? CGSize(width: 200, height: 132) : CGSize(width: 150, height: 100)
+    }
+
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
@@ -394,7 +483,7 @@ private struct SelfTile: View {
                     .padding(6)
             }
         }
-        .frame(width: video == nil ? 150 : 200, height: video == nil ? 100 : 132)
+        .frame(width: Self.size(hasVideo: video != nil).width, height: Self.size(hasVideo: video != nil).height)
         .overlay {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .strokeBorder(.white.opacity(0.15), lineWidth: 1)
@@ -495,20 +584,37 @@ struct ReturnToCallPill: View {
     }
 }
 
+extension AudioDeviceMenu {
+    fileprivate var moreLabel: some View {
+        Image(systemName: "ellipsis")
+            .font(.system(size: 21, weight: .semibold))
+            .foregroundStyle(.white)
+            .frame(width: 62, height: 62)
+            .glassEffect(.regular.interactive(), in: .circle)
+    }
+}
+
 /// The call's "more" button: which camera, microphone and speaker it uses — AirPods, a
 /// headset, the Mac's own — and, later, what else a call can do.
 private struct AudioDeviceMenu: View {
     let devices: AudioDevices
     let cameras: [(id: String, name: String)]
     let cameraID: String?
-    var onMicrophone: (AudioObjectID) -> Void
-    var onSpeaker: (AudioObjectID) -> Void
+    var onMicrophone: (AudioDeviceID) -> Void
+    var onSpeaker: (AudioDeviceID) -> Void
     var onCamera: (String) -> Void
+    /// In FaceTime's panel on iOS: a speaker button, no title under it.
+    var isCompact = false
+    var isSpeakerOn = false
 
     var body: some View {
-        VStack(spacing: 7) {
+        if isCompact {
             menu
-            CallButtonTitle("More")
+        } else {
+            VStack(spacing: 7) {
+                menu
+                CallButtonTitle("More")
+            }
         }
     }
 
@@ -544,11 +650,15 @@ private struct AudioDeviceMenu: View {
                 }
             }
         } label: {
-            Image(systemName: "ellipsis")
-                .font(.system(size: 21, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(width: 62, height: 62)
-                .glassEffect(.regular.interactive(), in: .circle)
+            #if os(iOS)
+            if isCompact {
+                PanelButtonFace(symbol: "speaker.wave.2.fill", isActive: isSpeakerOn)
+            } else {
+                moreLabel
+            }
+            #else
+            moreLabel
+            #endif
         }
         .menuStyle(.button)
         .buttonStyle(.plain)
@@ -608,13 +718,13 @@ private struct MovableSelfTile: View {
 
     /// Clear of the edges; at the top, clear of the minimize button and the name as well.
     private static let margin: CGFloat = 20
-    private static let topInset: CGFloat = 140
+    private static let topInset: CGFloat = Platform.isPhone ? 200 : 140
 
     private var spot: Spot { Spot(rawValue: spotName) ?? .bottomTrailing }
 
     /// The tile's size, as ``SelfTile`` draws itself.
     private var tileSize: CGSize {
-        video == nil ? CGSize(width: 150, height: 100) : CGSize(width: 200, height: 132)
+        SelfTile.size(hasVideo: video != nil)
     }
 
     var body: some View {
@@ -680,3 +790,121 @@ private struct MovableSelfTile: View {
         hypot(a.x - b.x, a.y - b.y)
     }
 }
+
+#if os(iOS)
+enum CallStatusText {
+    case timer(Date)
+    case text(String)
+}
+
+/// FaceTime's control panel: their face and name with how long you've been talking, the red
+/// End, and under them the round buttons — back to the messages, where the sound goes,
+/// mute, camera and sharing. Glass, floating over the call.
+private struct FaceTimePanel: View {
+    let call: CallController
+    let title: String
+    let status: CallStatusText
+    var onLeave: () -> Void
+    var onLeaveTheOtherWay: () -> Void
+    var onMinimize: () -> Void
+
+    var body: some View {
+        VStack(spacing: 14) {
+            HStack(spacing: 12) {
+                AvatarView(conversation: call.conversation, size: 44)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(title)
+                        .font(.system(size: 17, weight: .semibold))
+                        .lineLimit(1)
+                    Group {
+                        switch status {
+                        case .timer(let since): Text(since, style: .timer).monospacedDigit()
+                        case .text(let text): Text(text)
+                        }
+                    }
+                    .font(.system(size: 13))
+                    .foregroundStyle(.white.opacity(0.7))
+                }
+                .foregroundStyle(.white)
+                Spacer(minLength: 8)
+                Button(action: onLeave) {
+                    Text("End")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 22)
+                        .frame(height: 40)
+                        .background(.red, in: .capsule)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(call.hangUpEndsCall ? "End the call" : "Leave the call")
+                .contextMenu {
+                    if call.canHangUpTheOtherWay {
+                        Button(call.hangUpEndsCall ? "Leave Call" : "End Call for Everyone", systemImage: "phone.down.fill", action: onLeaveTheOtherWay)
+                    }
+                }
+            }
+
+            HStack {
+                PanelButton(symbol: "message.fill", label: "Messages", action: onMinimize)
+                Spacer(minLength: 0)
+                AudioDeviceMenu(
+                    devices: call.audioDevices,
+                    cameras: call.cameras.map { ($0.uniqueID, $0.localizedName) },
+                    cameraID: call.cameraID,
+                    onMicrophone: call.useMicrophone,
+                    onSpeaker: call.useSpeaker,
+                    onCamera: call.useCamera,
+                    isCompact: true,
+                    isSpeakerOn: call.audioDevices.defaultOutput == AudioDevices.speaker
+                )
+                Spacer(minLength: 0)
+                PanelButton(symbol: call.isMuted ? "mic.slash.fill" : "mic.fill", label: call.isMuted ? "Unmute" : "Mute",
+                            isActive: call.isMuted, action: call.toggleMute)
+                Spacer(minLength: 0)
+                PanelButton(symbol: call.isCameraOn ? "video.fill" : "video.slash.fill", label: "Camera",
+                            isActive: call.isCameraOn, action: call.toggleCamera)
+                Spacer(minLength: 0)
+                PanelButton(symbol: "rectangle.inset.filled.and.person.filled", label: call.isSharingScreen ? "Stop Sharing" : "Share Screen",
+                            isActive: call.isSharingScreen,
+                            action: { call.isSharingScreen ? call.stopSharingScreen() : call.shareScreen() })
+            }
+            .padding(.horizontal, 4)
+        }
+        .padding(16)
+        .glassEffect(.regular, in: .rect(cornerRadius: 34, style: .continuous))
+    }
+}
+
+/// One of the panel's round buttons: glass, and white with a dark symbol while it is on.
+struct PanelButton: View {
+    let symbol: String
+    let label: String
+    var isActive = false
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            PanelButtonFace(symbol: symbol, isActive: isActive)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+        .accessibilityAddTraits(isActive ? .isSelected : [])
+    }
+}
+
+struct PanelButtonFace: View {
+    let symbol: String
+    var isActive = false
+
+    var body: some View {
+        Image(systemName: symbol)
+            .font(.system(size: 19, weight: .semibold))
+            .foregroundStyle(isActive ? .black : .white)
+            .frame(width: 50, height: 50)
+            .background {
+                if isActive { Circle().fill(.white) } else { Circle().fill(.white.opacity(0.14)) }
+            }
+            .contentShape(.circle)
+    }
+}
+#endif

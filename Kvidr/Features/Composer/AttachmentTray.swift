@@ -1,4 +1,3 @@
-import AppKit
 import SwiftUI
 
 /// The strip of in-flight uploads above the composer.

@@ -10,6 +10,25 @@ struct MessageContentParserTests {
         RichObject(type: .user, id: id, name: name, attributes: server.map { ["server": $0] } ?? [:])
     }
 
+    // MARK: - Previews
+
+    @Test("A list preview says the words, not the Markdown around them")
+    func previewWithoutMarkdown() {
+        let content = MessageContentParser(currentUserID: "alice", markdownEnabled: false).parse(
+            text: "## ⚙️ Manage settings\nUse **bold**, `code` and snake_case.\n> quoted\n- item",
+            parameters: [:],
+            isMarkdown: true
+        )
+        #expect(content.previewWithoutMarkdown == "⚙️ Manage settings Use bold, code and snake_case. quoted item")
+    }
+
+    @Test("A Markdown heading is its own bold line, without the hashes")
+    func headingIsBold() {
+        let content = parser.parse(text: "## ✨ Smart Picker\nType a slash.", parameters: [:], isMarkdown: true)
+        #expect(content.blocks.count == 2)
+        #expect(content.blocks.first == .paragraph([.markdown("**✨ Smart Picker**")]))
+    }
+
     // MARK: - Placeholders
 
     @Test("A mention of me is marked as such")

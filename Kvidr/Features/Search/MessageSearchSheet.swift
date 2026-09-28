@@ -1,4 +1,3 @@
-import AppKit
 import SwiftUI
 
 /// ⇧⌘F — search everything the server remembers.

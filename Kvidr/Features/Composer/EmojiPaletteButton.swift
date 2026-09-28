@@ -1,4 +1,6 @@
+#if os(macOS)
 import AppKit
+#endif
 import SwiftUI
 
 /// The system emoji palette, which inserts straight into whatever has focus — the same thing
@@ -12,6 +14,7 @@ struct EmojiPaletteButton: View {
     var focus: () -> Void
 
     var body: some View {
+        #if os(macOS)
         Button {
             focus()
             Task { @MainActor in NSApplication.shared.orderFrontCharacterPalette(nil) }
@@ -25,5 +28,9 @@ struct EmojiPaletteButton: View {
         .glassCircle()
         .help("Emoji")
         .accessibilityLabel("Emoji")
+        #else
+        // The keyboard's own emoji key is iOS's palette, one tap from the field.
+        EmptyView()
+        #endif
     }
 }

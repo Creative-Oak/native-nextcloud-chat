@@ -1,9 +1,13 @@
+#if os(macOS)
 import AppKit
+#else
+import UIKit
+#endif
 import Foundation
 
 /// Fetches and caches avatars.
 ///
-/// Main-actor by design rather than an actor: `NSImage` is not `Sendable`, so an image
+/// Main-actor by design rather than an actor: `PlatformImage` is not `Sendable`, so an image
 /// returned from an actor could not legally cross back. Everything expensive — the network
 /// request and the disk read — happens off the main actor inside the calls this makes; only
 /// the small, cheap cache lives here.
@@ -22,8 +26,8 @@ final class AvatarLoader {
     private let client: OCSClient
     private let supportsConversationAvatars: Bool
 
-    @ObservationIgnored private var memory: [String: NSImage] = [:]
-    @ObservationIgnored private var inFlight: [String: Task<NSImage?, Never>] = [:]
+    @ObservationIgnored private var memory: [String: PlatformImage] = [:]
+    @ObservationIgnored private var inFlight: [String: Task<PlatformImage?, Never>] = [:]
     private let diskCache: AvatarDiskCache
     /// Bumped per person when their picture is known to have changed. Views showing a user
     /// avatar include it in what they load on, so they all ask again at once.
@@ -52,16 +56,16 @@ final class AvatarLoader {
 
     /// Already in memory? Use this from `body` — it never suspends, so the first frame can
     /// draw the real avatar instead of the fallback.
-    func cachedImage(for subject: Subject, size: Int, dark: Bool) -> NSImage? {
+    func cachedImage(for subject: Subject, size: Int, dark: Bool) -> PlatformImage? {
         memory[cacheKey(subject, size: size, dark: dark)]
     }
 
-    func image(for subject: Subject, size: Int, dark: Bool) async -> NSImage? {
+    func image(for subject: Subject, size: Int, dark: Bool) async -> PlatformImage? {
         let key = cacheKey(subject, size: size, dark: dark)
         if let cached = memory[key] { return cached }
         if let existing = inFlight[key] { return await existing.value }
 
-        let task = Task<NSImage?, Never> { [weak self] in
+        let task = Task<PlatformImage?, Never> { [weak self] in
             guard let self else { return nil }
             return await self.fetch(subject, size: size, dark: dark, key: key)
         }
@@ -81,7 +85,7 @@ final class AvatarLoader {
     /// free, and short enough that a new one turns up the same day.
     private static let userAvatarMaximumAge: TimeInterval = 24 * 60 * 60
 
-    private func fetch(_ subject: Subject, size: Int, dark: Bool, key: String) async -> NSImage? {
+    private func fetch(_ subject: Subject, size: Int, dark: Bool, key: String) async -> PlatformImage? {
         let maximumAge: TimeInterval? = switch subject {
         case .user: Self.userAvatarMaximumAge
         case .conversation: nil
@@ -135,25 +139,33 @@ final class AvatarLoader {
 
     /// A picture from the server's bytes. An emoji picture Talk made is drawn here from its
     /// colour and emoji — see ``EmojiAvatar`` for why its SVG isn't used as it is.
-    private static func image(from data: Data, size: Int) -> NSImage? {
-        guard let emoji = EmojiAvatar.parse(data) else { return NSImage(data: data) }
+    private static func image(from data: Data, size: Int) -> PlatformImage? {
+        guard let emoji = EmojiAvatar.parse(data) else { return PlatformImage(data: data) }
         let side = CGFloat(max(size, 32))
         let rgb = emoji.rgb
-        return NSImage(size: NSSize(width: side, height: side), flipped: false) { rect in
+        let text = NSAttributedString(string: emoji.emoji, attributes: [.font: PlatformFont.systemFont(ofSize: side * 0.5)])
+        let bounds = text.size()
+        #if os(macOS)
+        return PlatformImage(size: NSSize(width: side, height: side), flipped: false) { rect in
             NSColor(srgbRed: rgb.red, green: rgb.green, blue: rgb.blue, alpha: 1).setFill()
             rect.fill()
-            let font = NSFont.systemFont(ofSize: side * 0.5)
-            let text = NSAttributedString(string: emoji.emoji, attributes: [.font: font])
-            let bounds = text.size()
             text.draw(at: NSPoint(x: rect.midX - bounds.width / 2, y: rect.midY - bounds.height / 2))
             return true
         }
+        #else
+        return UIGraphicsImageRenderer(size: CGSize(width: side, height: side)).image { context in
+            let rect = context.format.bounds
+            UIColor(red: rgb.red, green: rgb.green, blue: rgb.blue, alpha: 1).setFill()
+            context.fill(rect)
+            text.draw(at: CGPoint(x: rect.midX - bounds.width / 2, y: rect.midY - bounds.height / 2))
+        }
+        #endif
     }
 
     /// What an avatar is allowed to weigh.
     private static let maximumAvatarBytes = 2 * 1024 * 1024
 
-    private func store(_ image: NSImage, for key: String) {
+    private func store(_ image: PlatformImage, for key: String) {
         if memory.count >= memoryLimit { memory.removeAll(keepingCapacity: true) }
         memory[key] = image
     }

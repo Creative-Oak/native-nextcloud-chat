@@ -1,5 +1,7 @@
-import AppKit
 import SwiftUI
+#if os(iOS)
+import SafariServices
+#endif
 
 /// Login Flow v2, as three calm states: type an address, approve in the browser, done.
 ///
@@ -63,7 +65,7 @@ struct LoginView: View {
                 }
             }
             .frame(maxWidth: 380)
-            .padding(.horizontal, 36)
+            .padding(.horizontal, Platform.isPhone ? 20 : 36)
             .padding(.vertical, 32)
             .glass(.panel, cornerRadius: 22)
 
@@ -76,17 +78,40 @@ struct LoginView: View {
                 .frame(maxWidth: 420)
                 .padding(.bottom, 24)
         }
+        #if os(macOS)
         .padding(40)
         .frame(minWidth: 520, minHeight: 460)
+        #else
+        .padding(20)
+        #endif
         .animation(.easeInOut(duration: 0.2), value: model.phase)
+        #if os(iOS)
+        // In the app rather than out to Safari: approving is one step of signing in, and
+        // the sheet goes by itself once the server says yes.
+        .sheet(isPresented: Binding(get: { model.browserURL != nil }, set: { if !$0 { model.browserURL = nil } })) {
+            if let url = model.browserURL {
+                SafariView(url: url)
+                    .ignoresSafeArea()
+            }
+        }
+        #endif
     }
 
     private var serverEntry: some View {
         VStack(spacing: 10) {
             TextField("cloud.example.com", text: $model.serverText)
                 .textFieldStyle(.roundedBorder)
+                #if os(macOS)
                 .font(.system(size: 14))
                 .frame(width: 320)
+                #else
+                .frame(maxWidth: 320)
+                .keyboardType(.URL)
+                .textContentType(.URL)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .submitLabel(.go)
+                #endif
                 .onSubmit { model.begin() }
                 .disabled(model.phase == .checkingServer)
 
@@ -103,10 +128,18 @@ struct LoginView: View {
         }
     }
 
+    private var isMac: Bool {
+        #if os(macOS)
+        true
+        #else
+        false
+        #endif
+    }
+
     private var waitingForBrowser: some View {
         VStack(spacing: 12) {
             ProgressView().controlSize(.small)
-            Text("Finish signing in in your browser, then come back.")
+            Text(Platform.isPhone || !isMac ? "Approve kvidr in the browser to finish signing in." : "Finish signing in in your browser, then come back.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -134,6 +167,8 @@ final class LoginModel {
     }
 
     var serverText = ""
+    /// The approval page, while it is up in the app's own browser sheet (iOS).
+    var browserURL: URL?
     private(set) var phase: Phase = .enteringServer
     private(set) var error: String?
 
@@ -172,7 +207,7 @@ final class LoginModel {
                 let flow = try await authentication.beginLogin(server: address)
                 self.session = flow
                 self.phase = .waitingForBrowser
-                NSWorkspace.shared.open(flow.loginURL)
+                self.openBrowser(flow.loginURL)
 
                 let result = try await authentication.completeLogin(flow)
                 // Cancel, or a second attempt against a different server, replaces
@@ -188,6 +223,7 @@ final class LoginModel {
                     Task.detached { await authentication.discardLogin(result) }
                     return
                 }
+                self.browserURL = nil
                 self.phase = .finishing
                 await self.app.signedIn(account: result.account)
             } catch let failure as TalkError {
@@ -219,13 +255,36 @@ final class LoginModel {
 
     func reopenBrowser() {
         guard let session else { return }
-        NSWorkspace.shared.open(session.loginURL)
+        openBrowser(session.loginURL)
+    }
+
+    private func openBrowser(_ url: URL) {
+        #if os(iOS)
+        browserURL = url
+        #else
+        Platform.open(url)
+        #endif
     }
 
     func cancel() {
         task?.cancel()
         task = nil
         session = nil
+        browserURL = nil
         phase = .enteringServer
     }
 }
+
+#if os(iOS)
+/// Safari, inside the app: the user's own password manager and autofill, and a page the
+/// app cannot read — which is what Login Flow v2 asks of the browser it is approved in.
+private struct SafariView: UIViewControllerRepresentable {
+    let url: URL
+
+    func makeUIViewController(context: Context) -> SFSafariViewController {
+        SFSafariViewController(url: url)
+    }
+
+    func updateUIViewController(_ controller: SFSafariViewController, context: Context) {}
+}
+#endif

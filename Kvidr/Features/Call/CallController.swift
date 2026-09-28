@@ -1,5 +1,4 @@
 import AVFoundation
-import CoreAudio
 import Foundation
 @preconcurrency import WebRTC
 
@@ -134,7 +133,12 @@ final class CallController {
             // With video: the camera's track goes out from the start, off.
             try await session.calls.join(token: token, flags: [.inCall, .withAudio, .withVideo])
         } catch {
-            end(reason: "Couldn’t join the call: \(error.userMessage)")
+            // Talk answers a join for a call that has just ended — or for a session the
+            // server has already let go of — with "not found", which reads as though the
+            // conversation were gone.
+            end(reason: error == .notFound
+                ? "This call has already ended. Start a new one from the conversation."
+                : "Couldn’t join the call: \(error.userMessage)")
             return
         }
         guard phase == .joining else { return }
@@ -180,16 +184,21 @@ final class CallController {
     }
 
     /// Uses another microphone: it becomes the Mac's default, and the call's audio starts again.
-    func useMicrophone(_ id: AudioObjectID) {
+    func useMicrophone(_ id: AudioDeviceID) {
         guard id != audioDevices.defaultInput else { return }
         audioDevices.setDefaultInput(id)
+        #if os(macOS)
         Task { await restartAudio() }
+        #endif
     }
 
-    func useSpeaker(_ id: AudioObjectID) {
+    /// On iPhone and iPad the route changes under the running call; only the Mac restarts.
+    func useSpeaker(_ id: AudioDeviceID) {
         guard id != audioDevices.defaultOutput else { return }
         audioDevices.setDefaultOutput(id)
+        #if os(macOS)
         Task { await restartAudio() }
+        #endif
     }
 
     /// WebRTC's audio holds on to the devices it started with, and the media server holds on

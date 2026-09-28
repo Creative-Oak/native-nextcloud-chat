@@ -1,4 +1,8 @@
+#if os(macOS)
 import AppKit
+#else
+import UIKit
+#endif
 import SwiftUI
 @preconcurrency import WebRTC
 
@@ -19,6 +23,7 @@ struct VideoView: View {
     }
 }
 
+#if os(macOS)
 private struct TrackView: NSViewRepresentable {
     let video: VideoTrack
     let fits: Bool
@@ -84,3 +89,71 @@ private struct TrackView: NSViewRepresentable {
         }
     }
 }
+#else
+private struct TrackView: UIViewRepresentable {
+    let video: VideoTrack
+    let fits: Bool
+
+    func makeUIView(context: Context) -> FillingVideoView {
+        let view = FillingVideoView()
+        view.fits = fits
+        view.attach(video.track)
+        return view
+    }
+
+    func updateUIView(_ view: FillingVideoView, context: Context) {
+        view.fits = fits
+        view.attach(video.track)
+    }
+
+    static func dismantleUIView(_ view: FillingVideoView, coordinator: ()) {
+        view.attach(nil)
+    }
+
+    /// The same clipping arrangement as the Mac's: WebRTC's Metal view stretched to the
+    /// video's proportions inside a view that cuts off the overflow.
+    final class FillingVideoView: UIView, RTCVideoViewDelegate {
+        private let renderer = RTCMTLVideoView(frame: .zero)
+        private var track: RTCVideoTrack?
+        private var videoSize = CGSize(width: 16, height: 9)
+        var fits = false {
+            didSet { if fits != oldValue { setNeedsLayout() } }
+        }
+
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+            clipsToBounds = true
+            renderer.videoContentMode = .scaleToFill
+            renderer.delegate = self
+            addSubview(renderer)
+        }
+
+        @available(*, unavailable)
+        required init?(coder: NSCoder) { fatalError("not supported") }
+
+        func attach(_ newTrack: RTCVideoTrack?) {
+            guard newTrack !== track else { return }
+            track?.remove(renderer)
+            track = newTrack
+            newTrack?.add(renderer)
+        }
+
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            let widthScale = bounds.width / max(videoSize.width, 1)
+            let heightScale = bounds.height / max(videoSize.height, 1)
+            let scale = fits ? min(widthScale, heightScale) : max(widthScale, heightScale)
+            let size = CGSize(width: videoSize.width * scale, height: videoSize.height * scale)
+            renderer.frame = CGRect(x: (bounds.width - size.width) / 2, y: (bounds.height - size.height) / 2, width: size.width, height: size.height)
+        }
+
+        nonisolated func videoView(_ videoView: any RTCVideoRenderer, didChangeVideoSize size: CGSize) {
+            Task { @MainActor in
+                guard size.width > 0, size.height > 0 else { return }
+                self.videoSize = size
+                self.setNeedsLayout()
+            }
+        }
+    }
+}
+#endif

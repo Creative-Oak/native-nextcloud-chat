@@ -1,4 +1,3 @@
-import AppKit
 import LinkPresentation
 import SwiftUI
 
@@ -8,15 +7,15 @@ struct LinkPreview: Sendable {
     var url: URL
     var title: String?
     var host: String
-    /// `NSImage` isn't `Sendable`; the loader hands these out on the main actor only.
-    nonisolated(unsafe) var image: NSImage?
+    /// `PlatformImage` isn't `Sendable`; the loader hands these out on the main actor only.
+    nonisolated(unsafe) var image: PlatformImage?
 }
 
 /// Rich previews for links in messages, fetched with the system's own link presentation
 /// machinery — the same one Messages uses, so a page previews here the way it previews
 /// there.
 ///
-/// Same shape as ``PreviewLoader`` and for the same reason: `NSImage` isn't `Sendable`,
+/// Same shape as ``PreviewLoader`` and for the same reason: `PlatformImage` isn't `Sendable`,
 /// so the cache lives on the main actor. Each page is asked about exactly once per run;
 /// a page that has nothing to show is remembered as such rather than asked again.
 @MainActor
@@ -114,11 +113,11 @@ final class LinkPreviewLoader {
         )
     }
 
-    private static func loadImage(from provider: NSItemProvider?) async -> NSImage? {
-        guard let provider, provider.canLoadObject(ofClass: NSImage.self) else { return nil }
+    private static func loadImage(from provider: NSItemProvider?) async -> PlatformImage? {
+        guard let provider, provider.canLoadObject(ofClass: PlatformImage.self) else { return nil }
         return await withCheckedContinuation { continuation in
-            provider.loadObject(ofClass: NSImage.self) { object, _ in
-                continuation.resume(returning: object as? NSImage)
+            provider.loadObject(ofClass: PlatformImage.self) { object, _ in
+                continuation.resume(returning: object as? PlatformImage)
             }
         }
     }

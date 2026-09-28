@@ -1,4 +1,3 @@
-import AppKit
 import SwiftUI
 
 /// The unread marker on a face: a dot in the accent colour, ringed in the colour behind it
@@ -13,7 +12,7 @@ struct UnreadDot: View {
             .frame(width: 12, height: 12)
             .overlay {
                 Circle().stroke(
-                    isSelected ? Color(nsColor: .selectedContentBackgroundColor) : Color(nsColor: .windowBackgroundColor),
+                    isSelected ? Color.selectedContentBackground : Color.windowBackground,
                     lineWidth: 2
                 )
             }

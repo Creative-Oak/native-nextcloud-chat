@@ -1,4 +1,3 @@
-import AppKit
 import SwiftUI
 
 /// The sidebar's Reminders row, at the top of the list while there are any — where Mail
@@ -10,7 +9,7 @@ struct RemindersSidebarRow: View {
 
     /// `ConversationRow`'s unread gutter and avatar column.
     private static let gutter: CGFloat = 8
-    private static let avatar: CGFloat = 40
+    private static let avatar: CGFloat = Platform.isPhone ? 44 : 40
 
     var body: some View {
         HStack(spacing: 5) {
@@ -20,20 +19,29 @@ struct RemindersSidebarRow: View {
 
             HStack(spacing: 10) {
                 Image(systemName: "alarm")
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.scaled(13, weight: .medium))
                     .foregroundStyle(isSelected ? .white : .orange)
-                    .frame(width: Self.avatar)
+                    .frame(width: Self.avatar, height: Platform.isPhone ? Self.avatar : nil)
+                    // On a phone it stands where a conversation's face would, in a disc.
+                    .background {
+                        if Platform.isPhone { Circle().fill(.orange.opacity(0.15)) }
+                    }
 
                 Text("Reminders")
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.scaled(13, weight: Platform.isPhone ? .semibold : .medium))
                     .lineLimit(1)
 
                 Spacer(minLength: 4)
 
                 Text("\(count)")
-                    .font(.system(size: 12))
+                    .font(.scaled(12))
                     .monospacedDigit()
                     .foregroundStyle(isSelected ? .primary : .secondary)
+                if Platform.isPhone {
+                    Image(systemName: "chevron.forward")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.tertiary)
+                }
             }
         }
         .padding(.vertical, 3)
@@ -46,6 +54,12 @@ struct RemindersSidebarRow: View {
 /// Every upcoming reminder, soonest first, in the messages column. A click opens the message
 /// in its conversation.
 struct RemindersPage: View {
+    #if os(macOS)
+    static let hint = "Right-click a message and choose Remind Me to be reminded about it later."
+    #else
+    static let hint = "Press and hold a message and choose Remind Me to be reminded about it later."
+    #endif
+
     let store: ReminderStore
     @Environment(AppModel.self) private var app
 
@@ -55,7 +69,7 @@ struct RemindersPage: View {
                 ContentUnavailableView {
                     Label("No Reminders", systemImage: "alarm")
                 } description: {
-                    Text("Right-click a message and choose Remind Me to be reminded about it later.")
+                    Text(Self.hint)
                 }
             } else {
                 List {
@@ -74,7 +88,7 @@ struct RemindersPage: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(nsColor: .textBackgroundColor))
+        .background(Color.textBackground)
         .navigationTitle("Reminders")
         .task { await store.load() }
     }
@@ -90,19 +104,19 @@ private struct ReminderRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            ActorAvatarView(actor: reminder.actor, size: 28)
+            ActorAvatarView(actor: reminder.actor, size: Platform.isPhone ? 40 : 28)
 
             VStack(alignment: .leading, spacing: 1) {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text(conversation?.displayName ?? reminder.actor.resolvedDisplayName)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.scaled(13, weight: .semibold))
                         .lineLimit(1)
                     Spacer(minLength: 8)
                     // Where the hover's remove button isn't: the two take turns.
                     if isHovering {
                         Button(action: onRemove) {
                             Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 12))
+                                .font(.scaled(12))
                         }
                         .buttonStyle(.plain)
                         .foregroundStyle(.secondary)
@@ -114,12 +128,14 @@ private struct ReminderRow: View {
                                 .foregroundStyle(.orange)
                             Text(ReminderTime.text(reminder.date))
                                 .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .fixedSize()
                         }
-                        .font(.system(size: 11))
+                        .font(.scaled(11))
                     }
                 }
                 Text(preview)
-                    .font(.system(size: 12))
+                    .font(.scaled(12))
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
             }
@@ -128,6 +144,10 @@ private struct ReminderRow: View {
         .contentShape(.rect)
         .onTapGesture(perform: onOpen)
         .onHover { isHovering = $0 }
+        // No hover on a touch screen: the remove button's job goes to a swipe.
+        .swipeActions {
+            Button("Remove", systemImage: "trash", role: .destructive, action: onRemove)
+        }
         .contextMenu {
             Button("Show Message", action: onOpen)
             Button("Remove Reminder", action: onRemove)
@@ -140,7 +160,7 @@ private struct ReminderRow: View {
             messageID: reminder.messageID, token: reminder.token, actor: reminder.actor,
             timestamp: reminder.date, text: reminder.text, parameters: reminder.parameters
         )
-        let text = MessageContentParser(currentUserID: "", markdownEnabled: false).parse(message).preview
+        let text = MessageContentParser(currentUserID: "", markdownEnabled: false).parse(message).previewWithoutMarkdown
         let isGroup = conversation.map { !$0.isOneToOne } ?? true
         return isGroup ? "\(reminder.actor.resolvedDisplayName): \(text)" : text
     }

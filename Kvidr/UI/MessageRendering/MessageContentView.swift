@@ -1,4 +1,3 @@
-import AppKit
 import SwiftUI
 
 /// Renders parsed message content.
@@ -110,7 +109,7 @@ enum MessageLink {
             Log.ui.warning("Refused to open a message link with scheme \(url.scheme ?? "none")")
             return
         }
-        NSWorkspace.shared.open(url)
+        Platform.open(url)
     }
 }
 
@@ -221,8 +220,7 @@ private struct CodeBlockView: View {
         .background(.quaternary.opacity(0.5), in: .rect(cornerRadius: 6))
         .contextMenu {
             Button("Copy Code") {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(code, forType: .string)
+                Pasteboard.copy(code)
                 didCopy = true
             }
         }
@@ -295,13 +293,11 @@ private struct AttachmentView: View {
         if let link = object.link {
             Button("Open in Nextcloud") { open() }
             Button("Copy Link") {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(link.absoluteString, forType: .string)
+                Pasteboard.copy(link.absoluteString)
             }
         }
         Button("Copy File Name") {
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(object.displayName, forType: .string)
+            Pasteboard.copy(object.displayName)
         }
     }
 

@@ -1,4 +1,3 @@
-import AppKit
 import SwiftUI
 
 /// Moderator settings for a conversation.
@@ -187,8 +186,7 @@ final class ConversationSettingsModel: Identifiable {
 
     func copyLink() {
         let url = session.account.server.url(path: "/index.php/call/\(conversation.token)")
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(url.absoluteString, forType: .string)
+        Pasteboard.copy(url.absoluteString)
     }
 
     /// Applies only what actually changed, so a save never sends five requests to set five

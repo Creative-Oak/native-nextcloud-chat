@@ -1,5 +1,8 @@
-import AppKit
 import SwiftUI
+
+#if os(macOS)
+import AppKit
+
 
 /// While this Mac shares its screen, kvidr gets out of the way: its window goes to the Dock, and
 /// a small call floats above everything instead — the other side's feed, your own, and the
@@ -205,3 +208,14 @@ private struct MiniButton: View {
 private final class FirstClickHostingView: NSHostingView<AnyView> {
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 }
+#else
+/// iOS: while the screen is shared kvidr is in the background, and the system's own
+/// indicator — the red status bar pill — is the way back to the call.
+@MainActor
+final class SharingMiniCall {
+    func start(call: CallController, me: MessageActor, avatarLoader: AvatarLoader?, onReturn: @escaping () -> Void, onLeave: @escaping () -> Void) {}
+    func show(call: CallController, me: MessageActor, avatarLoader: AvatarLoader?, onReturn: @escaping () -> Void, onLeave: @escaping () -> Void) {}
+    func hide() {}
+    func close(restoringWindow: Bool = true) {}
+}
+#endif

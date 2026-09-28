@@ -1,4 +1,6 @@
+#if os(macOS)
 import AppKit
+#endif
 import Combine
 import SwiftUI
 
@@ -30,6 +32,19 @@ struct RootView: View {
     /// The message the Forward sheet is choosing a conversation for.
     @State private var forwarding: Message?
     @Environment(\.openWindow) private var openWindow
+    #if os(iOS)
+    /// iPhone, or an iPad in a narrow slice of the screen: one column at a time.
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    /// iOS has no second window for the shortcuts; they come up as a sheet.
+    @State private var isShowingKeyboardShortcuts = false
+    /// Which column a one-column window shows. Driven from the selection, since the split
+    /// view only pushes on its own for a tap on a list row — not for a pinned face, a
+    /// notification, the palette or anything else that opens a conversation.
+    @State private var compactColumn: NavigationSplitViewColumn = .sidebar
+    /// When the detail was last asked for. The split view reports the sidebar once more
+    /// while it is still setting up a push, and that echo must not be taken for Back.
+    @State private var pushedAt: Date = .distantPast
+    #endif
 
     var body: some View {
         @Bindable var app = app
@@ -53,21 +68,41 @@ struct RootView: View {
         }
         .remembersWindowFrame(named: "KvidrMain")
         .task { await app.start() }
-        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: Platform.didBecomeActive)) { _ in
             app.isApplicationActive = true
         }
+        #if os(macOS)
         .onReceive(NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didWakeNotification)) { _ in
             app.systemDidWake()
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didResignActiveNotification)) { _ in
+        #endif
+        .onReceive(NotificationCenter.default.publisher(for: Platform.didResignActive)) { _ in
             app.isApplicationActive = false
         }
+        #if os(macOS)
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { _ in
             app.isWindowKey = true
         }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification)) { _ in
             app.isWindowKey = false
         }
+        #else
+        // Coming back from the background is iOS's version of waking: the long poll and
+        // the signaling socket were suspended with the app.
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
+            app.systemDidWake()
+        }
+        .sheet(isPresented: $isShowingKeyboardShortcuts) {
+            NavigationStack {
+                KeyboardShortcutsWindow()
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Done") { isShowingKeyboardShortcuts = false }
+                        }
+                    }
+            }
+        }
+        #endif
         .overlay { paletteOverlay }
         .focusedSceneValue(\.appCommands, commands)
     }
@@ -107,10 +142,14 @@ struct RootView: View {
         context.toggleArchive = { app.toggleArchiveOnSelection() }
         context.toggleInspector = toggleInspector
         context.openInBrowser = { app.openSelectionInBrowser() }
+        #if os(macOS)
         context.showKeyboardShortcuts = { openWindow(id: TalkWindow.keyboardShortcuts) }
+        #else
+        context.showKeyboardShortcuts = { isShowingKeyboardShortcuts = true }
+        #endif
         context.openDocumentation = {
             if let url = URL(string: "https://nextcloud-talk.readthedocs.io/en/latest/") {
-                NSWorkspace.shared.open(url)
+                Platform.open(url)
             }
         }
         context.openSettings = { app.showSettings() }
@@ -216,7 +255,105 @@ struct RootView: View {
         @Bindable var app = app
         @Bindable var preferences = preferences
 
-        NavigationSplitView(columnVisibility: $columnVisibility) {
+        #if os(iOS)
+        let splitView = NavigationSplitView(columnVisibility: $columnVisibility, preferredCompactColumn: $compactColumn) {
+            sidebarColumn
+        } detail: {
+            detailColumn
+        }
+        .onChange(of: app.selectedToken, initial: true) { _, token in
+            if token != nil { pushedAt = .now }
+            compactColumn = token == nil ? .sidebar : .detail
+        }
+        // Back to the list: nothing is open any more, so the same conversation can be
+        // opened again and its messages stop counting as seen.
+        .onChange(of: compactColumn) { _, column in
+            guard column == .sidebar, isCompact, app.selectedToken != nil else { return }
+            if Date.now.timeIntervalSince(pushedAt) < 0.6 {
+                compactColumn = .detail
+            } else {
+                app.selectedToken = nil
+            }
+        }
+        #else
+        let splitView = NavigationSplitView(columnVisibility: $columnVisibility) {
+            sidebarColumn
+        } detail: {
+            detailColumn
+        }
+        #endif
+
+        splitView
+        .navigationTitle(app.chat?.conversation.displayName ?? "Talk")
+        // Three columns need room. Below it, the sidebar gives way to the inspector,
+        // as it does in Messages, and comes back when the inspector closes or the
+        // window grows — rather than all three squeezing each other into clipped
+        // fragments and an overflowing toolbar.
+        .onGeometryChange(for: CGFloat.self) { proxy in
+            proxy.size.width
+        } action: { width in
+            contentWidth = width
+            reconcileColumns()
+        }
+        .onChange(of: isShowingInspector) { _, _ in reconcileColumns() }
+        .onChange(of: isSidebarYieldingToCall) { _, _ in
+            withAnimation(.smooth(duration: 0.45)) { reconcileColumns() }
+        }
+        .onChange(of: columnVisibility) { _, visibility in
+            // The sidebar hides only for the inspector. Its split view item cannot be
+            // collapsed by hand — see `SidebarDividerTracker` — but should AppKit ever
+            // report it gone for another reason, it is put back rather than left with
+            // no way to bring it up: there is no toggle, and ⌃⌘S changes the width.
+            if visibility == .detailOnly && !isSidebarYielding {
+                withoutColumnAnimation { columnVisibility = .all }
+            } else {
+                reconcileColumns()
+            }
+        }
+        .onChange(of: preferences.sidebarMode) { _, _ in reconcileColumns() }
+        // Settings has no conversation to inspect; the panel goes with the conversation.
+        .onChange(of: app.isShowingSettings) { _, showing in
+            if showing && isShowingInspector {
+                withAnimation(.smooth(duration: 0.3)) { isShowingInspector = false }
+            }
+        }
+        #if os(macOS)
+        .sheet(item: $conversationSettings) { model in
+            ConversationSettingsSheet(model: model)
+        }
+        #endif
+        // Built fresh each time so the scope picker reflects whichever conversation is
+        // open now, rather than the one that was open the first time it was used.
+        .sheet(isPresented: Binding(get: { forwarding != nil }, set: { if !$0 { forwarding = nil } })) {
+            if let message = forwarding {
+                ForwardSheet(
+                    message: message,
+                    conversations: app.conversationList?.index.visibleConversations ?? [],
+                    onForward: { target in
+                        forwarding = nil
+                        app.forward(message, to: target)
+                    },
+                    onCancel: { forwarding = nil }
+                )
+            }
+        }
+        .sheet(item: $messageSearch) { model in
+            MessageSearchSheet(
+                model: model,
+                onOpen: { hit in
+                    messageSearch = nil
+                    app.open(hit)
+                },
+                onClose: { messageSearch = nil }
+            )
+        }
+    }
+
+    @ViewBuilder
+    private var sidebarColumn: some View {
+        @Bindable var app = app
+        @Bindable var preferences = preferences
+
             // The width and the toolbar removal belong to the *column*, not to the list
             // inside it, and `SidebarColumn` always has something standing in the column
             // for them to apply to — even before the cache has opened.
@@ -231,7 +368,11 @@ struct RootView: View {
                 onDiscardDraft: { app.discardDraft() },
                 profile: app.profile,
                 reminderCount: app.reminders?.reminders.count ?? 0,
-                onOpenSettings: { app.showSettings() }
+                onOpenSettings: { app.showSettings() },
+                onNewMessage: { app.newMessage() },
+                onGoToAnything: openPalette,
+                onSearchMessages: { startMessageSearch() },
+                onOpenReminders: { app.showReminders() }
             )
             // No sidebar toggle, as in Messages: the sidebar is not something you
             // fold away by hand. It goes only when the inspector needs its room in
@@ -255,7 +396,12 @@ struct RootView: View {
             .background {
                 SidebarDividerTracker(mode: $preferences.sidebarMode)
             }
-        } detail: {
+    }
+
+    @ViewBuilder
+    private var detailColumn: some View {
+        @Bindable var app = app
+
             // The inspector is a panel inside this column, not a column of its own. A
             // column brings a section of the toolbar with it, and the toolbar lays its
             // sections out against where the columns *were* while they slide, so every
@@ -292,9 +438,19 @@ struct RootView: View {
                                     onDismiss: { withAnimation(.smooth(duration: 0.45)) { app.dismissEndedCall() } },
                                     onMinimize: { withAnimation(.smooth(duration: 0.45)) { app.isCallMinimized = true } }
                                 )
+                                #if os(macOS)
                                 .ignoresSafeArea(.container, edges: .top)
+                                #else
+                                // The call has the whole screen: no bar over it, and the
+                                // status bar light on its dark stage.
+                                .toolbar(.hidden, for: .navigationBar)
+                                .preferredColorScheme(.dark)
+                                #endif
                                 .transition(.move(edge: .leading).combined(with: .opacity))
                             }
+                        // No room beside the call on a phone: the call has the screen, as
+                        // FaceTime's does, and minimizing it brings the conversation back.
+                        if !(isCompact && callHere != nil) {
                         ChatView(
                             model: chat,
                             composerFocused: $composerFocused,
@@ -318,6 +474,7 @@ struct RootView: View {
                             onJoinCall: app.activeCall == nil ? { startCall() } : nil,
                             callElsewhere: app.isCallFullScreen ? nil : app.activeCall,
                             onReturnToCall: { withAnimation(.smooth(duration: 0.45)) { app.expandCall() } },
+                            onShowDetails: toggleInspector,
                             // In it, or it's ringing: the stage or the ringing banner says so, and
                             // a "call in progress" bar under it would say it twice.
                             isInCall: app.activeCall?.token == chat.token || app.incoming?.coversCallBar(for: chat.token) == true
@@ -325,6 +482,7 @@ struct RootView: View {
                             // A fresh view per conversation: no state bleeds between them.
                             .id(chat.token)
                             .frame(width: callHere == nil ? nil : 360)
+                        }
                         }
                         .animation(.smooth(duration: 0.45), value: callHere == nil)
                     } else if app.phase == .ready {
@@ -334,7 +492,7 @@ struct RootView: View {
                         // paints within a frame or two and a flashing spinner would be
                         // worse than nothing. The transcript's own colour, since a
                         // transcript is what almost always replaces it.
-                        Color(nsColor: .textBackgroundColor)
+                        Color.textBackground
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -362,6 +520,7 @@ struct RootView: View {
                     }
                 }
 
+                #if os(macOS)
                 if isShowingInspector, let inspector = app.inspector {
                     InspectorView(
                         model: inspector,
@@ -371,6 +530,7 @@ struct RootView: View {
                     .frame(width: Self.inspectorWidth)
                     .transition(.move(edge: .trailing))
                 }
+                #endif
             }
             // On the column, not on the chat view — these have to be true from the first
             // frame and stay true across conversations, or the toolbar visibly changes as
@@ -379,80 +539,92 @@ struct RootView: View {
             // The detail column contributes a title item; the header over the transcript
             // already says who this is, so it goes. (`NSWindow.titleVisibility` does not
             // reach it — this is a toolbar item, not the centred window title.)
+            #if os(macOS)
             .toolbar(removing: .title)
             // No toolbar backdrop over this column: the transcript's own soft edge fade
             // is the header's background, all the way down to the name capsule. Left
             // visible, AppKit paints its opaque, hairlined backdrop over the toolbar.
             .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
+            #else
+            // The same on iOS: the header over the transcript says who this is, and the
+            // navigation bar stays clear over the transcript's fade.
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackgroundVisibility(.hidden, for: .navigationBar)
+            // The details are a sheet on iOS: a 300-point panel beside the conversation
+            // leaves an iPhone nothing to read.
+            .sheet(isPresented: $isShowingInspector) {
+                if let inspector = app.inspector {
+                    NavigationStack {
+                        InspectorView(
+                            model: inspector,
+                            onOpenMessage: { messageID in
+                                isShowingInspector = false
+                                app.chat?.highlightRequest = messageID
+                            },
+                            onSearch: {
+                                isShowingInspector = false
+                                app.chat?.isSearching = true
+                            }
+                        )
+                        .toolbar { inspectorSheetToolbar(inspector) }
+                    }
+                    .environment(app)
+                    .environment(\.avatarLoader, app.avatarLoader)
+                    .environment(\.previewLoader, app.previewLoader)
+                    .environment(\.talkSession, app.session)
+                    // From the details sheet, over it: iOS shows one sheet at a time per level.
+                    .sheet(item: $conversationSettings) { model in
+                        ConversationSettingsSheet(model: model)
+                    }
+                    .presentationDetents([.large])
+                }
+            }
+            #endif
+            #if os(macOS)
             .toolbar { detailToolbar }
-        }
-        .navigationTitle(app.chat?.conversation.displayName ?? "Talk")
-        // Three columns need room. Below it, the sidebar gives way to the inspector,
-        // as it does in Messages, and comes back when the inspector closes or the
-        // window grows — rather than all three squeezing each other into clipped
-        // fragments and an overflowing toolbar.
-        .onGeometryChange(for: CGFloat.self) { proxy in
-            proxy.size.width
-        } action: { width in
-            contentWidth = width
-            reconcileColumns()
-        }
-        .onChange(of: isShowingInspector) { _, _ in reconcileColumns() }
-        .onChange(of: isSidebarYieldingToCall) { _, _ in
-            withAnimation(.smooth(duration: 0.45)) { reconcileColumns() }
-        }
-        .onChange(of: columnVisibility) { _, visibility in
-            // The sidebar hides only for the inspector. Its split view item cannot be
-            // collapsed by hand — see `SidebarDividerTracker` — but should AppKit ever
-            // report it gone for another reason, it is put back rather than left with
-            // no way to bring it up: there is no toggle, and ⌃⌘S changes the width.
-            if visibility == .detailOnly && !isSidebarYielding {
-                withoutColumnAnimation { columnVisibility = .all }
-            } else {
-                reconcileColumns()
-            }
-        }
-        .onChange(of: preferences.sidebarMode) { _, _ in reconcileColumns() }
-        // Settings has no conversation to inspect; the panel goes with the conversation.
-        .onChange(of: app.isShowingSettings) { _, showing in
-            if showing && isShowingInspector {
-                withAnimation(.smooth(duration: 0.3)) { isShowingInspector = false }
-            }
-        }
-        .sheet(item: $conversationSettings) { model in
-            ConversationSettingsSheet(model: model)
-        }
-        // Built fresh each time so the scope picker reflects whichever conversation is
-        // open now, rather than the one that was open the first time it was used.
-        .sheet(isPresented: Binding(get: { forwarding != nil }, set: { if !$0 { forwarding = nil } })) {
-            if let message = forwarding {
-                ForwardSheet(
-                    message: message,
-                    conversations: app.conversationList?.index.visibleConversations ?? [],
-                    onForward: { target in
-                        forwarding = nil
-                        app.forward(message, to: target)
-                    },
-                    onCancel: { forwarding = nil }
-                )
-            }
-        }
-        .sheet(item: $messageSearch) { model in
-            MessageSearchSheet(
-                model: model,
-                onOpen: { hit in
-                    messageSearch = nil
-                    app.open(hit)
-                },
-                onClose: { messageSearch = nil }
-            )
-        }
+            #else
+            .toolbar { touchDetailToolbar }
+            #endif
     }
 
     /// Messages' panel width, near enough. Fixed: the panel is a card, not a column.
     private static let inspectorWidth: CGFloat = 300
 
+    /// Whether the window is one column wide — an iPhone, or an iPad in Split View.
+    private var isCompact: Bool {
+        #if os(iOS)
+        horizontalSizeClass == .compact
+        #else
+        false
+        #endif
+    }
+
+    #if os(iOS)
+    @ToolbarContentBuilder
+    private func inspectorSheetToolbar(_ inspector: InspectorModel) -> some ToolbarContent {
+        ToolbarItem(placement: .cancellationAction) {
+            Button {
+                isShowingInspector = false
+            } label: {
+                Label("Close", systemImage: "xmark")
+            }
+        }
+        if let session = app.session,
+           inspector.conversation.isModerator || inspector.conversation.canLeaveConversation {
+            ToolbarItem(placement: .primaryAction) {
+                Button("Edit") {
+                    conversationSettings = ConversationSettingsModel(session: session, conversation: inspector.conversation)
+                }
+            }
+        }
+    }
+    #endif
+
     private func toggleInspector() {
+        #if os(iOS)
+        isShowingInspector.toggle()
+        return
+        #endif
         if isShowingInspector {
             withAnimation(.smooth(duration: 0.3)) { isShowingInspector = false }
         } else {
@@ -484,6 +656,7 @@ struct RootView: View {
     /// window is resized. This is that resize: a point wider and straight back, before
     /// anything is drawn.
     private func relayoutToolbar() {
+        #if os(macOS)
         Task { @MainActor in
             guard let window = NSApp.windows.first(where: { $0.frameAutosaveName == "KvidrMain" }) else { return }
             let frame = window.frame
@@ -492,6 +665,7 @@ struct RootView: View {
             window.setFrame(nudged, display: false)
             window.setFrame(frame, display: false)
         }
+        #endif
     }
 
     /// Sidebar, conversation and inspector side by side need about this much: the
@@ -528,6 +702,10 @@ struct RootView: View {
     }
 
     private func reconcileColumns() {
+        // iOS decides for itself when the sidebar shows; a phone is one column anyway.
+        #if os(iOS)
+        return
+        #endif
         if isSidebarYielding {
             didSidebarYieldToInspector = true
             guard columnVisibility != .detailOnly else { return }
@@ -720,6 +898,60 @@ struct RootView: View {
             }
         }
     }
+
+    #if os(iOS)
+    /// The conversation's bar as Messages draws it: their face in the middle — the name
+    /// hangs under it, see `ConversationHeader` — and the call button on the right. What
+    /// the Mac spreads along its toolbar goes in the menu beside it.
+    @ToolbarContentBuilder
+    private var touchDetailToolbar: some ToolbarContent {
+        if let chat = app.chat, !app.isShowingDraft, !app.isShowingSettings, !app.isShowingReminders, !app.isCallFullScreen {
+            ToolbarItem(placement: .principal) {
+                Button(action: toggleInspector) {
+                    AvatarView(conversation: chat.conversation, size: 44)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Details for \(chat.conversation.displayName)")
+            }
+            .sharedBackgroundVisibility(.hidden)
+
+            if app.activeCall == nil, chat.capabilities.config.callEnabled != false,
+               chat.conversation.canStartCall || chat.conversation.hasCall {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(action: startCall) {
+                        Label(chat.conversation.hasCall ? "Join Call" : "Call",
+                              systemImage: chat.conversation.hasCall ? "phone.fill" : "phone")
+                    }
+                    .tint(chat.conversation.hasCall ? .green : nil)
+                }
+            }
+
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Button("Details", systemImage: "info.circle", action: toggleInspector)
+                    Button("Search in Conversation", systemImage: "magnifyingglass") { chat.isSearching = true }
+                    if UnreadSummary.availability != .unsupported {
+                        Button("Summarize", systemImage: "apple.intelligence") { chat.summarize() }
+                    }
+                    if chat.capabilities.supportsThreads, !chat.threads.isEmpty {
+                        Menu("Threads", systemImage: "bubble.left.and.bubble.right") {
+                            ThreadsMenu(model: chat)
+                        }
+                    }
+                    if chat.hasHiddenPins {
+                        Menu("Pinned Messages", systemImage: "pin") {
+                            PinnedMessagesMenu(model: chat) { messageID in
+                                Task { await chat.reveal(messageID: messageID) }
+                            }
+                        }
+                    }
+                } label: {
+                    Label("More", systemImage: "ellipsis")
+                }
+            }
+        }
+    }
+    #endif
 
     private func startCall() {
         withAnimation(.smooth(duration: 0.45)) {

@@ -1,4 +1,3 @@
-import AppKit
 import SwiftUI
 
 /// The signed-in user's own picture, with their status as a dot.
@@ -12,13 +11,13 @@ struct ProfileAvatar: View {
 
     @Environment(\.avatarLoader) private var loader
     @Environment(\.colorScheme) private var colorScheme
-    @State private var image: NSImage?
+    @State private var image: PlatformImage?
 
     var body: some View {
         ZStack {
             if let image {
                 Circle().fill(.quaternary)
-                Image(nsImage: image).resizable().aspectRatio(contentMode: .fill)
+                Image(platformImage: image).resizable().aspectRatio(contentMode: .fill)
             } else {
                 Circle().fill(tint.gradient)
                 Text(initials)
@@ -30,7 +29,7 @@ struct ProfileAvatar: View {
         .frame(width: size, height: size)
         .clipShape(.circle)
         .overlay {
-            Circle().strokeBorder(Color(nsColor: .separatorColor).opacity(0.6), lineWidth: 0.5)
+            Circle().strokeBorder(Color.separatorLine.opacity(0.6), lineWidth: 0.5)
         }
         .overlay(alignment: .bottomTrailing) {
             if showsStatus, profile.statusSupport != nil, let status = profile.status?.status {

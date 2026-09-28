@@ -1,5 +1,11 @@
-import CoreAudio
 import Foundation
+
+#if os(macOS)
+import CoreAudio
+
+/// A microphone or speaker, as the system names it: a Core Audio object on the Mac, a port
+/// UID on iPhone and iPad.
+typealias AudioDeviceID = AudioObjectID
 
 /// The Mac's microphones and speakers, and which of them are the defaults — live, so AirPods
 /// appear the moment they connect.
@@ -11,7 +17,7 @@ import Foundation
 @Observable
 final class AudioDevices {
     struct Device: Identifiable, Hashable {
-        let id: AudioObjectID
+        let id: AudioDeviceID
         let name: String
     }
 
@@ -108,3 +114,107 @@ final class AudioDevices {
         AudioObjectSetPropertyData(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, UInt32(MemoryLayout<AudioObjectID>.size), &value)
     }
 }
+#else
+@preconcurrency import AVFoundation
+@preconcurrency import WebRTC
+
+typealias AudioDeviceID = String
+
+/// The microphones and speakers an iPhone or iPad can use in a call, and which are in use —
+/// live, so AirPods appear the moment they connect.
+///
+/// iOS routes audio per app through its audio session, and WebRTC follows the route as it
+/// changes, so choosing a device here re-routes the call without restarting it — unlike the
+/// Mac, where the choice changes the system default.
+@MainActor
+@Observable
+final class AudioDevices {
+    struct Device: Identifiable, Hashable {
+        let id: AudioDeviceID
+        let name: String
+    }
+
+    /// The loudspeaker, which iOS doesn't list as a port you can prefer: it is an override.
+    static let speaker = "kvidr.speaker"
+    /// The earpiece, or an iPad's own speaker — what a call plays through with no override.
+    static let builtIn = "kvidr.built-in"
+
+    private(set) var inputs: [Device] = []
+    private(set) var outputs: [Device] = []
+    private(set) var defaultInput: AudioDeviceID = ""
+    private(set) var defaultOutput: AudioDeviceID = ""
+
+    @ObservationIgnored private var observer: (any NSObjectProtocol)?
+
+    init() {
+        refresh()
+        observer = NotificationCenter.default.addObserver(
+            forName: AVAudioSession.routeChangeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.refresh() }
+        }
+    }
+
+    isolated deinit {
+        observer.map(NotificationCenter.default.removeObserver)
+    }
+
+    func setDefaultInput(_ id: AudioDeviceID) {
+        let session = AVAudioSession.sharedInstance()
+        guard let port = session.availableInputs?.first(where: { $0.uid == id }) else { return }
+        configure { try $0.setPreferredInput(port) }
+        refresh()
+    }
+
+    func setDefaultOutput(_ id: AudioDeviceID) {
+        if id == Self.speaker {
+            configure { try $0.overrideOutputAudioPort(.speaker) }
+        } else {
+            configure { try $0.overrideOutputAudioPort(.none) }
+            // A headset's output comes with its microphone: choosing it is choosing that input.
+            if id != Self.builtIn, let port = AVAudioSession.sharedInstance().availableInputs?.first(where: { $0.uid == id }) {
+                configure { try $0.setPreferredInput(port) }
+            }
+        }
+        refresh()
+    }
+
+    /// Through WebRTC's session wrapper, which is holding the audio session for the call.
+    private func configure(_ change: (RTCAudioSession) throws -> Void) {
+        let session = RTCAudioSession.sharedInstance()
+        session.lockForConfiguration()
+        defer { session.unlockForConfiguration() }
+        do {
+            try change(session)
+        } catch {
+            Log.sync.warning("Call: couldn’t change the audio route — \(error.localizedDescription)")
+        }
+    }
+
+    func refresh() {
+        let session = AVAudioSession.sharedInstance()
+        inputs = (session.availableInputs ?? []).map { Device(id: $0.uid, name: $0.portName) }
+        defaultInput = session.currentRoute.inputs.first?.uid ?? session.preferredInput?.uid ?? inputs.first?.id ?? ""
+
+        let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+        var outputs = [Device(id: Self.builtIn, name: isPhone ? "iPhone" : "iPad")]
+        if isPhone { outputs.append(Device(id: Self.speaker, name: "Speaker")) }
+        // Headsets and car kits: they come and go with the route.
+        let external = (session.availableInputs ?? []).filter { $0.portType != .builtInMic }
+        outputs += external.map { Device(id: $0.uid, name: $0.portName) }
+        for port in session.currentRoute.outputs where ![.builtInReceiver, .builtInSpeaker].contains(port.portType)
+            && !outputs.contains(where: { $0.name == port.portName }) {
+            outputs.append(Device(id: port.uid, name: port.portName))
+        }
+        self.outputs = outputs
+
+        let current = session.currentRoute.outputs.first
+        switch current?.portType {
+        case .builtInSpeaker?: defaultOutput = isPhone ? Self.speaker : Self.builtIn
+        case .builtInReceiver?, nil: defaultOutput = Self.builtIn
+        default:
+            defaultOutput = external.first(where: { $0.portName == current?.portName })?.uid ?? current?.uid ?? Self.builtIn
+        }
+    }
+}
+#endif

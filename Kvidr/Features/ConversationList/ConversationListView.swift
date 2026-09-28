@@ -45,6 +45,7 @@ struct ConversationListView: View {
                 RemindersSidebarRow(count: reminderCount, isSelected: RemindersToken.isReminders(selection))
                     .tag(RemindersToken.value)
                     .listRowSeparator(.hidden)
+                    .phoneRowInsets()
             }
 
             // Under the pinned faces rather than over them, where Messages puts it — the
@@ -73,12 +74,31 @@ struct ConversationListView: View {
                     Section(isExpanded: $model.isArchiveExpanded) {
                         rows(group.items)
                     } header: {
+                        #if os(iOS)
+                        // A plain list's section header folds nothing on iOS by itself.
+                        Button {
+                            withAnimation(.smooth(duration: 0.25)) { model.isArchiveExpanded.toggle() }
+                        } label: {
+                            HStack(spacing: 6) {
+                                Text(model.isArchiveExpanded ? group.section.title : "\(group.section.title) (\(group.items.count))")
+                                Spacer()
+                                Image(systemName: "chevron.forward")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .rotationEffect(.degrees(model.isArchiveExpanded ? 90 : 0))
+                            }
+                            .font(.scaled(12, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                            .contentShape(.rect)
+                        }
+                        .buttonStyle(.plain)
+                        #else
                         Text(model.isArchiveExpanded ? group.section.title : "\(group.section.title) (\(group.items.count))")
                             // The size of a row's timestamp. The list sets its headings 13pt
                             // in from the sidebar's edge (measured, macOS 26.6); pulled out
                             // to the 10pt the selection highlight keeps.
-                            .font(.system(size: 12))
+                            .font(.scaled(12))
                             .padding(.leading, -3)
+                        #endif
                     }
 
                 default:
@@ -86,6 +106,7 @@ struct ConversationListView: View {
                 }
             }
         }
+        #if os(macOS)
         .listStyle(.sidebar)
         // The search field as Messages draws it: a rounded pane at the top of the
         // sidebar. `.searchable` on this list gives the toolbar's small field, which
@@ -97,6 +118,11 @@ struct ConversationListView: View {
                 .padding(.top, 6)
                 .padding(.bottom, 8)
         }
+        #else
+        // Edge to edge, as Messages' list is on iPhone and iPad; the search field is the
+        // system's, at the foot of the screen — see `SidebarColumn`.
+        .listStyle(.plain)
+        #endif
         .overlay { emptyState }
         // `initial:` because ⌘F from the compact sidebar creates this list with the
         // request already set — a change-only observer would never see it.
@@ -129,6 +155,7 @@ struct ConversationListView: View {
             )
                 .tag(ConversationDraftToken.value)
                 .listRowSeparator(.hidden)
+                .phoneRowInsets()
         }
     }
 
@@ -152,6 +179,9 @@ struct ConversationListView: View {
             )
                 .tag(conversation.token)
                 .contextMenu { ConversationContextMenu(model: model, conversation: conversation) }
+                // The row draws its own separator, starting under the text.
+                .listRowSeparator(.hidden)
+                .phoneRowInsets()
         }
     }
 
@@ -188,7 +218,7 @@ private struct SidebarSearchField: View {
             TextField("Search", text: $text, prompt: Text("Search"))
                 .textFieldStyle(.plain)
                 .focused(isFocused)
-                .onExitCommand {
+                .onEscape {
                     text = ""
                     isFocused.wrappedValue = false
                 }
@@ -228,50 +258,60 @@ private struct PinnedConversations: View {
     @State private var gridSize: CGSize = .zero
 
     private static let space = "favouriteFaces"
-    private static let minimumCellWidth: CGFloat = 72
+    /// Three across on iPhone too, as Messages pins them — bigger faces for fingers.
+    private static let minimumCellWidth: CGFloat = Platform.isPhone ? 104 : 72
+    private static let faceSize: CGFloat = Platform.isPhone ? 92 : 62
     private static let spacing: CGFloat = 2
 
     /// Three across at the sidebar's ideal width, as in Messages.
-    private let columns = [GridItem(.adaptive(minimum: minimumCellWidth), spacing: spacing)]
+    private let columns = Platform.isPhone
+        // Three across, the outer two against the list's edges and the middle one centred —
+        // so the faces line up with the rows' avatars on the left and their chevrons on the
+        // right, as Messages' pinned faces do.
+        ? [GridItem(.flexible(), spacing: spacing, alignment: .leading),
+           GridItem(.flexible(), spacing: spacing, alignment: .center),
+           GridItem(.flexible(), spacing: spacing, alignment: .trailing)]
+        : [GridItem(.adaptive(minimum: minimumCellWidth), spacing: spacing)]
 
     var body: some View {
         LazyVGrid(columns: columns, spacing: Self.spacing) {
             ForEach(conversations) { conversation in
                 let isSelected = selection == conversation.token
-                Button {
-                    guard !drag.didDrag else { drag.didDrag = false; return }
-                    selection = conversation.token
-                } label: {
+                Group {
+                    #if os(iOS)
+                    // A menu of its own per face, opened by pressing and holding, with a tap
+                    // still opening the conversation. Not `.contextMenu`: the faces share
+                    // one list row, and a row gets one context menu — every face lifted the
+                    // first face and acted on it.
+                    // The picture alone is the menu's button: closing, the menu morphs back
+                    // into its button clipped to the button's frame, and a name wider than
+                    // the face ("Server Monitoring") came back as "erver Monitorin".
                     VStack(spacing: 6) {
-                        AvatarView(conversation: conversation, size: 62)
-                            .overlay(alignment: .topTrailing) {
-                                if conversation.hasUnread {
-                                    UnreadDot(isSelected: isSelected)
-                                }
-                            }
-                            .overlay(alignment: .bottomTrailing) {
-                                if conversation.hasCall {
-                                    CallBadge(conversation: conversation, isSelected: isSelected)
-                                }
-                            }
-                        Text(Self.title(for: conversation))
-                            .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
-                            .foregroundStyle(isSelected ? .white : .primary)
-                            .lineLimit(1)
-                            .padding(.horizontal, 4)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8)
-                    .contentShape(.rect)
-                    // The selected face sits on a solid block of the same blue a selected
-                    // sidebar row gets — one selection look, not two. That is the
-                    // system's selection colour, which is a shade deeper than the accent.
-                    .background {
-                        if isSelected {
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .fill(Color(nsColor: .selectedContentBackgroundColor))
+                        Menu {
+                            ConversationContextMenu(model: model, conversation: conversation)
+                                // Holding a face to open its menu starts a carry too, and the
+                                // menu cancels it without an end — which left the face lifted
+                                // in spirit and the next tap swallowed as the end of a drag.
+                                .onAppear { cancelCarry() }
+                        } label: {
+                            facePicture(conversation, isSelected: isSelected)
+                        } primaryAction: {
+                            guard !drag.didDrag else { drag.didDrag = false; return }
+                            selection = conversation.token
                         }
+                        faceName(conversation, isSelected: isSelected)
+                            .onTapGesture { selection = conversation.token }
                     }
+                    .frame(width: Self.faceSize)
+                    .padding(.vertical, 8)
+                    #else
+                    Button {
+                        guard !drag.didDrag else { drag.didDrag = false; return }
+                        selection = conversation.token
+                    } label: {
+                        faceLabel(conversation, isSelected: isSelected)
+                    }
+                    #endif
                 }
                 .buttonStyle(.plain)
                 // An outline around this face while its menu is open, where a list row
@@ -282,6 +322,7 @@ private struct PinnedConversations: View {
                             .strokeBorder(Color.accentColor, lineWidth: 2)
                     }
                 }
+                #if os(macOS)
                 .overlay {
                     ConversationMenuHost(
                         model: model,
@@ -292,6 +333,7 @@ private struct PinnedConversations: View {
                         )
                     )
                 }
+                #endif
                 // The face itself is carried — its picture and its name, not a snapshot of
                 // them — and the others slide aside to make room, the way Messages
                 // rearranges its pinned faces. Not system drag and drop: that lights up the
@@ -313,8 +355,56 @@ private struct PinnedConversations: View {
         // Out past the list's own content inset, so the selected block lands level with a
         // selected row's highlight. Measured on macOS 26.6: a row's content starts 16pt
         // from the sidebar's edge and its highlight 10pt, so the grid reaches out by 6.
-        .padding(.horizontal, -6)
+        // On a phone: the same margin as the rows' avatars on the left and their chevrons on
+        // the right.
+        .padding(.horizontal, Platform.isPhone ? ConversationRow.phoneMargin : -6)
         .padding(.vertical, 6)
+    }
+
+    @ViewBuilder
+    private func faceLabel(_ conversation: Conversation, isSelected: Bool) -> some View {
+        VStack(spacing: 6) {
+            facePicture(conversation, isSelected: isSelected)
+            faceName(conversation, isSelected: isSelected)
+        }
+        .frame(width: Platform.isPhone ? Self.faceSize : nil)
+        .frame(maxWidth: Platform.isPhone ? nil : .infinity)
+        .padding(.vertical, 8)
+        .contentShape(.rect)
+        // The selected face sits on a solid block of the same blue a selected
+        // sidebar row gets — one selection look, not two. That is the
+        // system's selection colour, which is a shade deeper than the accent.
+        .background {
+            if isSelected {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.selectedContentBackground)
+            }
+        }
+    }
+
+    private func facePicture(_ conversation: Conversation, isSelected: Bool) -> some View {
+        AvatarView(conversation: conversation, size: Self.faceSize)
+            .overlay(alignment: .topTrailing) {
+                if conversation.hasUnread {
+                    UnreadDot(isSelected: isSelected)
+                }
+            }
+            .overlay(alignment: .bottomTrailing) {
+                if conversation.hasCall {
+                    CallBadge(conversation: conversation, isSelected: isSelected)
+                }
+            }
+    }
+
+    private func faceName(_ conversation: Conversation, isSelected: Bool) -> some View {
+        Text(Self.title(for: conversation))
+            .font(.system(size: Platform.isPhone ? 12 : 13, weight: isSelected ? .semibold : .regular))
+            .foregroundStyle(isSelected ? .white : Platform.isPhone ? .secondary : .primary)
+            .lineLimit(1)
+            .padding(.horizontal, 4)
+            // Wider than the face, so a name like "Server Monitoring" can
+            // run past its edges rather than be cut to "Server M…".
+            .frame(width: Platform.isPhone ? Self.faceSize + 28 : nil)
     }
 
     private var grid: FaceGrid {
@@ -349,6 +439,20 @@ private struct PinnedConversations: View {
 
     /// Let go: the face glides from the pointer into its place — the one face, not a copy on
     /// its way back while the real one appears — and then the grid takes the new order.
+    /// A carry the system took over — the face's menu opened mid-press: everything back
+    /// where it was, nothing reordered.
+    private func cancelCarry() {
+        guard !drag.settling else { return }
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            drag.token = nil
+            drag.order = drag.base
+            drag.translation = .zero
+            drag.didDrag = false
+        }
+    }
+
     private func putDown() {
         guard let token = drag.token, !drag.settling else { return }
         let grid = grid
@@ -405,8 +509,22 @@ struct ConversationRow: View {
     /// The gutter the unread dot lives in, plus the avatar and the gap after it — the
     /// separator between rows starts where the text does, as it does in Messages.
     private static let gutter: CGFloat = 8
-    private static let avatar: CGFloat = 40
+    private static let avatar: CGFloat = Platform.isPhone ? 44 : 40
+    /// The list's margin on a phone, the same on both sides: the avatar starts this far in
+    /// and the chevron ends this far in. The unread dot sits in the gap before the avatar.
+    static let phoneMargin: CGFloat = 16
     private static let textInset: CGFloat = gutter + 5 + avatar + 10
+    /// iOS sets its lists in larger type, as Messages does: a 17pt name over 15pt preview.
+    private static let nameSize: CGFloat = isTouch ? 17 : 15
+    private static let detailSize: CGFloat = isTouch ? 15 : 12
+    private static let previewSize: CGFloat = isTouch ? 15 : 13
+    private static var isTouch: Bool {
+        #if os(iOS)
+        true
+        #else
+        false
+        #endif
+    }
 
     var body: some View {
         HStack(spacing: 5) {
@@ -421,7 +539,7 @@ struct ConversationRow: View {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(alignment: .firstTextBaseline, spacing: 6) {
                         Text(conversation.displayName)
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(.system(size: Self.nameSize, weight: .semibold))
                             .lineLimit(1)
                             .truncationMode(.tail)
 
@@ -432,14 +550,19 @@ struct ConversationRow: View {
                         }
 
                         Text(timestamp)
-                            .font(.system(size: 12))
+                            .font(.system(size: Self.detailSize))
                             .foregroundStyle(isSelected ? .primary : .secondary)
                             .fixedSize()
+                        if Self.isTouch {
+                            Image(systemName: "chevron.forward")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(.tertiary)
+                        }
                     }
 
                     HStack(alignment: .top, spacing: 6) {
                         Text(preview)
-                            .font(.system(size: 13))
+                            .font(.system(size: Self.previewSize))
                             .foregroundStyle(isSelected ? .primary : .secondary)
                             // Two lines, always: Messages keeps every row the same
                             // height, and a list whose rows are all different heights
@@ -665,5 +788,15 @@ private struct CarriedFace: ViewModifier {
         let from = grid.origin(ofSlot: base)
         let to = grid.origin(ofSlot: now)
         return CGSize(width: to.x - from.x, height: to.y - from.y)
+    }
+}
+
+extension View {
+    /// A phone list row whose avatar starts at ``ConversationRow/phoneMargin``, the unread
+    /// gutter in front of it, and whose trailing edge is the same distance in.
+    func phoneRowInsets() -> some View {
+        listRowInsets(Platform.isPhone
+            ? EdgeInsets(top: 4, leading: ConversationRow.phoneMargin - 13, bottom: 4, trailing: ConversationRow.phoneMargin)
+            : nil)
     }
 }

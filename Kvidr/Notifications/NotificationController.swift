@@ -1,4 +1,6 @@
+#if os(macOS)
 import AppKit
+#endif
 import Foundation
 import UserNotifications
 
@@ -217,7 +219,11 @@ final class NotificationController: NSObject {
     /// Dock badge. Cleared entirely when the preference is off, so it can't get stuck.
     func updateBadge(count: Int) {
         let label = preferences.showsDockBadge && count > 0 ? String(count) : nil
+        #if os(macOS)
         NSApplication.shared.dockTile.badgeLabel = label
+        #else
+        center.setBadgeCount(label == nil ? 0 : count)
+        #endif
     }
 
     /// Removes delivered notifications for a conversation the user has now read.
@@ -254,16 +260,20 @@ extension NotificationController: UNUserNotificationCenterDelegate {
                     self?.onDeclineCall?(token)
                 } else {
                     // Answer, or a click on the banner itself: both mean "take the call".
+                    #if os(macOS)
                     NSApplication.shared.activate(ignoringOtherApps: true)
+                    #endif
                     self?.onAnswerCall?(token)
                 }
                 return
             }
             if let joinLink {
-                NSWorkspace.shared.open(joinLink)
+                Platform.open(joinLink)
                 return
             }
+            #if os(macOS)
             NSApplication.shared.activate(ignoringOtherApps: true)
+            #endif
             guard let token else { return }
             if let messageID, let open = self?.onOpenMessage {
                 open(token, messageID)

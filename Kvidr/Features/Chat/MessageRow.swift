@@ -1,4 +1,3 @@
-import AppKit
 import SwiftUI
 
 /// One message in the transcript.
@@ -46,6 +45,9 @@ struct MessageRow: View {
     var onShowParent: (Int) -> Void
     /// True while this message's reactions float above it — see `TapbackBar`.
     var isTapbackTarget = false
+    /// A one-to-one on a phone: who wrote it is who you're talking to, so no picture and no
+    /// name beside it — the bubbles have the width, as in Messages.
+    var hidesSender = false
     var onShowTapback: (Message) -> Void
 
     @State private var isShowingReactionDetail = false
@@ -66,7 +68,7 @@ struct MessageRow: View {
             if isFromMe {
                 // Your own messages hug the right edge; no avatar, you know who you are.
                 Spacer(minLength: 48)
-            } else {
+            } else if !hidesSender {
                 // The gutter keeps grouped messages aligned with the first one's text.
                 Group {
                     if group.showsAvatar {
@@ -144,11 +146,13 @@ struct MessageRow: View {
         .contentShape(.rect)
         // Right-click: reactions and actions in one menu, as in Messages. The host
         // takes only right clicks; everything else reaches the row as before.
+        #if os(macOS)
         .overlay {
             if isActionable {
                 MessageMenuHost(actions: menuActions)
             }
         }
+        #endif
         .background(alignment: .leading) {
             if content.mentionsCurrentUser {
                 // A quiet tint rather than a badge: you notice it, it doesn't shout.
@@ -202,9 +206,17 @@ struct MessageRow: View {
             // a picture is as reactable as a sentence.
             .scaleEffect(isTapbackTarget ? 1.04 : 1, anchor: isFromMe ? .bottomTrailing : .bottomLeading)
             .animation(reduceMotion ? nil : .snappy(duration: 0.25), value: isTapbackTarget)
+            #if os(macOS)
             .onLongPressGesture(minimumDuration: 0.35, maximumDistance: 6) {
                 if isActionable && capabilities.supportsReactions { onShowTapback(message) }
             }
+            #else
+            // On a touch screen, press and hold is the system's context menu: reactions on
+            // top, then everything the Mac puts in its right-click menu.
+            .contextMenu {
+                if isActionable { MessageMenuItems(actions: menuActions) }
+            }
+            #endif
             // Where the message is, for the transcript to place the bar.
             .anchorPreference(key: TapbackAnchorKey.self, value: .bounds) { anchor in
                 isTapbackTarget ? [message.messageID: TapbackAnchor(bounds: anchor, isFromMe: isFromMe)] : [:]
@@ -247,7 +259,7 @@ struct MessageRow: View {
 
     private var header: some View {
         HStack(spacing: 6) {
-            if !isFromMe {
+            if !isFromMe, !hidesSender {
                 Text(message.actor.resolvedDisplayName)
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(.primary)
@@ -337,8 +349,7 @@ struct MessageRow: View {
             onEdit: { onEdit(message) },
             onDelete: { onDelete(message) },
             onCopy: {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(content.preview, forType: .string)
+                Pasteboard.copy(content.preview)
             },
             onReact: { onReact($0, message) },
             onShowReactions: { isShowingReactionDetail = true },

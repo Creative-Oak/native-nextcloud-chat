@@ -1,6 +1,6 @@
 # kvidr
 
-A native macOS client for [Nextcloud Talk](https://nextcloud.com/talk/), focused on text
+A native macOS, iPhone and iPad client for [Nextcloud Talk](https://nextcloud.com/talk/), focused on text
 chat. Swift and SwiftUI, with AppKit where AppKit behaves better. No Electron, no web view
 rendering chat content — it talks to the documented Nextcloud and Talk HTTP APIs directly.
 
@@ -12,7 +12,7 @@ real menu commands, keyboard-first navigation, unread state you can trust.
 
 ## Requirements
 
-- macOS 26 or later
+- macOS 26 or later, or iOS / iPadOS 26 or later
 - Xcode 26 or later
 - A Nextcloud server with the Talk app installed
 
@@ -21,6 +21,14 @@ real menu commands, keyboard-first navigation, unread state you can trust.
 ```sh
 open Kvidr.xcodeproj      # then ⌘R
 ```
+
+One `Kvidr` target builds for both platforms — pick *My Mac* or an iPhone or iPad as the run
+destination. The views are shared; where a platform needs its own control (the composer's
+text view, the right-click menus, which are press-and-hold menus on iOS) the file carries an
+`#if os(macOS)` branch, and `Kvidr/UI/Platform/Platform.swift` spells the handful of system
+services both halves use. The iOS build also embeds `KvidrBroadcast`, the ReplayKit
+extension that shares the screen in a call; it and the app share the App Group
+`group.app.kvidr.ios`, which automatic signing registers on first build to a device.
 
 The project uses Xcode 16+ synchronized folder groups, so new files under `Kvidr/`
 and `Sources/TalkCore/` are picked up automatically — there is no file list to maintain.

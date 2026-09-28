@@ -1,5 +1,8 @@
-import AppKit
 import SwiftUI
+
+#if os(macOS)
+import AppKit
+
 
 /// Gives SwiftUI's window a frame autosave name, so macOS restores its size and position,
 /// and sets the two title bar properties SwiftUI has no modifier for.
@@ -63,3 +66,9 @@ extension View {
         }
     }
 }
+#else
+extension View {
+    /// iOS sizes and restores its own windows.
+    func remembersWindowFrame(named name: String) -> some View { self }
+}
+#endif

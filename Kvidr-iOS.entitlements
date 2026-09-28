@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- The keychain group the app password and the cache keys live in. iOS apps are
+	     sandboxed and get their own group without asking; this names it explicitly so it
+	     reads the same as the Mac build's. -->
+	<!-- Shared with the screen broadcast extension: the socket its frames come over. -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.app.kvidr.ios</string>
+	</array>
+	<key>keychain-access-groups</key>
+	<array>
+		<string>$(AppIdentifierPrefix)app.kvidr.ios</string>
+	</array>
+</dict>
+</plist>

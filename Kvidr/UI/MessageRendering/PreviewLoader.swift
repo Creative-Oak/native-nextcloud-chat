@@ -1,9 +1,8 @@
-import AppKit
 import SwiftUI
 
 /// Thumbnails for files shared into a conversation.
 ///
-/// Same shape as ``AvatarLoader`` and for the same reason: `NSImage` isn't `Sendable`, so
+/// Same shape as ``AvatarLoader`` and for the same reason: `PlatformImage` isn't `Sendable`, so
 /// the cache lives on the main actor while the fetching happens inside an actor.
 ///
 /// The inline previews are also kept on disk, sealed with the account's key — see
@@ -13,11 +12,11 @@ import SwiftUI
 @MainActor
 final class PreviewLoader {
     private let session: Session
-    private var memory: [String: NSImage] = [:]
+    private var memory: [String: PlatformImage] = [:]
     /// Each image's upright pixel size, by file — what ``ImageLayout`` needs, and what
-    /// `NSImage.size` (in points) doesn't give.
+    /// `PlatformImage.size` (in points) doesn't give.
     private var pixelSizes: [String: CGSize] = [:]
-    private var inFlight: [String: Task<NSImage?, Never>] = [:]
+    private var inFlight: [String: Task<PlatformImage?, Never>] = [:]
     /// Files the server has no preview for. Remembered so we ask exactly once.
     private var unavailable: Set<String> = []
     private let disk: EncryptedFileCache
@@ -40,7 +39,7 @@ final class PreviewLoader {
         )
     }
 
-    func cached(fileID: String, width: Int) -> NSImage? {
+    func cached(fileID: String, width: Int) -> PlatformImage? {
         memory[key(fileID, width)]
     }
 
@@ -52,7 +51,7 @@ final class PreviewLoader {
         unavailable.contains(fileID)
     }
 
-    func preview(fileID: String, width: Int, height: Int) async -> NSImage? {
+    func preview(fileID: String, width: Int, height: Int) async -> PlatformImage? {
         let key = key(fileID, width)
         if let cached = memory[key] { return cached }
         if unavailable.contains(fileID) { return nil }
@@ -60,7 +59,7 @@ final class PreviewLoader {
 
         let keepsOnDisk = width == Self.inlineSize
         let disk = disk
-        let task = Task<NSImage?, Never> { [weak self] in
+        let task = Task<PlatformImage?, Never> { [weak self] in
             guard let self else { return nil }
             if keepsOnDisk, let data = await disk.read(key), let image = self.accept(data, fileID: fileID, key: key) {
                 return image
@@ -91,7 +90,7 @@ final class PreviewLoader {
     }
 
     /// Full-size, for the lightbox.
-    func fullSize(fileID: String) async -> NSImage? {
+    func fullSize(fileID: String) async -> PlatformImage? {
         await preview(fileID: fileID, width: 1600, height: 1600)
     }
 
@@ -105,14 +104,14 @@ final class PreviewLoader {
         await disk.purge()
     }
 
-    private func accept(_ data: Data, fileID: String, key: String) -> NSImage? {
-        guard let image = NSImage(data: data) else { return nil }
+    private func accept(_ data: Data, fileID: String, key: String) -> PlatformImage? {
+        guard let image = PlatformImage(data: data) else { return nil }
         if let pixels = ImageLayout.pixelSize(of: data) { pixelSizes[fileID] = pixels }
         store(image, for: key)
         return image
     }
 
-    private func store(_ image: NSImage, for key: String) {
+    private func store(_ image: PlatformImage, for key: String) {
         if memory.count >= memoryLimit { memory.removeAll(keepingCapacity: true) }
         memory[key] = image
     }
@@ -152,14 +151,14 @@ extension EnvironmentValues {
 /// ``ImageLayout`` — so a picture loading doesn't move the transcript.
 struct InlineImageView: View {
     let object: RichObject
-    var limits: ImageLayout.Limits = .transcript
+    var limits: ImageLayout.Limits = .onScreen
     /// Rounder than a thumbnail in a row, because with no bubble around it the picture is
     /// the shape the eye reads.
     var cornerRadius: CGFloat = 16
 
     @Environment(\.previewLoader) private var loader
     @Environment(\.openAttachment) private var openAttachment
-    @State private var image: NSImage?
+    @State private var image: PlatformImage?
     @State private var didFail = false
 
     var body: some View {
@@ -168,7 +167,7 @@ struct InlineImageView: View {
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .fill(.quaternary.opacity(0.4))
             if let image {
-                Image(nsImage: image)
+                Image(platformImage: image)
                     .resizable()
                     // Filling the frame rather than fitting it: when the shapes agree, which
                     // is what the frame was chosen for, the difference is a rounding pixel.
@@ -187,7 +186,7 @@ struct InlineImageView: View {
         .clipShape(.rect(cornerRadius: cornerRadius, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .strokeBorder(Color(nsColor: .separatorColor).opacity(0.6), lineWidth: 0.5)
+                .strokeBorder(Color.separatorLine.opacity(0.6), lineWidth: 0.5)
         }
         .contentShape(.rect)
         .onTapGesture { openAttachment?(object) }

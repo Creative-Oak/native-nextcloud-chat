@@ -1,4 +1,3 @@
-import AppKit
 import SwiftUI
 
 /// A conversation or person avatar, with an attractive fallback.
@@ -11,7 +10,7 @@ struct AvatarView: View {
 
     @Environment(\.avatarLoader) private var loader
     @Environment(\.colorScheme) private var colorScheme
-    @State private var image: NSImage?
+    @State private var image: PlatformImage?
 
     var body: some View {
         ZStack {
@@ -20,7 +19,7 @@ struct AvatarView: View {
             // out as two pictures on top of each other. They get a plain disc instead.
             if let image {
                 Circle().fill(.quaternary)
-                Image(nsImage: image)
+                Image(platformImage: image)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
                     .transition(.opacity)
@@ -32,7 +31,7 @@ struct AvatarView: View {
         .clipShape(.circle)
         .overlay {
             // A hairline keeps light avatars from bleeding into a light sidebar.
-            Circle().strokeBorder(Color(nsColor: .separatorColor).opacity(0.6), lineWidth: 0.5)
+            Circle().strokeBorder(Color.separatorLine.opacity(0.6), lineWidth: 0.5)
         }
         .overlay(alignment: .bottomTrailing) { statusIndicator }
         .task(id: taskID) { await load() }
@@ -132,13 +131,13 @@ struct ActorAvatarView: View {
 
     @Environment(\.avatarLoader) private var loader
     @Environment(\.colorScheme) private var colorScheme
-    @State private var image: NSImage?
+    @State private var image: PlatformImage?
 
     var body: some View {
         ZStack {
             if let image {
                 Circle().fill(.quaternary)
-                Image(nsImage: image).resizable().aspectRatio(contentMode: .fill)
+                Image(platformImage: image).resizable().aspectRatio(contentMode: .fill)
             } else {
                 Circle().fill(tint.gradient)
                 if actor.isBot {

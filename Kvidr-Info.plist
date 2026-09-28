@@ -6,5 +6,10 @@
 	<!-- An iPhone as the camera in a call, through Continuity Camera. -->
 	<key>NSCameraUseContinuityCameraDeviceType</key>
 	<true/>
+	<!-- iOS: a call keeps its audio when you leave the app or lock the phone. macOS ignores it. -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+	</array>
 </dict>
 </plist>
